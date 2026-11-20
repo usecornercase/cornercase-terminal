@@ -180,6 +180,39 @@ mod acting {
     }
 }
 
+mod the_toggle {
+    use super::*;
+
+    fn three() -> Settings {
+        let mut s = with(&[
+            (machine("vps", "vps.lan"), State::Older),
+            (Machine { shown: false, ..machine("pi", "pi.lan") }, State::Connecting),
+        ]);
+        s.config.machines.push(machine("bad name", "bad.lan"));
+        s
+    }
+
+    #[test]
+    fn is_ticked_for_a_shown_machine_and_not_for_a_hidden_one_and_absent_elsewhere() {
+        let s = three();
+
+        let toggles: Vec<Option<bool>> = s.rows().iter().map(|row| s.row_text(row).toggle).collect();
+
+        assert_eq!(toggles, [None, Some(true), None, Some(false), None, None]);
+    }
+
+    #[test]
+    fn flips_what_the_machine_shows() {
+        let s = three();
+
+        let flips: Vec<Option<Action>> = (0..s.rows().len()).map(|i| s.toggling(i)).collect();
+
+        let expected =
+            [None, Some(Action::ShowMachine(0, false)), None, Some(Action::ShowMachine(1, true)), None, None];
+        assert_eq!(flips, expected);
+    }
+}
+
 mod selection {
     use super::*;
 
@@ -222,9 +255,17 @@ mod the_hint {
     }
 
     #[test]
-    fn otherwise_says_what_enter_and_the_cross_do() {
+    fn otherwise_says_what_enter_the_toggle_and_the_cross_do() {
         let mut s = with(&[(machine("vps", "vps.lan"), State::Linked)]);
         go_to(&mut s, &Row::Machine(0));
+
+        assert_eq!(s.hint(), "enter edits a machine · ✓ hides it here · × removes it; its server keeps running there");
+    }
+
+    #[test]
+    fn leaves_the_toggle_out_on_an_update_row_which_has_none() {
+        let mut s = with(&[(machine("pi", "pi.lan"), State::Older)]);
+        go_to(&mut s, &Row::UpdateMachine(0));
 
         assert_eq!(s.hint(), "enter edits a machine · × removes it, and its server keeps running there");
     }
@@ -243,7 +284,7 @@ mod a_machine_that_is_not_shown {
 
         assert_eq!(s.rows(), [Row::Here, Row::Machine(0), Row::AddMachine]);
         let row = s.row_text(&Row::Machine(0));
-        assert_eq!((row.note.as_str(), row.mark, row.dangerous), ("not shown", Some(State::Connecting), false));
+        assert_eq!((row.note.as_str(), row.mark, row.dangerous), ("hidden", Some(State::Connecting), false));
     }
 
     #[test]
@@ -251,7 +292,10 @@ mod a_machine_that_is_not_shown {
         let mut s = with(&[(hidden(), State::Connecting)]);
         go_to(&mut s, &Row::Machine(0));
 
-        assert_eq!(s.hint(), "not shown here: open it and tick show its work here to link it");
+        assert_eq!(
+            s.hint(),
+            "hidden: nothing is linked and its server keeps running there; its toggle shows it here again"
+        );
     }
 }
 

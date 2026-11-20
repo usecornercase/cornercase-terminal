@@ -140,14 +140,15 @@ Reconnecting never asks for a password or a passphrase, since the window has you
 Once your list holds a machine ([Settings › Machines](../machines/), or a window that reached one with `cornercase remote`, or a program that added one: below), the bottom of the sidebar names where the window is, on a row of its own under **`Worktrees`** and **`Recap`**: `this computer ▴`, or `on devbox ▴` once it moved. Click it to move the window somewhere else without closing it:
 
 - **this computer** attaches it to the server on your laptop, and starts one if none is running.
-- Every machine of your list, shown or not, attaches it there, with its **command** if it has one. The one the window is on has a `✓`.
+- Every machine of your list, shown or not. On this computer each one opens a submenu: **show its work here ✓** hides the machine (its link ends, its server keeps running there), **show its work here ·** shows a hidden one again, and **open the window there** attaches the window there, with its **command** if it has one. On another machine a click attaches the window there at once, and the one the window is on has a `✓`.
+- **only this computer** hides every machine and **show all** shows them all, each dim when it would change nothing; see [Hide a machine](../machines/#hide-a-machine). They show only while the window is on this computer.
 - **add machine…** opens the form of Settings › Machines, and **manage machines…** opens that page. Both show only while the window is on this computer: on another machine the menu lists your computer's machines and nothing else to change them.
 - The tunnels the window holds, one row each, with what you can do to them: see [Remembered per machine](#remembered-per-machine). The button then shows their count, `on devbox ⇄2 ▴`.
 
 <Screen
   name="machine-menu"
-  alt="The machine menu over the bottom of the sidebar: a check by this computer, then vps, add machine… and manage machines…"
-  crop={[0, 22, 34, 16]}
+  alt="The machine menu over the bottom of the sidebar: a check by this computer, then vps with an arrow to its submenu, only this computer, show all, add machine… and manage machines…"
+  crop={[0, 20, 34, 18]}
 />
 
 There is no **forget…**: a machine is removed in Settings › Machines, where its link ends too.

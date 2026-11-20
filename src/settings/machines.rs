@@ -6,8 +6,10 @@ use super::{Action, Row, Settings};
 
 const FOLDER_WIDTH: usize = 24;
 const HINT: &str = "enter edits a machine · × removes it, and its server keeps running there";
+const SHOWN_HINT: &str = "enter edits a machine · ✓ hides it here · × removes it; its server keeps running there";
 const HERE_HINT: &str = "this computer runs the server you are using; it links to each machine below";
-const NOT_SHOWN_HINT: &str = "not shown here: open it and tick show its work here to link it";
+const HIDDEN_HINT: &str =
+    "hidden: nothing is linked and its server keeps running there; its toggle shows it here again";
 const UPDATE_NOTE: &str = "installs this version there with cornercase update; nothing restarts";
 const ADD_NOTE: &str = "another computer you reach with ssh";
 
@@ -46,8 +48,9 @@ impl Settings {
             Picked::Add => Row::AddMachine,
             Picked::Machine { at, machine, update } => {
                 let machines = &self.config.machines;
-                let kept = (machines.get(at) == Some(&machine)).then_some(at);
-                match kept.or_else(|| machines.iter().position(|listed| *listed == machine)) {
+                let same = |listed: &Machine| Machine { shown: machine.shown, ..listed.clone() } == machine;
+                let kept = machines.get(at).is_some_and(same).then_some(at);
+                match kept.or_else(|| machines.iter().position(same)) {
                     Some(at) if update => Row::UpdateMachine(at),
                     Some(at) => Row::Machine(at),
                     None => Row::Here,
@@ -143,6 +146,19 @@ impl Settings {
         })
     }
 
+    pub(super) fn machine_toggle(&self, row: &Row) -> Option<bool> {
+        let Row::Machine(at) = row else { return None };
+        let accepted = self.machine_info(*at).is_some_and(|info| info.problem.is_none());
+        self.config.machines.get(*at).filter(|_| accepted).map(|machine| machine.shown)
+    }
+
+    pub(crate) fn toggling(&self, row: usize) -> Option<Action> {
+        let row = self.rows().get(row)?.clone();
+        let shown = self.machine_toggle(&row)?;
+        let Row::Machine(at) = row else { return None };
+        Some(Action::ShowMachine(at, !shown))
+    }
+
     pub(super) fn activate_machine(row: &Row) -> Action {
         match row {
             Row::Machine(at) => Action::EditMachine(*at),
@@ -161,12 +177,13 @@ impl Settings {
 
     pub(super) fn machine_hint(&self) -> String {
         match self.row() {
-            Some(Row::Machine(at) | Row::UpdateMachine(at)) => {
+            Some(row @ (Row::Machine(at) | Row::UpdateMachine(at))) => {
                 let Some(info) = self.machine_info(at) else { return HINT.into() };
                 if !info.shown && info.problem.is_none() {
-                    return NOT_SHOWN_HINT.into();
+                    return HIDDEN_HINT.into();
                 }
-                info.error.unwrap_or_else(|| HINT.into())
+                let hint = if self.machine_toggle(&row) == Some(true) { SHOWN_HINT } else { HINT };
+                info.error.unwrap_or_else(|| hint.into())
             }
             Some(Row::Here) => match &self.on {
                 Some(on) => format!(

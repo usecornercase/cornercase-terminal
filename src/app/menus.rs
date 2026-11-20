@@ -153,6 +153,7 @@ impl App {
                 Self::account_disabled(action, blocker.is_some())
                     || self.remote_disabled(action)
                     || self.bot_menu_disabled(action)
+                    || self.machine_disabled(action)
             })
             .collect();
         ui::Overlay::Menu { at, items: self.labels_of(actions, blocker.as_deref()), disabled }

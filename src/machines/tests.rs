@@ -515,7 +515,7 @@ mod a_row_that_is_not_shown {
 
         assert_eq!(
             (info.state, info.mark(), info.note(SystemTime::now()), info.shown),
-            (State::Unreachable, '◌', "not shown".into(), false)
+            (State::Unreachable, '◌', "hidden".into(), false)
         );
     }
 
@@ -541,5 +541,58 @@ mod a_row_that_is_not_shown {
         let info: Info = serde_json::from_value(json!({"name": "vps"})).expect("a row");
 
         assert!(info.shown);
+    }
+}
+
+mod setting_shown {
+    use super::*;
+
+    fn list() -> Vec<Machine> {
+        vec![
+            Machine { unreached: true, command: Some("cc".into()), ..machine("vps", "vps.lan") },
+            Machine { shown: false, ..machine("mini", "mini.lan") },
+        ]
+    }
+
+    #[test]
+    fn finds_a_name_ignoring_case_and_spaces() {
+        let mut machines = list();
+
+        let changed = set_shown(&mut machines, Some(" VPS "), false);
+
+        assert_eq!((changed, machines[0].shown), (Some(vec!["vps".to_string()]), false));
+    }
+
+    #[test]
+    fn gives_none_for_an_unknown_name_and_changes_nothing() {
+        let mut machines = list();
+
+        assert_eq!((set_shown(&mut machines, Some("nobody"), false), machines), (None, list()));
+    }
+
+    #[test]
+    fn sets_every_entry_without_a_name_and_says_only_those_that_changed() {
+        let mut machines = list();
+
+        let changed = set_shown(&mut machines, None, true);
+
+        assert_eq!(changed, Some(vec!["mini".to_string()]));
+        assert!(machines.iter().all(|machine| machine.shown));
+    }
+
+    #[test]
+    fn says_nothing_changed_for_a_machine_already_in_that_state() {
+        let mut machines = list();
+
+        assert_eq!(set_shown(&mut machines, Some("mini"), false), Some(Vec::new()));
+    }
+
+    #[test]
+    fn leaves_every_other_field_alone() {
+        let mut machines = list();
+
+        set_shown(&mut machines, Some("vps"), false);
+
+        assert_eq!(machines[0], Machine { shown: false, ..list().remove(0) });
     }
 }

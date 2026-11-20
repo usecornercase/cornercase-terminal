@@ -101,6 +101,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "bot-secrets",
     "bot-asks",
     "machine-shown",
+    "machine-hide",
     "bot-chat-apps",
 ];
 

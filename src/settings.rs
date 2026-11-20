@@ -381,6 +381,7 @@ pub(crate) enum Action {
     EditMachine(usize),
     RemoveMachine(usize),
     UpdateMachine(usize),
+    ShowMachine(usize, bool),
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -445,6 +446,7 @@ pub(crate) struct RowText {
     pub(crate) dangerous: bool,
     pub(crate) mark: Option<State>,
     pub(crate) tail: String,
+    pub(crate) toggle: Option<bool>,
 }
 
 #[derive(Debug)]

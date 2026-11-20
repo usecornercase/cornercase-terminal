@@ -341,7 +341,7 @@ pub(crate) enum Control {
     )]
     Worktrees(worktrees::WorktreesArgs),
     #[command(
-        about = "List the machines work can start on with the state of each link, and add, change or remove them",
+        about = "List the machines work can start on with the state of each link, and add, change, hide or remove them",
         after_help = MACHINES_HELP
     )]
     Machines(machines::MachinesArgs),

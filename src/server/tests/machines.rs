@@ -51,6 +51,8 @@ fn only_the_window_that_picked_a_machine_is_told_to_switch() {
         switcher.click_on(BUTTON);
         switcher.shows("gpu-box");
         switcher.click_on("gpu-box");
+        switcher.shows("open the window there");
+        switcher.click_on("open the window there");
         let got = orders(&switcher.received(ordered));
         assert_eq!(got, [MachineOrder::Switch(Some("gpu-box".into()))]);
         let heard = plain.received(|_| true);

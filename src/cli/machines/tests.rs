@@ -78,6 +78,33 @@ mod the_arguments {
         assert_eq!(needs_shown(&sent(line).0), needs);
     }
 
+    #[rstest]
+    #[case::hide_one(&["machines", "hide", "vps"], Machines::Hide(Some("vps".into())))]
+    #[case::hide_all(&["machines", "hide", "all"], Machines::Hide(None))]
+    #[case::hide_all_in_capitals(&["machines", "hide", "ALL"], Machines::Hide(None))]
+    #[case::show_one(&["machines", "show", "vps"], Machines::Show(Some("vps".into())))]
+    #[case::show_all(&["machines", "show", "all"], Machines::Show(None))]
+    fn hide_and_show_take_a_name_or_all(#[case] line: &[&str], #[case] request: Machines) {
+        assert_eq!(sent(line).0, request);
+    }
+
+    #[rstest]
+    #[case::hide(&["cornercase", "machines", "hide"])]
+    #[case::show(&["cornercase", "machines", "show"])]
+    fn hide_and_show_need_a_target(#[case] line: &[&str]) {
+        assert!(Cli::try_parse_from(line.iter().copied()).is_err());
+    }
+
+    #[rstest]
+    #[case::hide(&["machines", "hide", "vps"], true)]
+    #[case::show(&["machines", "show", "all"], true)]
+    #[case::retry(&["machines", "retry"], false)]
+    #[case::hidden_add(&["machines", "add", "vps", "x.lan", "--hidden"], false)]
+    #[case::a_list(&["machines"], false)]
+    fn only_hide_and_show_need_machine_hide(#[case] line: &[&str], #[case] needs: bool) {
+        assert_eq!(needs_hide(&sent(line).0), needs);
+    }
+
     #[test]
     fn edit_only_an_existing_machine_and_what_was_given() {
         let set = MachineSet {

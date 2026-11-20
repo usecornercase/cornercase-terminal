@@ -13,6 +13,7 @@ fn row(section: &'static str, label: &str, value: &str, note: &str) -> SettingsR
         movable: false,
         mark: None,
         tail: String::new(),
+        toggle: None,
     }
 }
 
@@ -76,6 +77,7 @@ fn layout<'a>(sections: &'a [&'a str]) -> SettingsLayout<'a> {
         sections,
         tabs: &TABS,
         removable: &[true, false, false, false, false],
+        toggles: &[false; 5],
         movable: &[false, false, true, true, true],
         cursor: 0,
         pick: None,
@@ -267,4 +269,121 @@ fn a_click_on_the_field_is_a_hit_of_the_field() {
     let area = Rect::new(0, 0, 100, 20);
     let at = settings_find(settings_area(area)).as_position();
     assert_eq!(settings_hit(area, &layout(&sections()), at), Some(SettingsHit::Find));
+}
+
+mod a_machine_toggle {
+    use super::*;
+
+    const WIDE: Rect = Rect { x: 0, y: 0, width: 140, height: H };
+    const NARROW: Rect = Rect { x: 0, y: 0, width: 80, height: H };
+
+    fn machine(shown: bool) -> SettingsRow {
+        SettingsRow {
+            removable: true,
+            mark: Some(crate::machines::State::Linked),
+            toggle: Some(shown),
+            ..row("Machines", "☁ vps", "cc@vps.example", "linked · 0.14.2")
+        }
+    }
+
+    fn machines(rows: Vec<SettingsRow>) -> Settings {
+        Settings { tabs: vec!["Machines".into()], tab: 0, rows, ..settings(0) }
+    }
+
+    fn drawn(area: Rect, shown: bool, hover: Option<Position>) -> (String, Style) {
+        let settings = machines(vec![machine(shown)]);
+        let view = View { hover, ..with(settings) };
+        let t = render_sized(&view, area.width, area.height);
+        let toggle = settings_toggle(settings_row(area, &["Machines"], 0, 0));
+        let cells: Vec<_> = (toggle.x..toggle.right()).map(|x| t.backend().buffer()[(x, toggle.y)].clone()).collect();
+        let text = cells.iter().map(ratatui::buffer::Cell::symbol).collect();
+        (text, cells[1].style())
+    }
+
+    #[test]
+    fn is_left_of_the_cross_and_twelve_cells_on_a_wide_row() {
+        let row = Rect::new(2, 3, 96, 1);
+
+        let toggle = settings_toggle(row);
+
+        assert_eq!((toggle.width, toggle.right()), (12, settings_remove(row).x));
+    }
+
+    #[test]
+    fn is_three_cells_on_a_narrow_row() {
+        let row = Rect::new(2, 3, 74, 1);
+
+        let toggle = settings_toggle(row);
+
+        assert_eq!((toggle.width, toggle.right()), (3, settings_remove(row).x));
+    }
+
+    #[rstest]
+    #[case::wide_and_shown(WIDE, true, " show here ✓")]
+    #[case::wide_and_hidden(WIDE, false, " show here ·")]
+    #[case::narrow_and_shown(NARROW, true, " ✓ ")]
+    #[case::narrow_and_hidden(NARROW, false, " · ")]
+    fn says_whether_the_machine_shows(#[case] area: Rect, #[case] shown: bool, #[case] text: &str) {
+        assert_eq!(drawn(area, shown, None).0, text);
+    }
+
+    #[test]
+    fn is_muted_while_the_machine_is_hidden_and_plain_while_it_shows() {
+        let muted = view(&["shop"]).muted;
+
+        assert_eq!((drawn(AREA, false, None).1.fg, drawn(AREA, true, None).1.fg), (Some(muted), Some(Color::Reset)));
+    }
+
+    #[test]
+    fn is_cyan_and_bold_under_the_mouse() {
+        let toggle = settings_toggle(settings_row(AREA, &["Machines"], 0, 0));
+
+        let style = drawn(AREA, false, Some(toggle.as_position())).1;
+
+        assert_eq!((style.fg, style.add_modifier.contains(Modifier::BOLD)), (Some(Color::Cyan), true));
+    }
+
+    #[test]
+    fn leaves_the_state_its_room_on_a_narrow_row() {
+        let t = render_sized(&with(machines(vec![machine(true)])), NARROW.width, NARROW.height);
+        let r = settings_row(NARROW, &["Machines"], 0, 0);
+
+        let line: String = (r.x..r.right()).map(|x| t.backend().buffer()[(x, r.y)].symbol().to_string()).collect();
+
+        assert!(line.contains("linked · 0.14.2"), "{line}");
+    }
+
+    fn hit(pos: impl Fn(Rect) -> Position, toggles: &[bool]) -> Option<SettingsHit> {
+        let sections = ["Machines", "Machines"];
+        let layout = SettingsLayout {
+            sections: &sections,
+            tabs: &["Machines"],
+            removable: &[true, true],
+            toggles,
+            movable: &[false, false],
+            cursor: 0,
+            pick: None,
+        };
+        settings_hit(AREA, &layout, pos(settings_row(AREA, &sections, 0, 0)))
+    }
+
+    #[test]
+    fn a_click_on_it_is_a_toggle() {
+        assert_eq!(hit(|row| settings_toggle(row).as_position(), &[true, false]), Some(SettingsHit::Toggle(0)));
+    }
+
+    #[test]
+    fn a_click_on_the_cross_still_removes() {
+        assert_eq!(hit(|row| settings_remove(row).as_position(), &[true, false]), Some(SettingsHit::Remove(0)));
+    }
+
+    #[test]
+    fn a_click_elsewhere_selects_the_row() {
+        assert_eq!(hit(Rect::as_position, &[true, false]), Some(SettingsHit::Row(0)));
+    }
+
+    #[test]
+    fn a_row_without_a_toggle_never_answers_one() {
+        assert_eq!(hit(|row| settings_toggle(row).as_position(), &[false, false]), Some(SettingsHit::Row(0)));
+    }
 }
