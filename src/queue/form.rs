@@ -99,6 +99,13 @@ pub(crate) enum Step {
     Chose(Control),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Room {
+    pub(crate) width: usize,
+    pub(crate) list: usize,
+    pub(crate) prompt: usize,
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct Choices {
     pub(crate) places: Vec<Choice>,
@@ -392,28 +399,36 @@ impl Form {
         self.focus_on(controls[next]);
     }
 
-    pub(crate) fn key(&mut self, key: KeyEvent, width: usize, rows: usize) -> Step {
+    pub(crate) fn key(&mut self, key: KeyEvent, room: Room) -> Step {
         self.error = None;
         if let Some(open) = self.opened().filter(|_| !matches!(key.code, KeyCode::Tab | KeyCode::BackTab)) {
-            let changed = self.combo(open).is_some_and(|combo| combo.key(key, rows));
+            let changed = self.combo(open).is_some_and(|combo| combo.key(key, room.list));
             return if changed { self.chose(open) } else { Step::None };
         }
         match key.code {
             KeyCode::Esc => return Step::Cancel,
             KeyCode::Tab => self.step_focus(true),
             KeyCode::BackTab => self.step_focus(false),
-            KeyCode::Enter => return Step::Submit,
+            KeyCode::Enter if self.focus != Control::Prompt => return Step::Submit,
             KeyCode::Char(' ') if self.focus == Control::Cleanup => self.cleanup = !self.cleanup,
-            _ => {
-                let focus = self.focus;
-                if let Some(combo) = self.combo(focus) {
-                    combo.key(key, rows);
-                } else if let Some(editor) = self.editor(focus) {
-                    editor.one_line_key(key, width);
-                }
-            }
+            _ => self.type_key(key, room),
         }
         Step::None
+    }
+
+    fn type_key(&mut self, key: KeyEvent, room: Room) {
+        let focus = self.focus;
+        if focus == Control::Prompt {
+            self.prompt.key(key, room.width, room.prompt);
+        } else if let Some(combo) = self.combo(focus) {
+            combo.key(key, room.list);
+        } else if let Some(editor) = self.editor(focus) {
+            editor.one_line_key(key, room.width);
+        }
+    }
+
+    pub(crate) fn scroll_prompt(&mut self, delta: isize, width: usize, rows: usize) {
+        self.prompt.scroll_by(delta, width, rows);
     }
 
     pub(crate) fn chose(&mut self, control: Control) -> Step {

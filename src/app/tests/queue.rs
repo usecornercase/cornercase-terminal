@@ -353,7 +353,7 @@ mod forms {
             assert!(form.prompt.text().contains("Fix login"));
             assert_eq!(form.branch.text(), issues::branch(&issue));
             assert!(form.worktree());
-            app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
+            save_queue_form(&mut app);
             assert!(app.overlay.is_none());
         }
         assert_eq!(app.panels.queued.queue().pending(), Source::ALL.len());
@@ -393,7 +393,7 @@ mod forms {
         form.prompt = Editor::new("fix logout instead");
         form.when = When::In.combo();
         form.amount = Editor::new("3");
-        app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
+        save_queue_form(&mut app);
         assert_eq!(app.panels.queued.queue().entry(id).expect("edited").task.label, expected);
     }
 
@@ -407,7 +407,7 @@ mod forms {
         form.prompt = Editor::new("fix logout instead");
         form.when = When::In.combo();
         form.amount = Editor::new("3");
-        app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
+        save_queue_form(&mut app);
         assert_eq!(app.panels.queued.queue().entry(id).expect("edited").task.prompt, "fix logout instead");
         assert!(matches!(&app.overlay, Some(Overlay::Issues(b)) if b.current() == IssueTab::Queue));
         press_button(&mut app, "remove");
@@ -456,7 +456,7 @@ mod resets {
         let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("form") };
         form.prompt = Editor::new("fix login");
         form.when = When::ClaudeReset.combo();
-        app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
+        save_queue_form(&mut app);
         pump_until(
             &mut app,
             &rx,
@@ -491,7 +491,7 @@ mod guarantees {
         assert_eq!(form.agent.label(), Some(original.agent.as_str()));
         assert_eq!(form.mode.label(), Some("careful"));
         form.prompt = Editor::new("fix logout instead");
-        app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
+        save_queue_form(&mut app);
         assert!(app.overlay.is_none());
         let edited = &app.panels.queued.queue().entry(id).expect("edited").task;
         assert_eq!(
@@ -514,7 +514,7 @@ mod guarantees {
         app.new_queue_form(Some(id));
         let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("form") };
         form.prompt = Editor::new("fix logout instead");
-        app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
+        save_queue_form(&mut app);
         assert!(app.overlay.is_none());
         let edited = &app.panels.queued.queue().entry(id).expect("edited").task;
         assert_eq!((&edited.mode, &edited.command), (&original.mode, &original.command));
@@ -579,7 +579,7 @@ mod destinations {
         } else {
             app.projects[0].workspaces.clear();
         }
-        app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
+        save_queue_form(&mut app);
         assert!(matches!(&app.overlay, Some(Overlay::Queue(form)) if form.error.is_some()));
         assert_eq!(app.panels.queued.queue().entries, []);
     }
@@ -596,7 +596,7 @@ mod destinations {
         let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("form") };
         assert_eq!(form.choice().expect("a place").place.workspace_id, Some(workspace_id));
         form.prompt = Editor::new("fix login");
-        app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
+        save_queue_form(&mut app);
         let id = app.panels.queued.queue().entries[0].id;
         app.projects[0].workspaces[1].name = Some("renamed notes".into());
         app.run_queued(id, Instant::now()).expect("start in the same workspace");
@@ -610,7 +610,7 @@ mod destinations {
         task.place.project = PathBuf::from("/nonexistent/queued-project");
         let id = app.panels.queued.schedule(None, task).expect("add");
         app.new_queue_form(Some(id));
-        app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
+        save_queue_form(&mut app);
         assert!(
             matches!(&app.overlay, Some(Overlay::Queue(form)) if form.place.chosen().is_none() && form.error.is_some())
         );
@@ -681,7 +681,7 @@ mod panel {
         press_button(&mut app, "new");
         let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("form") };
         form.prompt = Editor::new("fix the login");
-        app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
+        save_queue_form(&mut app);
         assert_eq!(app.panels.queued.queue().entries.len(), 1);
         let Some(Overlay::Issues(b)) = &app.overlay else { panic!("back in issues") };
         assert_eq!((b.current(), b.queued.len()), (IssueTab::Queue, 1));
@@ -720,7 +720,9 @@ mod panel {
         let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("form") };
         form.prompt = Editor::new(&"word ".repeat(80));
         let field = ui::queue_form::text(AREA, form, Control::Prompt);
-        let start = ui::first_line(&form.prompt, field);
+        form.prompt.reveal(usize::from(field.width), usize::from(field.height));
+        form.scroll_prompt(-1, usize::from(field.width), usize::from(field.height));
+        let start = ui::queue_form::top(AREA, form);
         assert!(start > 0);
         click(&mut app, Position::new(field.x, field.y));
         let Some(Overlay::Queue(form)) = &app.overlay else { panic!("form") };
@@ -885,7 +887,7 @@ mod modes {
         let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("form") };
         form.prompt = Editor::new("fix login");
         form.mode.choose(0);
-        app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
+        save_queue_form(&mut app);
         let task = only_entry(&app);
         assert_eq!(task.mode, None);
         assert!(!task.command.contains("--careful"), "{}", task.command);

@@ -166,15 +166,16 @@ pub(crate) struct EditorField<'a> {
     pub(crate) text: Rect,
     pub(crate) focused: bool,
     pub(crate) placeholder: &'a str,
+    pub(crate) top: Option<usize>,
 }
 
 pub(crate) fn draw_editor(f: &mut Frame, view: &View, editor: &Editor, at: EditorField) {
-    let EditorField { field, text: r, focused, placeholder } = at;
+    let EditorField { field, text: r, focused, placeholder, top } = at;
     let bg = Style::default().bg(view.surface());
     f.render_widget(Paragraph::new("").style(bg), field);
     let width = usize::from(r.width.max(1));
     let (line, col) = editor.position(width);
-    let start = first_line(editor, r);
+    let start = top.unwrap_or_else(|| first_line(editor, r));
     if editor.is_empty() && !placeholder.is_empty() {
         f.render_widget(Paragraph::new(placeholder).style(bg.fg(view.muted)), r);
     } else {
@@ -194,11 +195,9 @@ pub(crate) fn draw_editor(f: &mut Frame, view: &View, editor: &Editor, at: Edito
     if focused {
         paint_selection(f.buffer_mut(), r, start, &editor.highlight(width));
     }
-    if focused && !r.is_empty() {
-        f.set_cursor_position(Position::new(
-            r.x + u16::try_from(col).unwrap_or_default().min(r.width.saturating_sub(1)),
-            r.y + u16::try_from(line - start).unwrap_or_default().min(r.height.saturating_sub(1)),
-        ));
+    let shown = line.checked_sub(start).and_then(|row| u16::try_from(row).ok()).filter(|row| *row < r.height);
+    if let Some(row) = shown.filter(|_| focused && !r.is_empty()) {
+        f.set_cursor_position(Position::new(r.x + u16::try_from(col).unwrap_or_default().min(r.width - 1), r.y + row));
     }
 }
 

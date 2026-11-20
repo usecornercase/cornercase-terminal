@@ -500,12 +500,7 @@ impl App {
                 self.ask_sessions(Instant::now());
             }
             Some(Overlay::BotForm(_)) => self.bot_form_paste(text, area),
-            Some(Overlay::Queue(form)) => {
-                let (focus, idle) = (form.focus, !form.busy && form.opened().is_none());
-                if let Some(editor) = form.editor(focus).filter(|_| idle) {
-                    editor.insert(text);
-                }
-            }
+            Some(Overlay::Queue(_)) => self.queue_form_paste(text, area),
             Some(Overlay::Issues(b)) => b.paste(text),
             Some(Overlay::Settings(s)) => s.paste(text),
             Some(Overlay::ShareSettings(_)) => self.share_settings_paste(text, area),

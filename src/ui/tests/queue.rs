@@ -135,6 +135,47 @@ fn a_prompt_with_line_breaks_shows_them() {
 }
 
 #[test]
+fn the_prompt_is_taller_in_a_tall_window() {
+    let f = form("Fix the login form", None);
+    let screen = Rect::new(0, 0, 100, 40);
+    assert_eq!(queue_form::text(screen, &f, Control::Prompt).height, 8);
+    assert_eq!(queue_form::area(screen).height, 28);
+    let short = Rect::new(0, 0, 100, 24);
+    let shift = queue_form::rect(screen, &f, Control::Agent).y - queue_form::area(screen).y;
+    assert_eq!(shift, queue_form::rect(short, &f, Control::Agent).y - queue_form::area(short).y + 5);
+    insta::assert_snapshot!(shown(f, 100, 40).backend());
+}
+
+#[test]
+fn a_short_window_keeps_three_rows() {
+    let f = form("Fix the login form", None);
+    let screen = Rect::new(0, 0, 100, 24);
+    assert_eq!(queue_form::text(screen, &f, Control::Prompt).height, 3);
+    assert_eq!(queue_form::area(screen).height, 23);
+}
+
+#[test]
+fn a_scrolled_prompt_shows_how_much_is_hidden() {
+    let text: Vec<String> = (1..=12).map(|n| format!("line {n}")).collect();
+    let mut f = form(&text.join("\n"), None);
+    f.prompt.scroll_by(4, 60, 3);
+    let lines = lines(&shown(f, 100, 24));
+    let label = lines.iter().position(|l| l.contains("Prompt")).expect("the label");
+    assert!(lines[label].contains(" ↑ 4 more "), "{lines:#?}");
+    assert!(lines[label + 1].contains("│ line 5 "), "{lines:#?}");
+    assert!(lines[label + 4].contains(" ↓ 5 more "), "{lines:#?}");
+}
+
+#[test]
+fn the_focused_prompt_says_what_enter_does() {
+    let mut f = form("fix", None);
+    let hint = "enter breaks the line · tab moves on";
+    assert!(!lines(&shown(f.clone(), 100, 24)).iter().any(|l| l.contains(hint)));
+    f.focus = Control::Prompt;
+    assert!(lines(&shown(f, 100, 24)).iter().any(|l| l.contains(hint)));
+}
+
+#[test]
 fn a_workspace_says_it_opens_a_new_tab_without_offering_a_choice() {
     let mut f = form("fix", None);
     f.place.choose(1);

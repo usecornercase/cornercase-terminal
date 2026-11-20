@@ -91,7 +91,7 @@ fn enter_on_a_routine_opens_its_form_filled_and_saving_keeps_its_schedule() {
     click(&mut app, queue_row(0));
     let Some(Overlay::Queue(form)) = &app.overlay else { panic!("form") };
     assert_eq!((form.kind(), form.repeat().as_deref(), form.id), (When::Daily, Some("day 09:00"), Some(id)));
-    app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
+    save_queue_form(&mut app);
     assert_eq!(routine(&app, id).task.at, at);
     assert!(app.messages.toast.as_ref().is_some_and(|toast| toast.message.starts_with("scheduled routine")));
 }
@@ -131,7 +131,7 @@ mod the_form {
         assert_eq!(form.kind(), When::Weekdays);
         form.prompt = Editor::new("review the open pull requests");
         form.clock = Editor::new("09:00");
-        app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
+        save_queue_form(&mut app);
         let routine =
             app.panels.queued.queue().entries.iter().find(|entry| entry.is_routine()).expect("routine").clone();
         assert_eq!(routine.task.repeat.map(|repeat| repeat.to_string()).as_deref(), Some("weekday 09:00"));
