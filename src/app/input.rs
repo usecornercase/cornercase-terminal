@@ -62,7 +62,9 @@ impl App {
             Some(Overlay::Issues(_)) => return self.issues_key(key, area),
             Some(Overlay::Flows { .. }) => self.flows_key(key, area),
             Some(Overlay::StartFlow { .. }) => self.start_flow_key(key, area),
-            Some(Overlay::Worktrees(_) | Overlay::Ports(_) | Overlay::Processes(_)) => self.listing_key(key, area),
+            Some(Overlay::Worktrees(_) | Overlay::Ports(_) | Overlay::Processes(_) | Overlay::QueueList(_)) => {
+                self.listing_key(key, area);
+            }
             Some(Overlay::BotRoutines(_)) => self.bot_list_key(key, area),
             Some(Overlay::BotSecrets(secrets)) if secrets.list().is_some() => self.bot_list_key(key, area),
             Some(Overlay::CloseAgent(_)) => self.close_agent_key(key, area),
@@ -511,6 +513,7 @@ impl App {
             Some(Overlay::ProjectSettings(_)) => self.project_settings_paste(text, area),
             Some(Overlay::Worktrees(_)) => self.worktrees_paste(text),
             Some(Overlay::Processes(dialog)) => dialog.paste(text),
+            Some(Overlay::QueueList(dialog)) => dialog.paste(text),
             Some(Overlay::BotAsk(_)) => self.bot_ask_paste(text, area),
             Some(_) => self.name_paste(text, area),
             None => {}

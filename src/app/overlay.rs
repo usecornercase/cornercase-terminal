@@ -133,6 +133,7 @@ pub(super) enum Overlay {
     },
     Issues(Box<Browser>),
     Queue(Box<crate::queue::form::Form>),
+    QueueList(Box<crate::queue::dialog::Dialog>),
     BotForm(Box<crate::bots::form::Form>),
     RenameBot {
         bot: u64,
@@ -217,7 +218,7 @@ impl Overlay {
             Self::RemoveWorkspace { .. } => "remove workspace",
             Self::Picker { .. } => "folder picker",
             Self::Issues(_) => "issues",
-            Self::Queue(_) | Self::QueueResult(_) => self.queue_name(),
+            Self::Queue(_) | Self::QueueList(_) | Self::QueueResult(_) => self.queue_name(),
             Self::Search(_) => "search",
             Self::Update(_) => "update",
             Self::Usage | Self::Remote | Self::PhoneAppCode => self.access_name(),
@@ -284,6 +285,13 @@ impl Overlay {
         )
     }
 
+    fn is_listing(&self) -> bool {
+        matches!(
+            self,
+            Self::Worktrees(_) | Self::Ports(_) | Self::Processes(_) | Self::BotRoutines(_) | Self::QueueList(_)
+        )
+    }
+
     pub(super) fn closes_from_outside(&self) -> bool {
         !matches!(self, Self::Popup(_) | Self::Star)
     }
@@ -315,6 +323,7 @@ impl Overlay {
     fn queue_name(&self) -> &'static str {
         match self {
             Self::QueueResult(_) => "queue result",
+            Self::Queue(_) => "queue form",
             _ => "queue",
         }
     }
@@ -481,6 +490,7 @@ impl App {
             Some(Overlay::Context { .. }) => self.context_mouse(ev, pos, area),
             Some(Overlay::FlowMessage { .. }) => self.flow_message_mouse(ev, pos, area),
             Some(Overlay::QueueResult(_)) => self.queue_result_mouse(ev, pos, area),
+            Some(Overlay::QueueList(_)) => self.queue_list_mouse(ev, pos, area),
             Some(Overlay::Remote | Overlay::PhoneAppCode) => self.access_mouse(ev, pos, area),
             Some(Overlay::Pairing(via)) => self.pairing_mouse(*via, ev, pos, area),
             Some(Overlay::Forum(via)) => self.forum_mouse(*via, ev, pos, area),
@@ -547,9 +557,7 @@ impl App {
             | Overlay::CloseTab { .. }
             | Overlay::ClosePane { .. } => self.close_confirm_view(overlay)?,
             Overlay::Keys(group) => ui::Overlay::Keys(self.keys_view(*group)),
-            Overlay::Worktrees(_) | Overlay::Ports(_) | Overlay::Processes(_) | Overlay::BotRoutines(_) => {
-                self.listing_view(overlay, area)?
-            }
+            overlay if overlay.is_listing() => self.listing_view(overlay, area)?,
             Overlay::CloseAgent(dialog) => self.close_agent_view(dialog, area),
             Overlay::CloseAgents(_) | Overlay::ForgetAgents { .. } => self.closed_agents_view(overlay, area)?,
             Overlay::Picker { picker, group } => Self::picker_view(picker, group.is_some(), self.home.as_deref()),

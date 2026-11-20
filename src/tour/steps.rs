@@ -237,16 +237,16 @@ const QUEUE: [Step; 3] = [
     step(
         "open",
         "Queue",
-        "The queue starts agents at a time you choose. It is the last tab of Issues; open Issues.",
-        Target::Issues,
-        opened(Dialog::Issues),
+        "The queue starts agents at a time you choose. Open More, then queue.",
+        Target::Queue,
+        opened(Dialog::Queue),
     ),
     shows(
         step(
             "new",
             "Schedule",
-            "In the Queue tab, new asks for a prompt, a time and a place: in two hours, tomorrow at 9, or when your plan resets.",
-            Target::Issues,
+            "In the queue, new asks for a prompt, a time and a place: in two hours, tomorrow at 9, or when your plan resets.",
+            Target::Queue,
             Done::Next,
         ),
         Show::Queue,

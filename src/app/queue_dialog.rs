@@ -13,7 +13,7 @@ use crate::agents;
 use crate::control::QueueAdd;
 use crate::editor::Editor;
 use crate::git;
-use crate::issues::browser::{Place, Screen, Tab};
+use crate::issues::browser::Place;
 use crate::issues::{self, Issue};
 use crate::list::{COMBO_ROWS, Combo};
 use crate::project::{Hierarchy, Project, Workspace};
@@ -95,7 +95,7 @@ impl App {
 
     pub(super) fn stash_back(&mut self) {
         let back = match self.overlay.take() {
-            Some(back @ (Overlay::Issues(_) | Overlay::BotRoutines(_))) => Some(Box::new(back)),
+            Some(back @ (Overlay::Issues(_) | Overlay::BotRoutines(_) | Overlay::QueueList(_))) => Some(Box::new(back)),
             other => {
                 self.overlay = other;
                 None
@@ -255,7 +255,7 @@ impl App {
         };
         match form.key(key, room) {
             Step::Submit => self.submit_queue(),
-            Step::Cancel => self.close_queue_form(false),
+            Step::Cancel => self.close_queue_form(None),
             Step::Chose(control) => self.queue_chose(control),
             Step::None => {}
         }
@@ -330,7 +330,7 @@ impl App {
             return;
         }
         match ui::queue_form::hit(area, form, pos) {
-            Some(ui::queue_form::Hit::Cancel) => self.close_queue_form(false),
+            Some(ui::queue_form::Hit::Cancel) => self.close_queue_form(None),
             Some(ui::queue_form::Hit::Submit) => self.submit_queue(),
             Some(ui::queue_form::Hit::Close) | None => form.close_lists(),
             Some(ui::queue_form::Hit::Choose(i)) => {
@@ -472,7 +472,7 @@ impl App {
         match (reply, form) {
             (Ok(id), form) => {
                 if form.is_some() {
-                    self.close_queue_form(true);
+                    self.close_queue_form(Some(id));
                 }
                 let text = self.scheduled_text(id);
                 self.messages.toast = Some(Toast::new(text, ui::ToastIcon::Check));
@@ -497,19 +497,22 @@ impl App {
         }
     }
 
-    pub(super) fn close_queue_form(&mut self, scheduled: bool) {
-        self.overlay = self.panels.queued.take_back().map(|back| match *back {
-            Overlay::Issues(mut browser) => {
+    pub(super) fn close_queue_form(&mut self, saved: Option<u64>) {
+        let back = self.panels.queued.take_back().map(|back| *back);
+        match (back, saved) {
+            (Some(Overlay::Issues(_)), Some(id)) => return self.open_queue(Some(id)),
+            (Some(Overlay::Issues(mut browser)), None) => {
                 browser.scheduling = false;
-                if scheduled {
-                    browser.screen = Screen::List;
-                    browser.tab_to(Tab::Queue);
-                    browser.search.reset();
-                }
-                Overlay::Issues(browser)
+                self.overlay = Some(Overlay::Issues(browser));
             }
-            other => other,
-        });
+            (Some(Overlay::QueueList(mut dialog)), saved) => {
+                if let Some(id) = saved {
+                    dialog.select(id);
+                }
+                self.overlay = Some(Overlay::QueueList(dialog));
+            }
+            (back, _) => self.overlay = back,
+        }
         self.sync_queued();
     }
 

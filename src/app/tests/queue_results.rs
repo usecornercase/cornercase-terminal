@@ -1,7 +1,6 @@
 use super::*;
 use crate::agents::context::{Pointer, Said};
 use crate::error::Error;
-use crate::issues::browser::Tab;
 use crate::queue::outcome::{CLOSING, Pull, Taken};
 use crate::queue::{Place, State as QueueState, Task};
 use crate::test_util::TempDir;
@@ -15,10 +14,7 @@ pub(super) fn opened() -> (App, Receiver<AppEvent>, [TempDir; 2]) {
     let (mut app, rx) = new_app_with_shell(shell, folders[0].path().join("config.json"));
     app.open_project(folders[1].path().to_path_buf(), AREA).expect("the project");
     render(&mut app, AREA);
-    app.open_issues(AREA).expect("open issues");
-    let Some(Overlay::Issues(browser)) = &mut app.overlay else { panic!("issues") };
-    browser.tab_to(Tab::Queue);
-    app.sync_queued();
+    app.open_queue(None);
     (app, rx, folders)
 }
 

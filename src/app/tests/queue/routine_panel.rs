@@ -4,11 +4,11 @@ use crate::queue::repeat::Repeat;
 
 fn opened() -> (App, Receiver<AppEvent>, Vec<TempDir>) {
     let (mut app, rx, repo, config, worktrees) = queued_app();
-    queue_tab(&mut app);
+    open_queue(&mut app);
     (app, rx, vec![repo, config, worktrees])
 }
 
-fn seed_routine(app: &mut App, every: &str) -> u64 {
+pub(super) fn seed_routine(app: &mut App, every: &str) -> u64 {
     let at = time::now() + 3600;
     let place = Place { project: app.projects[0].path.clone(), ..Place::default() };
     let repeat = Repeat::parse(every, "UTC", at).expect("repeat");
@@ -19,23 +19,21 @@ fn routine(app: &App, id: u64) -> queue::Entry {
     app.panels.queued.queue().entry(id).expect("routine").clone()
 }
 
-fn labels(app: &mut App) -> Vec<&'static str> {
-    app.sync_queued();
-    let Some(Overlay::Issues(b)) = &app.overlay else { panic!("issues") };
-    b.labels(issues_dialog::room(AREA).buttons)
+fn shown_rows(app: &App) -> Vec<queue::dialog::Row> {
+    let Some(Overlay::QueueList(dialog)) = &app.overlay else { panic!("the queue modal") };
+    dialog.shown().iter().map(|shown| shown.row.clone()).collect()
 }
 
 #[test]
 fn pause_and_resume_work_from_the_buttons_and_the_row_says_so() {
     let (mut app, _rx, _dirs) = opened();
     let id = seed_routine(&mut app, "2h");
-    assert!(labels(&mut app).contains(&"pause"));
+    assert!(queue_labels(&mut app).contains(&"pause"));
     press_button(&mut app, "pause");
     assert!(routine(&app, id).task.paused);
     assert!(app.messages.toast.as_ref().is_some_and(|toast| toast.message == format!("paused routine {id}")));
-    let Some(Overlay::Issues(b)) = &app.overlay else { panic!("issues") };
-    assert_eq!(b.queued[0].when, "paused");
-    assert!(labels(&mut app).contains(&"resume"));
+    assert_eq!(shown_rows(&app)[0].when, "paused");
+    assert!(queue_labels(&mut app).contains(&"resume"));
     press_button(&mut app, "resume");
     assert!(!routine(&app, id).task.paused);
     assert!(app.messages.toast.as_ref().is_some_and(|toast| toast.message.starts_with("resumed routine")));
@@ -48,12 +46,11 @@ fn a_routines_row_shows_its_repeat_and_its_runs_follow_it() {
     let run = app.panels.queued.run_now(id, time::now()).expect("run");
     app.panels.queued.set_state(run, QueueState::Removed);
     app.sync_queued();
-    let Some(Overlay::Issues(b)) = &app.overlay else { panic!("issues") };
-    let routine = b.queued.iter().find(|queued| queued.id == id).expect("routine row");
-    assert!(routine.meta.starts_with("↻ every day 09:00 · fake · "), "{}", routine.meta);
-    let run = b.queued.iter().find(|queued| queued.id == run).expect("run row");
-    assert!(run.meta.starts_with("removed · fake"), "{}", run.meta);
-    assert_eq!(run.label, routine.label);
+    let rows = shown_rows(&app);
+    assert_eq!(rows.iter().map(|row| row.id).collect::<Vec<_>>(), [id, run]);
+    assert!(rows[0].meta().starts_with("↻ every day 09:00 · fake · "), "{}", rows[0].meta());
+    assert!(rows[1].meta().starts_with("removed · fake"), "{}", rows[1].meta());
+    assert_eq!(rows[1].routine, Some(id));
 }
 
 #[test]
@@ -72,7 +69,6 @@ fn removing_a_routine_takes_its_runs_and_undo_brings_everything_back() {
     let id = seed_routine(&mut app, "2h");
     app.panels.queued.run_now(id, time::now()).expect("run");
     let before = app.panels.queued.queue().entries.clone();
-    send_key(&mut app, KeyCode::Down, KeyModifiers::NONE);
     press_button(&mut app, "remove");
     assert_eq!(app.panels.queued.queue().entries, []);
     assert!(
@@ -103,8 +99,8 @@ fn a_failed_run_opens_its_detail_and_no_form() {
     let run = app.panels.queued.run_now(id, time::now()).expect("run");
     app.panels.queued.set_state(run, QueueState::Failed { reason: "gone".into() });
     app.sync_queued();
-    let rows = app.panels.queued.queue().entries.iter().position(|entry| entry.id == run).expect("row");
-    click(&mut app, queue_row(u16::try_from(rows).expect("row")));
+    let row = shown_ids(&app).iter().position(|shown| *shown == run).expect("row");
+    click(&mut app, queue_row(u16::try_from(row).expect("row")));
     assert!(matches!(app.overlay, Some(Overlay::QueueResult(_))));
 }
 

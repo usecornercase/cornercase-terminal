@@ -107,6 +107,7 @@ impl App {
             Some(Overlay::Worktrees(_)) => self.worktrees_key(key, area),
             Some(Overlay::Ports(_)) => self.ports_key(key, area),
             Some(Overlay::Processes(_)) => self.processes_key(key, area),
+            Some(Overlay::QueueList(_)) => self.queue_list_key(key, area),
             _ => {}
         }
     }
@@ -117,6 +118,7 @@ impl App {
             Overlay::Ports(dialog) => Some(ui::Overlay::Ports(self.ports_view(dialog, area))),
             Overlay::Processes(dialog) => Some(ui::Overlay::Processes(self.processes_view(dialog, area))),
             Overlay::BotRoutines(dialog) => self.bot_routines_view(dialog, area),
+            Overlay::QueueList(dialog) => Some(Self::queue_list_view(dialog, area)),
             _ => None,
         }
     }

@@ -280,7 +280,7 @@ impl App {
     pub(super) fn cancel_form(&mut self) {
         match &self.overlay {
             Some(overlay) if overlay.busy() => {}
-            Some(Overlay::Queue(_)) => self.close_queue_form(false),
+            Some(Overlay::Queue(_)) => self.close_queue_form(None),
             Some(Overlay::QueueResult(_)) => self.close_queue_result_dialog(),
             Some(Overlay::Flows { .. }) => self.close_flows(),
             Some(Overlay::Star) => self.answer_star(None),

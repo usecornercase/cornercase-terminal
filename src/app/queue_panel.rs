@@ -1,9 +1,8 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::hash::{BuildHasher, BuildHasherDefault, DefaultHasher};
 use std::time::{Duration, Instant};
 
 use ratatui::layout::Rect;
-use ratatui::style::Color;
 use serde_json::Value;
 
 use super::App;
@@ -14,8 +13,8 @@ use crate::agents::context::Said;
 use crate::agents::launch;
 use crate::control;
 use crate::host::notify::Notification;
-use crate::issues::browser::{Browser, Queued, QueuedKind};
 use crate::project::Hierarchy;
+use crate::queue::dialog::{Kind, Row};
 use crate::queue::outcome::Taken;
 use crate::queue::{self, Queue, State, Task};
 use crate::ui;
@@ -31,6 +30,7 @@ pub(super) struct QueueRuntime {
     area: Option<Rect>,
     path: Option<std::path::PathBuf>,
     back: Option<Box<Overlay>>,
+    folded: BTreeSet<u64>,
     pub(super) cleanups: super::routine_cleanup::Cleanups,
     removals: VecDeque<(u64, Vec<queue::Entry>)>,
     next_undo: u64,
@@ -222,6 +222,16 @@ impl QueueRuntime {
     pub(super) fn save(&self) -> Result<(), String> {
         let Some(path) = &self.path else { return Ok(()) };
         crate::persist::save(path, &self.queue.saved()).map_err(|error| error.to_string())
+    }
+
+    pub(super) fn folded(&self) -> &BTreeSet<u64> {
+        &self.folded
+    }
+
+    pub(super) fn toggle_fold(&mut self, id: u64) {
+        if !self.folded.remove(&id) {
+            self.folded.insert(id);
+        }
     }
 
     pub(super) fn keep_back(&mut self, back: Option<Box<Overlay>>) {
@@ -417,7 +427,7 @@ impl App {
         }
     }
 
-    pub(super) fn queued_rows(&self) -> Vec<Queued> {
+    pub(super) fn queued_rows(&self) -> Vec<Row> {
         let zone = self.panels.queued.display_zone();
         let entries = self.panels.queued.queue.entries.iter().filter(|entry| !entry.is_bot());
         entries.map(|entry| self.queued_row(entry, zone)).collect()
@@ -429,34 +439,35 @@ impl App {
         entries.filter(|entry| entry.bot().is_some_and(|bot| bots.by_id(bot).is_some())).count()
     }
 
-    pub(super) fn queued_row(&self, entry: &queue::Entry, zone: &str) -> Queued {
-        let place = self.queued_place(&entry.task.place);
-        let (when, meta, kind) = if let Some(repeat) = entry.task.repeat {
-            let when =
-                if entry.task.paused { "paused".to_string() } else { queue::clock::display(entry.task.at, zone) };
-            let who = entry.task.flow.as_ref().map_or_else(|| entry.task.agent.clone(), |flow| format!("flow {flow}"));
-            (when, format!("↻ every {repeat} · {who} · {place}"), QueuedKind::Routine { paused: entry.task.paused })
+    pub(super) fn queued_row(&self, entry: &queue::Entry, zone: &str) -> Row {
+        let task = &entry.task;
+        let who = task.flow.as_ref().map_or_else(|| task.agent.clone(), |flow| format!("flow {flow}"));
+        let origin = format!("{who} · {}", self.queued_place(&task.place));
+        let (when, status, kind) = if let Some(repeat) = task.repeat {
+            let when = if task.paused { "paused".to_string() } else { queue::clock::display(task.at, zone) };
+            (when, format!("↻ every {repeat}"), Kind::Routine { paused: task.paused })
         } else {
-            let kind = if entry.is_run() { QueuedKind::Run } else { QueuedKind::Entry };
-            let who = entry.task.flow.as_ref().map_or_else(|| entry.task.agent.clone(), |flow| format!("flow {flow}"));
-            let meta = format!("{} · {who} · {place}", self.queued_status(entry));
-            (queue::clock::display(entry.task.at, zone), meta, kind)
+            let kind = if entry.is_run() { Kind::Run } else { Kind::Entry };
+            (queue::clock::display(task.at, zone), self.queued_status(entry), kind)
         };
         let live = match &entry.state {
             State::Started { pane, server } | State::Kept { pane, server, .. } => self.queue_pane_live(*pane, server),
             _ => false,
         };
-        let first_line = queue::prompt_first_line(&entry.task.prompt);
-        Queued {
+        Row {
             id: entry.id,
             when,
-            label: entry.task.label.clone(),
-            first_line,
-            meta,
+            label: task.label.clone(),
+            first_line: queue::prompt_first_line(&task.prompt),
+            status,
+            origin,
             state: entry.state.clone(),
             kind,
             live,
             unsent: entry.unsent,
+            routine: task.routine,
+            at: task.at,
+            ran: entry.started.unwrap_or(task.at),
         }
     }
 
@@ -506,12 +517,11 @@ impl App {
     }
 
     pub(super) fn sync_queued(&mut self) {
-        if matches!(self.overlay, Some(Overlay::Issues(_))) {
+        if matches!(self.overlay, Some(Overlay::QueueList(_))) {
             let rows = self.queued_rows();
             let count = self.bot_routine_count();
-            if let Some(Overlay::Issues(browser)) = &mut self.overlay {
-                browser.queued = rows;
-                browser.bot_routines = count;
+            if let Some(Overlay::QueueList(dialog)) = &mut self.overlay {
+                dialog.set(rows, self.panels.queued.folded(), count);
             }
         }
     }
@@ -589,69 +599,4 @@ impl App {
         self.queue_removed(format!("cleared {} started", cleared.len()), cleared);
         self.sync_queued();
     }
-}
-
-pub(super) fn queued_colour(queued: &Queued) -> Option<Color> {
-    if queued.unsent && matches!(queued.state, State::Started { .. }) {
-        return Some(Color::Yellow);
-    }
-    match (queued.kind, &queued.state) {
-        (QueuedKind::Routine { paused: true }, _) | (_, State::Removed) => Some(Color::DarkGray),
-        (_, State::Failed { .. }) => Some(Color::Red),
-        (_, State::Missed | State::Kept { .. }) => Some(Color::Yellow),
-        (_, State::Started { .. } | State::Answered { .. }) => Some(Color::Green),
-        (_, State::Pending | State::Starting) => None,
-    }
-}
-
-fn bot_routines_tail(count: usize) -> Option<String> {
-    match count {
-        0 => None,
-        1 => Some("1 bot routine: in its bot's chat".into()),
-        n => Some(format!("{n} bot routines: in each bot's chat")),
-    }
-}
-
-fn queue_hint(selected: Option<&Queued>) -> &'static str {
-    let Some(queued) = selected else { return "every project's scheduled agents" };
-    let opens = matches!(queued.state, State::Started { .. } | State::Kept { .. }) && queued.live;
-    match (queued.kind, &queued.state) {
-        (QueuedKind::Routine { .. }, _) => "enter edits it · start now runs it once more",
-        (QueuedKind::Run, _) if opens => "enter opens its pane · a run of a routine",
-        (QueuedKind::Run, State::Pending | State::Starting) => "a run of a routine · every project's scheduled agents",
-        (QueuedKind::Run, _) => "enter shows its result · a run of a routine",
-        (_, State::Started { .. }) if opens => "enter opens its pane · every project's scheduled agents",
-        (_, State::Started { .. }) => "enter shows its result · every project's scheduled agents",
-        (_, State::Starting) => "starting… · every project's scheduled agents",
-        _ => "enter edits it · start now runs it at once",
-    }
-}
-
-pub(super) fn queue_tab(browser: &Browser) -> (ui::IssuesBody, Option<ui::Note>, String) {
-    let shown = browser.shown_queue();
-    let selected = shown.len().checked_sub(1).map(|last| browser.search.selected().min(last));
-    let items = shown
-        .iter()
-        .map(|queued| ui::IssueRow {
-            key: queued.when.clone(),
-            title: queued.label.clone(),
-            meta: queued.meta.clone(),
-            colour: queued_colour(queued),
-        })
-        .collect();
-    let empty = if browser.queued.is_empty() {
-        "nothing queued: new schedules a prompt, and schedule on an issue queues it"
-    } else {
-        "nothing matches"
-    };
-    let hint = queue_hint(selected.map(|i| shown[i]));
-    let body = ui::IssuesBody::List {
-        filter: browser.search.query().to_string(),
-        items,
-        selected,
-        scroll: browser.search.scroll(),
-        empty: empty.into(),
-        tail: bot_routines_tail(browser.bot_routines),
-    };
-    (body, None, hint.into())
 }

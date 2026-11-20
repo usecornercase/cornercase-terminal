@@ -2,7 +2,6 @@
 
 use super::*;
 use crate::app::text_fields::TextField;
-use crate::issues::browser::Tab as IssueTab;
 use crate::queue::form::{Control, When};
 use crate::queue::{self, Place, State as QueueState, Task};
 use crate::time;
@@ -72,24 +71,36 @@ fn task(app: &App, at: i64, branch: Option<&str>) -> Task {
     }
 }
 
-fn queue_tab(app: &mut App) {
-    app.open_issues(AREA).expect("open issues");
-    let Some(Overlay::Issues(b)) = &mut app.overlay else { panic!("issues") };
-    b.tab_to(IssueTab::Queue);
-    app.sync_queued();
+fn open_queue(app: &mut App) {
+    app.open_queue(None);
+    assert!(matches!(app.overlay, Some(Overlay::QueueList(_))), "the queue modal");
 }
 
 fn queue_row(i: u16) -> Position {
-    let list = ui::issues_list(ui::issues_area(AREA));
-    Position::new(list.x + 2, list.y + i)
+    let list = ui::queue_list_rows(AREA);
+    Position::new(list.x + 6, list.y + i)
+}
+
+fn queue_mark(i: u16) -> Position {
+    let list = ui::queue_list_rows(AREA);
+    Position::new(list.x + 1, list.y + i)
+}
+
+fn queue_labels(app: &mut App) -> Vec<&'static str> {
+    app.sync_queued();
+    let Some(Overlay::QueueList(dialog)) = &app.overlay else { panic!("the queue modal") };
+    dialog.buttons(ui::queue_list_room(AREA).1).into_iter().map(queue::dialog::Button::label).collect()
+}
+
+fn shown_ids(app: &App) -> Vec<u64> {
+    let Some(Overlay::QueueList(dialog)) = &app.overlay else { panic!("the queue modal") };
+    dialog.shown().iter().map(|shown| shown.row.id).collect()
 }
 
 fn press_button(app: &mut App, label: &str) {
-    app.sync_queued();
-    let Some(Overlay::Issues(b)) = &app.overlay else { panic!("issues") };
-    let labels = b.labels(issues_dialog::room(AREA).buttons);
+    let labels = queue_labels(app);
     let i = labels.iter().position(|l| *l == label).unwrap_or_else(|| panic!("no {label} in {labels:?}"));
-    let button = ui::issue_buttons(ui::issues_area(AREA), &labels)[i];
+    let button = ui::queue_list_buttons(AREA, &labels)[i];
     click(app, button.as_position());
 }
 
@@ -364,7 +375,7 @@ mod forms {
     fn right_click_on_another_field_focuses_it_even_with_a_selection_elsewhere() {
         let (mut app, _rx, _repo, _config, _worktrees) = queued_app();
         app.panels.queued.schedule(None, task(&app, time::now() + 3600, None)).expect("add");
-        queue_tab(&mut app);
+        open_queue(&mut app);
         click(&mut app, queue_row(0));
         let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("edit form") };
         form.when = When::In.combo();
@@ -401,7 +412,7 @@ mod forms {
     fn edits_and_cancels_a_pending_prompt_with_mouse_and_enter() {
         let (mut app, _rx, _repo, _config, _worktrees) = queued_app();
         let id = app.panels.queued.schedule(None, task(&app, time::now() + 3600, None)).expect("add");
-        queue_tab(&mut app);
+        open_queue(&mut app);
         click(&mut app, queue_row(0));
         let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("edit form") };
         form.prompt = Editor::new("fix logout instead");
@@ -409,7 +420,7 @@ mod forms {
         form.amount = Editor::new("3");
         save_queue_form(&mut app);
         assert_eq!(app.panels.queued.queue().entry(id).expect("edited").task.prompt, "fix logout instead");
-        assert!(matches!(&app.overlay, Some(Overlay::Issues(b)) if b.current() == IssueTab::Queue));
+        assert!(matches!(app.overlay, Some(Overlay::QueueList(_))));
         press_button(&mut app, "remove");
         assert_eq!(app.panels.queued.queue().entries, []);
     }
@@ -627,7 +638,7 @@ mod panel {
 
     fn opened() -> (App, Receiver<AppEvent>, Vec<TempDir>) {
         let (mut app, rx, repo, config, worktrees) = queued_app();
-        queue_tab(&mut app);
+        open_queue(&mut app);
         (app, rx, vec![repo, config, worktrees])
     }
 
@@ -665,26 +676,27 @@ mod panel {
         let id = app.panels.queued.schedule(None, task(&app, time::now() + 3600, None)).expect("add");
         app.panels.queued.start(id, Instant::now());
         click(&mut app, queue_row(0));
-        assert!(matches!(app.overlay, Some(Overlay::Issues(_))));
-        let Some(Overlay::Issues(b)) = &app.overlay else { panic!("issues") };
-        assert_eq!(b.labels(usize::MAX), ["new", "cancel"]);
+        assert!(matches!(app.overlay, Some(Overlay::QueueList(_))));
+        assert_eq!(queue_labels(&mut app), ["new", "done"]);
         assert_eq!(app.take_notifications().len(), 0);
     }
 
     #[test]
-    fn a_new_entry_comes_back_to_the_queue_tab_and_escape_too() {
+    fn a_new_entry_comes_back_to_the_queue_selected_and_escape_too() {
         let (mut app, _rx, _dirs) = opened();
+        let first = app.panels.queued.schedule(None, task(&app, time::now() + 60, None)).expect("an earlier entry");
         press_button(&mut app, "new");
         assert!(matches!(app.overlay, Some(Overlay::Queue(_))));
         app.queue_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE), AREA);
-        assert!(matches!(&app.overlay, Some(Overlay::Issues(b)) if b.current() == IssueTab::Queue));
+        assert!(matches!(app.overlay, Some(Overlay::QueueList(_))));
         press_button(&mut app, "new");
         let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("form") };
         form.prompt = Editor::new("fix the login");
         save_queue_form(&mut app);
-        assert_eq!(app.panels.queued.queue().entries.len(), 1);
-        let Some(Overlay::Issues(b)) = &app.overlay else { panic!("back in issues") };
-        assert_eq!((b.current(), b.queued.len()), (IssueTab::Queue, 1));
+        let saved = app.panels.queued.queue().entries.iter().map(|entry| entry.id).find(|id| *id != first);
+        let Some(Overlay::QueueList(dialog)) = &app.overlay else { panic!("back in the queue") };
+        assert_eq!(dialog.selected().map(|row| row.id), saved);
+        assert_eq!(shown_ids(&app).len(), 2);
     }
 
     #[test]
@@ -746,7 +758,7 @@ mod bot_entries {
     use crate::agents::headless::Access;
 
     #[test]
-    fn the_tab_lists_projects_only_and_ends_with_a_line_for_the_bots_routines() {
+    fn the_queue_lists_projects_only_and_ends_with_a_line_for_the_bots_routines() {
         let (mut app, _rx, _repo, _config, _worktrees) = queued_app();
         let (_dir, _bin, _claude) = bots::install_bot(&mut app, "", Access::Cornercase);
         let own = Task {
@@ -755,10 +767,10 @@ mod bot_entries {
         };
         app.panels.queued.schedule(None, own).expect("a bot entry");
         let project = app.panels.queued.schedule(None, task(&app, time::now() + 3600, None)).expect("a project entry");
-        queue_tab(&mut app);
-        let Some(Overlay::Issues(browser)) = &app.overlay else { panic!("issues") };
-        assert_eq!(browser.queued.iter().map(|row| row.id).collect::<Vec<_>>(), [project]);
-        assert_eq!(browser.bot_routines, 1);
+        open_queue(&mut app);
+        assert_eq!(shown_ids(&app), [project]);
+        let Some(Overlay::QueueList(dialog)) = &app.overlay else { panic!("the queue modal") };
+        assert_eq!(dialog.bot_routines, 1);
         let drawn = format!("{}", render(&mut app, AREA).backend());
         assert!(drawn.contains("1 bot routine: in its bot's chat"), "{drawn}");
     }
@@ -907,5 +919,7 @@ mod modes {
 
 mod accounts;
 mod cleanup;
+mod list;
+mod prompt;
 mod routine_panel;
 mod routines;

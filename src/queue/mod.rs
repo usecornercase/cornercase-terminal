@@ -1,5 +1,6 @@
 pub(crate) mod clock;
 pub(crate) mod conversation;
+pub(crate) mod dialog;
 pub(crate) mod form;
 pub(crate) mod outcome;
 pub(crate) mod repeat;

@@ -63,8 +63,8 @@ fn a_queued_prompt_never_taken_says_so() {
     let kept = entry(&agent.app, id);
     assert!(kept.unsent);
     let row = agent.app.queued_rows().into_iter().find(|row| row.id == id).expect("its row");
-    assert!(row.meta.contains("· prompt not taken"), "{}", row.meta);
-    assert_eq!(queue_panel::queued_colour(&row), Some(ratatui::style::Color::Yellow));
+    assert!(row.meta().contains("· prompt not taken"), "{}", row.meta());
+    assert_eq!(queue_list_dialog::queued_colour(&row), Some(ratatui::style::Color::Yellow));
     let toast = agent.app.messages.toast.as_ref().map(|toast| toast.message.clone()).unwrap_or_default();
     assert!(toast.contains("did not take the prompt"), "{toast}");
     let told: Vec<_> = messages(&agent.app.take_events(), 9).into_iter().map(|(kind, ..)| kind).collect();

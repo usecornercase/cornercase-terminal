@@ -102,7 +102,7 @@ impl App {
             Overlay::Usage => Dialog::Usage,
             Overlay::Remote => Dialog::Remote,
             Overlay::Keys(_) => Dialog::Keys,
-            Overlay::Queue(_) => Dialog::Queue,
+            Overlay::QueueList(_) | Overlay::Queue(_) => Dialog::Queue,
             _ => return None,
         })
     }
