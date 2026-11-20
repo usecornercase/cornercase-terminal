@@ -413,8 +413,8 @@ fn a_machine_s_agent_shows_under_the_local_project_and_tells_when_it_needs_you()
         raw.contains("\x1b]777;notify;cornercase;claude on vps needs you in ")
     });
     app.wait_for("a toast says where", |s| s.contains("claude on vps needs you in web-shop"));
-    app.wait_for("the tab there says it needs you", |s| s.contains("└ ! "));
-    app.click(app.position_of("└ ! "));
+    app.wait_for("the tab there says it needs you", |s| s.contains("├ ! "));
+    app.click(app.position_of("├ ! "));
     let tabs = project_named(&status(&machine)["projects"], "web-shop")["workspaces"][0]["tabs"].clone();
     let asking = tabs.as_array().and_then(|tabs| tabs.last()).expect("claude's tab there")["id"].clone();
     wait_until("the tab there that needs you is shown", || {
