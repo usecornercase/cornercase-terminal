@@ -71,10 +71,6 @@ impl Journal {
     }
 }
 
-pub(crate) fn not_after(changed: Option<SystemTime>, now: SystemTime) -> Option<SystemTime> {
-    changed.map(|changed| changed.min(now))
-}
-
 pub(crate) fn in_the_future(changed: &str, now: SystemTime) -> bool {
     Stamp::parse(changed).is_some_and(|changed| changed > now + SKEW)
 }
@@ -145,10 +141,10 @@ pub(crate) fn plan<S: PartialEq>(ours: &Ours<S>, theirs: &Theirs<S>) -> Plan {
     let mut plan = Plan::default();
     for mine in &ours.flows {
         match find(&theirs.flows, &mine.name) {
-            Some(there) if newer(there.changed, mine.changed) => plan.kept.push(mine.name.clone()),
-            Some(there) if !newer(mine.changed, there.changed) && there.spec == mine.spec => {
+            Some(there) if there.spec == mine.spec && there.changed == mine.changed => {
                 plan.same.push(mine.name.clone());
             }
+            Some(there) if newer(there.changed, mine.changed) => plan.kept.push(mine.name.clone()),
             _ => plan.ops.push(Op::Send(mine.name.clone())),
         }
     }
@@ -185,7 +181,7 @@ fn events<S>(ours: &Ours<S>) -> Vec<Event> {
         };
         return ours.hidden.iter().map(hidden).collect();
     };
-    ours.events.iter().filter(|event| Stamp::parse(&event.at).is_some_and(|at| at > synced)).cloned().collect()
+    ours.events.iter().filter(|event| Stamp::parse(&event.at).is_some_and(|at| at >= synced)).cloned().collect()
 }
 
 fn newer_there<S>(event: &Event, theirs: &Theirs<S>) -> bool {

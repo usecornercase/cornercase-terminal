@@ -5,6 +5,8 @@ use crate::error::{Error, Result};
 use crate::persist;
 
 pub(crate) const EXTENSION: &str = "toml";
+const PROJECT_FOLDER: &str = ".cornercase";
+const FLOWS_FOLDER: &str = "flows";
 const MAX_COPIES: u32 = 1000;
 const MAX_SLUG: usize =
     persist::MAX_NAME - ("-".len() + MAX_COPIES.ilog10() as usize + 1) - (".".len() + EXTENSION.len());
@@ -209,7 +211,7 @@ pub(crate) fn tag(builtins: &[String], saved: &Saved) -> Option<&'static str> {
 }
 
 pub(crate) fn project_dir(project: &Path) -> PathBuf {
-    project.join(".cornercase").join("flows")
+    project.join(PROJECT_FOLDER).join(FLOWS_FOLDER)
 }
 
 pub(crate) fn list(builtins: Vec<Flow>, chosen: Chosen, user: &Path, project: Option<&Path>) -> Listing {
@@ -324,16 +326,16 @@ pub(crate) fn save(dir: &Path, flow: &Flow, previous: Option<&Path>) -> Result<P
         .map(|stem| dir.join(format!("{stem}.{EXTENSION}")))
         .find(|path| Some(path.as_path()) == previous || !path.exists())
         .ok_or_else(|| Error::FlowFile { path: dir.to_path_buf(), reason: "too many flows share its name".into() })?;
-    persist::write_bytes(&path, text.as_bytes(), kind(flow))?;
+    persist::write_bytes(&path, text.as_bytes(), kind(dir))?;
     if let Some(previous) = previous.filter(|previous| *previous != path) {
         std::fs::remove_file(previous)?;
     }
     Ok(path)
 }
 
-fn kind(flow: &Flow) -> persist::Kind {
-    let sets_env = std::iter::once(&flow.orchestrator).chain(&flow.roles).any(|role| !role.env.is_empty());
-    if sets_env { persist::Kind::Private } else { persist::Kind::Synced }
+fn kind(dir: &Path) -> persist::Kind {
+    let project = dir.ends_with(Path::new(PROJECT_FOLDER).join(FLOWS_FOLDER));
+    if project { persist::Kind::Synced } else { persist::Kind::Private }
 }
 
 pub(crate) fn delete(path: &Path) -> Result<()> {

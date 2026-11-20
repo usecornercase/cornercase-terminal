@@ -12,7 +12,7 @@ import { Aside } from '@astrojs/starlight/components';
 | `cornercase` | The program itself. An [update](../../installation/#update) from the app replaces it in place; on Windows the old one is left as `cornercase.old.exe` until nothing runs from it. | `~/.local/bin/` with the install script (`%USERPROFILE%\.local\bin\` on Windows); Homebrew's or Cargo's `bin` folder otherwise |
 | `config.json` | Your [settings](../configuration/). | `~/.config/cornercase/` |
 | `config.json.lock` | Empty. Makes `cornercase remote --remember` and `--forget` and a window that reaches a machine wait for each other while they change your list of machines. The Settings form and `cornercase machines` do not use it. Safe to delete. | Next to `config.json` |
-| `flows/` | Your [flows](../../guides/flows/#where-flows-are-kept), one TOML file each. A project's flows are in `.cornercase/flows/` in its repository. | Next to `config.json` |
+| `flows/` | Your [flows](../../guides/flows/#where-flows-are-kept), one TOML file each, readable only by you (`0600`) once saved. A project's flows are in `.cornercase/flows/` in its repository. | Next to `config.json` |
 | `secrets.json` | GitLab, Shortcut, Linear, Jira, Plane and Asana tokens and the [Telegram](../../guides/telegram/) and [Discord](../../guides/discord/) bots' tokens, typed in the app. Readable only by you (mode `0600`); removed when its last token is. | Next to `config.json` |
 | `apps.json` | The phone apps paired to reach cornercase [from the app](../../guides/phone/#the-phone-app): a name and a hash of each one's secret, never the secret. Readable only by you (mode `0600`). | Next to `config.json` |
 | `browsers.json` | The browsers paired to open cornercase [from your phone](../../guides/phone/): a hash of each one's secret, never the secret. Readable only by you (mode `0600`). | Next to `config.json` |
@@ -24,6 +24,7 @@ import { Aside } from '@astrojs/starlight/components';
 | `session.json.bak` | The session as it was before a restore that left some tabs out, because their shells couldn't start. The copy before that, if any, is moved to `session.json.bak.1`. | Next to `session.json` |
 | `issues.json` | The last issue lists, so the browser opens instantly. Titles and metadata only, never tokens; at most 50 lists. | Next to `session.json` |
 | `stats.json` | Local counts of agent work, hourly buckets for 26 weeks and a day, and lifetime totals per agent. Compact versioned JSON, readable only by its owner (`0600`). | Next to `session.json` |
+| `flow-sync.json` | What [syncing your flows](../../guides/flows/#sync-your-flows-with-your-machines) needs to remember: the flows you deleted, hid or restored, when each machine last synced, and the changes a machine refused, to send again. | Next to `session.json` |
 | `star.json` | The prompts counted for the [star prompt](../configuration/#star_prompt), when it asked and your answer. Nothing else. | Next to `session.json` |
 | `machines.json` | Older releases kept here the machines a window reached. This release moves them into [`machines`](../configuration/#machines) in `config.json` the first time, not shown, and removes the file. | Next to `session.json` |
 | `runs/` | The [folders of flow runs](../../guides/flows/#the-runs-folder), one per run, removed with their workspace. Readable only by you (`0700`). | Next to `session.json` |

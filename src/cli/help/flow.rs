@@ -154,7 +154,7 @@ each change touched, how many were already the same, and error when the machine 
 It exits with 1 when no machine syncs your flows, when --machine names one that does not, and when a
 machine could not be reached or refused a flow (error, or a failed entry): the JSON is still printed.
 A deletion a machine refused is sent again with every later sync until it goes through. Each flow's
-env values go too, and a flow that sets env is written readable only by you on both ends.
+env values go too, and each flow file of yours is written readable only by you on both ends.
 
 Examples:
   cornercase flow sync

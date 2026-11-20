@@ -1,7 +1,7 @@
 use serde_json::{Value, json};
 
 use super::*;
-use crate::control::{FlowInfo, Flows, FlowsSynced, Response};
+use crate::control::{FlowInfo, FlowSpec, Flows, FlowsSynced, Response};
 use crate::flows::store;
 use crate::flows::sync::{Change, Journal};
 use crate::flows::{Flow, ORCHESTRATOR, Role, Stage};
@@ -430,5 +430,28 @@ mod an_import_from_a_machine {
         rig.import_from(&duo("Duo"), "lap\u{202e}top\nmini");
 
         assert_eq!(rig.toast().as_deref(), Some("Duo arrived from laptop mini's flows: your flows sync from there"));
+    }
+}
+
+mod a_flow_of_yours_with_a_time_ahead {
+    use super::*;
+
+    #[test]
+    fn is_saved_with_this_computer_s_time_and_is_then_the_same_there() {
+        let there = There::default();
+        let mut rig = synced_once(&there);
+        let ahead = Flow { changed: Some("2099-01-01T00:00:00.000Z".into()), ..duo("Duo") };
+        store::save(&rig.yours(), &ahead, None).expect("save a flow by hand");
+
+        let first = rig.sync_now();
+        let fixed = store::read(&rig.yours().join("duo.toml")).expect("the flow");
+        let info =
+            FlowInfo { flow: FlowSpec::from(&fixed), ..listed_as_yours("Duo", fixed.changed.as_deref()).remove(0) };
+        *there.listed.lock() = vec![info];
+        let second = rig.sync_now();
+
+        assert_ne!(fixed.changed.as_deref(), Some("2099-01-01T00:00:00.000Z"));
+        assert_eq!((first.machines[0].sent.clone(), second.machines[0].same), (vec!["Duo".into()], 1));
+        assert_eq!(rig.app.flow_synced_to(&fixed), ["vps"]);
     }
 }

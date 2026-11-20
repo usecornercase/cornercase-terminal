@@ -288,9 +288,20 @@ mod times {
     use super::*;
 
     #[test]
-    fn a_time_in_the_future_is_sent_as_now() {
-        assert_eq!(not_after(Some(at(50)), at(40)), Some(at(40)));
-        assert_eq!(not_after(Some(at(30)), at(40)), Some(at(30)));
+    fn the_same_copy_with_the_same_time_ahead_is_the_same_not_kept() {
+        let plan = plan(&ours(vec![held("Duo", Some(4_000), "a")]), &theirs(vec![held("Duo", Some(4_000), "a")]));
+
+        assert_eq!((plan.same, plan.kept), (vec!["Duo".to_string()], Vec::new()));
+    }
+
+    #[test]
+    fn a_change_made_in_the_millisecond_of_the_last_sync_is_still_sent() {
+        let mut ours = changed(vec![event("Duo", Change::Deleted, 40)]);
+        ours.synced = Some(at(40));
+
+        let plan = plan(&ours, &theirs(vec![held("Duo", Some(20), "a")]));
+
+        assert_eq!(plan.ops, [Op::Delete("Duo".into())]);
     }
 
     #[test]

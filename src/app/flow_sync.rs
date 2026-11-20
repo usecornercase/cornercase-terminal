@@ -297,10 +297,11 @@ impl App {
         let mut flows = Vec::new();
         let mut texts = Vec::new();
         for saved in listing.flows.iter().filter(|saved| matches!(saved.origin, Origin::User(_))) {
-            let Ok(text) = share::to_share(&saved.flow) else { continue };
-            let changed = sync::not_after(saved.flow.changed.as_deref().and_then(Stamp::parse), now);
-            flows.push(sync::Held { name: saved.flow.name.clone(), changed, spec: FlowSpec::from(&saved.flow) });
-            texts.push((saved.flow.name.clone(), text));
+            let flow = in_the_present(saved, now);
+            let Ok(text) = share::to_share(&flow) else { continue };
+            let changed = flow.changed.as_deref().and_then(Stamp::parse);
+            flows.push(sync::Held { name: flow.name.clone(), changed, spec: FlowSpec::from(&flow) });
+            texts.push((flow.name.clone(), text));
         }
         let synced = journal.synced(destination);
         let retry = journal.retry.get(destination).cloned().unwrap_or_default();
@@ -456,15 +457,27 @@ enum Arrival {
     Replaced,
 }
 
+fn present(flow: &Flow, now: SystemTime) -> Option<Flow> {
+    let future = flow.changed.as_deref().is_some_and(|changed| sync::in_the_future(changed, now));
+    future.then(|| Flow { changed: Some(Stamp(now).to_string()), ..flow.clone() })
+}
+
 fn kept_time(flow: &Flow) -> Flow {
-    let now = SystemTime::now();
-    match flow.changed.as_deref().filter(|changed| sync::in_the_future(changed, now)) {
-        Some(_) => {
-            log::warning!("flows", "a synced flow's time is in the future: it is saved with this computer's time");
-            Flow { changed: Some(Stamp(now).to_string()), ..flow.clone() }
-        }
-        None => flow.clone(),
+    let Some(fixed) = present(flow, SystemTime::now()) else { return flow.clone() };
+    log::warning!("flows", "a synced flow's time is in the future: it is saved with this computer's time");
+    fixed
+}
+
+fn in_the_present(saved: &store::Saved, now: SystemTime) -> Flow {
+    let (Some(fixed), Some(path)) = (present(&saved.flow, now), saved.origin.path()) else {
+        return saved.flow.clone();
+    };
+    let dir = path.parent().unwrap_or(path);
+    match store::save(dir, &fixed, Some(path)) {
+        Ok(_) => log::warning!("flows", "a flow's time is in the future: it is saved with this computer's time"),
+        Err(e) => log::warning!("flows", "a flow's time in the future could not be fixed", why = e),
     }
+    fixed
 }
 
 fn hidden_report(mut report: MachineFlows, destination: &str) -> MachineFlows {

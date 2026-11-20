@@ -92,15 +92,15 @@ mod modes {
     }
 
     #[test]
-    fn a_flow_that_sets_env_is_readable_only_by_its_owner() {
+    fn yours_are_readable_only_by_their_owner_and_a_project_s_are_not() {
         let dir = TempDir::new();
         let mut secret = named("Deploy");
-        secret.roles[0].env.insert("TOKEN".into(), "abc".into());
+        secret.roles[0].args = vec!["--api-key=abc".into()];
 
-        let private = save(dir.path(), &secret, None).expect("save it");
-        let plain = save(dir.path(), &named("Plain"), None).expect("save it");
+        let yours = save(&dir.path().join("flows"), &secret, None).expect("save it");
+        let project = save(&project_dir(dir.path()), &named("Plain"), None).expect("save it");
 
-        assert_eq!(mode(&private), 0o600);
-        assert_ne!(mode(&plain), 0o600);
+        assert_eq!(mode(&yours), 0o600);
+        assert_ne!(mode(&project), 0o600);
     }
 }
