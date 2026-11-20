@@ -51,7 +51,7 @@ impl App {
         let compact = area.width < ui::COMPACT_WIDTH;
         let mut fitted = dialog.clone();
         fitted.fit(&ids, ui::routines_room(area, compact).0);
-        let (selected, scroll) = (fitted.index(&ids), fitted.scroll);
+        let (selected, scroll) = (fitted.index(&ids), fitted.list.scroll);
         let rows: Vec<ui::RoutineRow> = entries.iter().map(|entry| self.routine_row(entry)).collect();
         let hint =
             selected.map_or_else(|| HINT_NONE.replace("{bot}", &name), |at| self.routine_hint(entries[at], &name));

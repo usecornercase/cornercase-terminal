@@ -4,7 +4,6 @@ use crate::app::App;
 use crate::app::layout::Side;
 use crate::app::menus::MenuAction;
 use crate::app::overlay::Overlay;
-use crate::issues::browser::Tab;
 use crate::log;
 use crate::project::search::Finder;
 use crate::settings::Page;
@@ -53,8 +52,8 @@ impl App {
             (Show::Panel { panel }, _) => self.tour_panel() == Some(panel),
             (Show::Issues, Some(Overlay::Issues(_)))
             | (Show::Search, Some(Overlay::Search(_)))
-            | (Show::Keys, Some(Overlay::Keys(_))) => true,
-            (Show::Queue, Some(Overlay::Issues(b))) => b.current() == Tab::Queue,
+            | (Show::Keys, Some(Overlay::Keys(_)))
+            | (Show::Queue, Some(Overlay::QueueList(_))) => true,
             (Show::Settings { page: tour::Page::Flows }, Some(Overlay::Flows { dialog, .. })) => dialog.in_settings,
             (Show::Settings { page }, Some(Overlay::Settings(s))) => s.page == settings_page(page),
             (Show::HelpMenu, Some(Overlay::Menu { actions, .. })) => {
@@ -73,7 +72,8 @@ impl App {
         }
         let Some(area) = self.panels.queued.area().filter(|_| self.overlay.is_none()) else { return false };
         match show {
-            Show::Issues | Show::Queue => self.open_issues_on(area, show == Show::Queue),
+            Show::Issues => self.open_issues_on(area),
+            Show::Queue => self.open_queue(None),
             Show::Search => self.overlay = Some(Overlay::Search(Finder::default())),
             Show::Keys => self.overlay = Some(Overlay::Keys(None)),
             Show::Settings { page } => {
@@ -101,12 +101,9 @@ impl App {
         true
     }
 
-    fn open_issues_on(&mut self, area: Rect, queue: bool) {
+    fn open_issues_on(&mut self, area: Rect) {
         if let Err(e) = self.open_issues(area) {
             log::warning!("tour", "cannot open issues", error = e);
-        }
-        if queue && let Some(Overlay::Issues(b)) = &mut self.overlay {
-            b.tab_to(Tab::Queue);
         }
     }
 

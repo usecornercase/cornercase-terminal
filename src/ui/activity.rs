@@ -109,6 +109,7 @@ impl Item {
                         | Overlay::Flows(_)
                         | Overlay::Usage(_)
                         | Overlay::Remote(_)
+                        | Overlay::QueueList(_)
                 )
             ),
             Self::Plugin(_) | Self::Machine => false,

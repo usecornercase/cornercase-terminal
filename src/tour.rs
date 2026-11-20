@@ -34,6 +34,7 @@ pub(crate) enum Target {
     Settings,
     Usage,
     Remote,
+    Queue,
     Help,
 }
 

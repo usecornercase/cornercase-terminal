@@ -124,6 +124,7 @@ impl App {
             Action::Todo => self.todo_by_key(),
             Action::Recap => self.toggle_recap(),
             Action::NewBot => self.dialog_by_key(|app| app.open_bot_form(None)),
+            Action::Queue => self.dialog_by_key(|app| app.open_queue(None)),
             Action::Settings => self.dialog_by_key(Self::open_settings),
             Action::Usage => self.dialog_by_key(Self::open_usage),
             Action::Processes => self.dialog_by_key(Self::open_processes),

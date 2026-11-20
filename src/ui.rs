@@ -17,6 +17,9 @@ pub(crate) use dialog::bot_ask;
 pub(crate) use dialog::clone_on_machine;
 pub(crate) use dialog::machine as machine_form;
 pub(crate) use dialog::queue as queue_form;
+pub(crate) use dialog::queue_list::{QueueList, QueueRow, queue_list_hit, queue_list_room};
+#[cfg(test)]
+pub(crate) use dialog::queue_list::{queue_list_buttons, queue_list_rows};
 mod drop;
 pub(crate) mod files;
 pub(crate) mod flow;
@@ -542,6 +545,7 @@ fn draw_overlay(f: &mut Frame, view: &View, areas: &Areas) {
         Some(Overlay::Form(form)) => draw_form(f, view, form, None),
         Some(Overlay::RunOnForm(form, run_on)) => draw_form(f, view, form, Some(run_on)),
         Some(Overlay::Queue(form)) => dialog::queue::draw(f, view, form),
+        Some(Overlay::QueueList(queue)) => dialog::queue_list::draw(f, view, queue),
         Some(Overlay::BotForm(form)) => dialog::bot::draw(f, view, form),
         Some(Overlay::BotAsk(ask)) => bot_ask::draw(f, view, ask),
         Some(Overlay::GroupStyle(group)) => draw_group_style(f, view, group),

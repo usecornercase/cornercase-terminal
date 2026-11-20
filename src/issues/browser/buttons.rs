@@ -1,6 +1,5 @@
-use super::{Action, After, Browser, Pick, Place, Queued, QueuedKind, Screen, Step, Tab};
+use super::{Action, After, Browser, Pick, Place, Screen, Step, Tab};
 use crate::issues::{Issue, Source, Who};
-use crate::queue::State;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Button {
@@ -25,12 +24,6 @@ pub(super) enum Button {
     Next,
     Cancel,
     Back,
-    New,
-    RunNow,
-    Pause,
-    Resume,
-    Remove,
-    ClearStarted,
 }
 
 impl Button {
@@ -57,12 +50,6 @@ impl Button {
             Self::Next => "next",
             Self::Cancel => "cancel",
             Self::Back => "back",
-            Self::New => "new",
-            Self::RunNow => "start now",
-            Self::Pause => "pause",
-            Self::Resume => "resume",
-            Self::Remove => "remove",
-            Self::ClearStarted => "clear started",
         }
     }
 }
@@ -137,9 +124,6 @@ impl Browser {
     }
 
     fn list_buttons(&self) -> Vec<Button> {
-        if self.current() == Tab::Queue {
-            return self.queue_buttons();
-        }
         let mut buttons = vec![Button::Start, Button::Schedule, Button::Flow, Button::Refresh];
         if let Tab::One(source) = self.current()
             && self.connections.get(&source).is_some_and(|c| !c.from_env)
@@ -148,28 +132,6 @@ impl Browser {
         }
         buttons.push(Button::Cancel);
         self.unscheduled(buttons)
-    }
-
-    fn queue_buttons(&self) -> Vec<Button> {
-        let mut buttons = vec![Button::New];
-        if let Some(queued) = self.selected_queued() {
-            if queued.runnable() {
-                buttons.push(Button::RunNow);
-            }
-            match queued.kind {
-                QueuedKind::Routine { paused: false } => buttons.push(Button::Pause),
-                QueuedKind::Routine { paused: true } => buttons.push(Button::Resume),
-                QueuedKind::Entry | QueuedKind::Run => {}
-            }
-            if queued.state != State::Starting {
-                buttons.push(Button::Remove);
-            }
-        }
-        if self.queued.iter().any(Queued::clearable) {
-            buttons.push(Button::ClearStarted);
-        }
-        buttons.push(Button::Cancel);
-        buttons
     }
 
     pub(crate) fn labels(&self, width: usize) -> Vec<&'static str> {
@@ -181,9 +143,6 @@ impl Browser {
     }
 
     pub(crate) fn toggles(&self) -> (Vec<String>, Vec<bool>) {
-        if self.current() == Tab::Queue {
-            return (Vec::new(), Vec::new());
-        }
         let label = self.people_label();
         let filtered = label != "people";
         (vec!["closed".into(), label], vec![self.closed, filtered])
@@ -204,9 +163,6 @@ impl Browser {
                 self.open_picker(pick, After::Nothing);
                 Action::None
             }
-            Button::New | Button::RunNow | Button::Pause | Button::Resume | Button::Remove | Button::ClearStarted => {
-                self.press_queue(button)
-            }
             Button::Done => self.close_people(),
             Button::Clear => self.clear_people(),
             Button::LoginTab => Action::OpenLoginTab,
@@ -223,7 +179,7 @@ impl Browser {
             },
             Button::Disconnect => match self.current() {
                 Tab::One(source) => Action::Disconnect(source),
-                Tab::All | Tab::Queue => Action::None,
+                Tab::All => Action::None,
             },
             Button::Connect | Button::Next => self.submit_token(),
             Button::Cancel => Action::Close,
@@ -265,17 +221,6 @@ impl Browser {
                 }
                 None => Action::None,
             },
-        }
-    }
-
-    fn press_queue(&mut self, button: Button) -> Action {
-        match button {
-            Button::RunNow => self.selected_queued().map_or(Action::None, |queued| Action::QueueRun(queued.id)),
-            Button::Pause => self.selected_queued().map_or(Action::None, |queued| Action::QueuePause(queued.id)),
-            Button::Resume => self.selected_queued().map_or(Action::None, |queued| Action::QueueResume(queued.id)),
-            Button::Remove => self.selected_queued().map_or(Action::None, |queued| Action::QueueRemove(queued.id)),
-            Button::ClearStarted => Action::QueueClear,
-            _ => Action::QueueNew,
         }
     }
 

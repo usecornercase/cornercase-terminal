@@ -92,7 +92,7 @@ fn its_menu_button_opens_the_same_menu_and_a_click_beside_it_opens_the_dialog() 
 pub(super) fn assert_a_card_click_opens_its_routines(c: &mut Chat, id: u64) {
     let pos = card_rows_of(c, id)[0];
     click(&mut c.app, pos);
-    assert!(matches!(&c.app.overlay, Some(Overlay::BotRoutines(dialog)) if dialog.selected == Some(id)));
+    assert!(matches!(&c.app.overlay, Some(Overlay::BotRoutines(dialog)) if dialog.list.selected == Some(id)));
 }
 
 fn second_row_value(c: &mut Chat, id: u64) -> String {
@@ -245,5 +245,5 @@ fn a_press_uses_the_list_of_the_frame_that_was_drawn() {
     let pos = card_rows_of(&c, id)[0];
     c.app.screen.nav = Some(ui::Nav::Workspaces);
     click_in(&mut c.app, pos, SMALL);
-    assert!(matches!(&c.app.overlay, Some(Overlay::BotRoutines(dialog)) if dialog.selected == Some(id)));
+    assert!(matches!(&c.app.overlay, Some(Overlay::BotRoutines(dialog)) if dialog.list.selected == Some(id)));
 }

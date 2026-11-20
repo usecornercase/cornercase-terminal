@@ -196,7 +196,7 @@ export type MenuAction =
 
 export type HelpItem = 'tour' | 'catalogue' | 'docs' | 'keys' | 'bug';
 
-export type MoreItem = 'settings' | 'usage' | 'processes' | 'new bot…' | 'quit';
+export type MoreItem = 'settings' | 'usage' | 'processes' | 'new bot…' | 'queue' | 'quit';
 
 export interface PickItem {
   value: string;
@@ -270,6 +270,7 @@ export type Overlay =
   | import('./queue').QueueForm
   | import('./botform').BotForm
   | import('./botroutines').BotRoutinesDialog
+  | import('./queuelist').QueueListDialog
   | SettingsOverlay
   | IssuesOverlay;
 

@@ -45,7 +45,7 @@ fn form(app: &mut App) -> &mut Form {
 
 fn save(app: &mut App) {
     form(app).prompt = Editor::new("fix the login");
-    app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
+    save_queue_form(app);
     assert!(!matches!(app.overlay, Some(Overlay::Queue(_))), "the form saved");
 }
 
@@ -219,7 +219,7 @@ fn an_account_deleted_while_the_form_is_open_is_refused_on_save() {
     app.relist_accounts();
 
     form(&mut app).prompt = Editor::new("fix the login");
-    app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
+    save_queue_form(&mut app);
 
     let error = form(&mut app).error.clone().expect("the form says why");
     assert!(error.contains("there is no claude account `home`"), "{error}");
@@ -253,7 +253,7 @@ fn editing_an_entry_whose_account_is_gone_says_so_and_keeps_it() {
     assert_eq!(error, "the claude account `home` is gone: pick another account");
     assert_eq!(shown(&mut app), ("System work".into(), None));
     form(&mut app).clock = Editor::new("23:59");
-    app.queue_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE), AREA);
+    save_queue_form(&mut app);
 
     let error = form(&mut app).error.clone().expect("the save is refused");
     assert!(error.contains("there is no claude account `home`"), "{error}");

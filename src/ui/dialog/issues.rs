@@ -207,14 +207,23 @@ pub(in crate::ui) fn draw_issues(f: &mut Frame, view: &View, issues: &Issues) {
 }
 
 fn draw_issue_list(f: &mut Frame, view: &View, list: Rect, (shown, empty, tail): (RowsShown, &str, Option<&str>)) {
+    draw_empty_and_tail(f, view, list, (shown.items.len(), empty, tail));
+    draw_issue_rows(f, view, list, shown);
+}
+
+pub(super) fn draw_empty_and_tail(
+    f: &mut Frame,
+    view: &View,
+    list: Rect,
+    (items, empty, tail): (usize, &str, Option<&str>),
+) {
     let dim = Style::default().fg(view.muted);
-    if shown.items.is_empty() {
+    if items == 0 {
         let text = Paragraph::new(Span::styled(empty, dim)).wrap(Wrap { trim: false });
         f.render_widget(text, list.inner(Margin::new(1, 0)));
     }
-    draw_issue_rows(f, view, list, shown);
     if let Some(tail) = tail {
-        draw_issue_tail(f, dim, list, (shown.items.len(), empty), tail);
+        draw_issue_tail(f, dim, list, (items, empty), tail);
     }
 }
 
@@ -264,8 +273,11 @@ fn draw_issue_note(f: &mut Frame, dim: Style, issues: &Issues, note: Rect) {
 }
 
 fn draw_issue_buttons(f: &mut Frame, view: &View, issues: &Issues, r: Rect) {
-    let rects = issue_buttons(r, &issues.buttons);
-    for (i, (rect, label)) in rects.iter().zip(&issues.buttons).enumerate() {
+    draw_buttons(f, view, &issue_buttons(r, &issues.buttons), &issues.buttons);
+}
+
+pub(super) fn draw_buttons(f: &mut Frame, view: &View, rects: &[Rect], labels: &[&str]) {
+    for (i, (rect, label)) in rects.iter().zip(labels).enumerate() {
         let style = dialog_button_style(view, *rect, i == 0);
         f.render_widget(Paragraph::new(Span::styled(format!(" {label} "), style)), *rect);
     }

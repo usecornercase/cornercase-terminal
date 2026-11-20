@@ -144,7 +144,7 @@ fn draw_fields(f: &mut Frame, view: &View, screen: Rect, form: &Form) {
             draw_secrets(f, view, r, (&form.secrets, focused));
         } else if let Some(editor) = form.editor_of(field) {
             let placeholder = if field == Field::About { "optional: what the bot is for" } else { "" };
-            let at = EditorField { field: r, text: text(screen, form, field), focused, placeholder };
+            let at = EditorField { field: r, text: text(screen, form, field), focused, placeholder, top: None };
             draw_editor(f, view, editor, at);
         } else if let Some(choices) = form.combo_of(field) {
             let grey = field == Field::Agent && form.editing.is_some();

@@ -1388,11 +1388,9 @@ screen_queue() {
   ' "$CC_RUN/server.queue.json" "$CC_HOME"
   cc_start 140 38
   cc_wait 'web-shop'
-  cc_click 'Issues'
-  cc_wait '#482'
-  cc_click 'Queue'
+  cc_more 'queue'
   cc_wait 'clear started'
-  cc_hover 'Issues · web-shop'
+  cc_hover '╭─ Queue'
   cc_shot queue
 }
 
@@ -1473,11 +1471,9 @@ screen_queue_routine() {
   cc_session "$CC_CAPTURE/sessions/s1.json"
   cc_start 110 38
   cc_wait 'web-shop'
-  cc_click 'Issues'
-  cc_wait '#482'
-  cc_click 'Queue'
+  cc_more 'queue'
   cc_wait 'nothing queued'
-  cc_click 'new   cancel'
+  cc_click 'new   done'
   cc_wait 'Schedule an agent'
   cc_type 'Check the dependencies'
   cc_keys Tab
@@ -1495,11 +1491,9 @@ screen_queue_form() {
   cc_session "$CC_CAPTURE/sessions/s1.json"
   cc_start 110 38
   cc_wait 'web-shop'
-  cc_click 'Issues'
-  cc_wait '#482'
-  cc_click 'Queue'
+  cc_more 'queue'
   cc_wait 'nothing queued'
-  cc_click 'new   cancel'
+  cc_click 'new   done'
   cc_wait 'Schedule an agent'
   cc_type 'Fix the login form'
   cc_hover 'Workspaces'

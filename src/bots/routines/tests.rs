@@ -16,30 +16,30 @@ mod keys {
         let mut dialog = Dialog::new(1, None);
         assert_eq!(dialog.index(&IDS), Some(0));
         dialog.key(press(KeyCode::Down), &IDS, 4);
-        assert_eq!(dialog.selected, Some(11));
+        assert_eq!(dialog.list.selected, Some(11));
         for _ in 0..9 {
             dialog.key(press(KeyCode::Down), &IDS, 4);
         }
-        assert_eq!(dialog.selected, Some(13));
+        assert_eq!(dialog.list.selected, Some(13));
         for _ in 0..9 {
             dialog.key(press(KeyCode::Up), &IDS, 4);
         }
-        assert_eq!(dialog.selected, Some(10));
+        assert_eq!(dialog.list.selected, Some(10));
     }
 
     #[test]
     fn page_home_and_end_move_by_pages_and_to_the_ends() {
         let mut dialog = Dialog::new(1, None);
         dialog.key(press(KeyCode::PageDown), &IDS, 2);
-        assert_eq!(dialog.selected, Some(12));
+        assert_eq!(dialog.list.selected, Some(12));
         dialog.key(press(KeyCode::End), &IDS, 2);
-        assert_eq!(dialog.selected, Some(13));
-        assert_eq!(dialog.scroll, 2);
+        assert_eq!(dialog.list.selected, Some(13));
+        assert_eq!(dialog.list.scroll, 2);
         dialog.key(press(KeyCode::PageUp), &IDS, 2);
-        assert_eq!(dialog.selected, Some(11));
+        assert_eq!(dialog.list.selected, Some(11));
         dialog.key(press(KeyCode::Home), &IDS, 2);
-        assert_eq!(dialog.selected, Some(10));
-        assert_eq!(dialog.scroll, 0);
+        assert_eq!(dialog.list.selected, Some(10));
+        assert_eq!(dialog.list.scroll, 0);
     }
 
     #[test]
@@ -57,7 +57,7 @@ mod keys {
         let reordered = [11, 10, 13, 12];
         assert_eq!(dialog.index(&reordered), Some(0));
         dialog.key(press(KeyCode::Down), &reordered, 4);
-        assert_eq!(dialog.selected, Some(10));
+        assert_eq!(dialog.list.selected, Some(10));
         assert_eq!(dialog.index(&IDS), Some(0));
     }
 }
@@ -69,16 +69,16 @@ mod clicks {
     fn a_click_on_a_row_selects_and_opens_it() {
         let mut dialog = Dialog::new(1, None);
         assert_eq!(dialog.click(Hit::Row(2), &IDS), Asked::Open(12));
-        assert_eq!(dialog.selected, Some(12));
+        assert_eq!(dialog.list.selected, Some(12));
         assert_eq!(dialog.click(Hit::Row(9), &IDS), Asked::None);
-        assert_eq!(dialog.selected, Some(12));
+        assert_eq!(dialog.list.selected, Some(12));
     }
 
     #[test]
     fn a_button_acts_on_its_own_row() {
         let mut dialog = Dialog::new(1, Some(10));
         assert_eq!(dialog.click(Hit::Button(3, Button::Pause), &IDS), Asked::Press(13, Button::Pause));
-        assert_eq!(dialog.selected, Some(13));
+        assert_eq!(dialog.list.selected, Some(13));
     }
 
     #[test]
@@ -100,9 +100,9 @@ fn index_falls_back_to_the_first_row_when_its_entry_is_gone() {
 fn scroll_by_stays_inside_the_list() {
     let mut dialog = Dialog::new(1, None);
     dialog.scroll_by(5, 4, 2);
-    assert_eq!(dialog.scroll, 2);
+    assert_eq!(dialog.list.scroll, 2);
     dialog.scroll_by(-9, 4, 2);
-    assert_eq!(dialog.scroll, 0);
+    assert_eq!(dialog.list.scroll, 0);
 }
 
 mod rules {
@@ -153,11 +153,11 @@ fn fit_brings_the_selection_into_view() {
     let ids: Vec<u64> = (0..12).collect();
     let mut dialog = Dialog::new(1, Some(11));
     dialog.fit(&ids, 10);
-    assert_eq!(dialog.scroll, 2);
+    assert_eq!(dialog.list.scroll, 2);
     let mut early = Dialog::new(1, Some(0));
-    early.scroll = 5;
+    early.list.scroll = 5;
     early.fit(&ids, 10);
-    assert_eq!(early.scroll, 0);
+    assert_eq!(early.list.scroll, 0);
 }
 
 #[test]
@@ -166,9 +166,9 @@ fn a_wheel_scroll_stops_the_view_from_following_the_selection_until_a_move() {
     let mut dialog = Dialog::new(1, None);
     dialog.scroll_by(3, 14, 10);
     dialog.fit(&ids, 10);
-    assert_eq!(dialog.scroll, 3);
+    assert_eq!(dialog.list.scroll, 3);
     dialog.key(press(KeyCode::Down), &ids, 10);
     dialog.fit(&ids, 10);
-    assert_eq!(dialog.scroll, 1);
-    assert_eq!(dialog.selected, Some(1));
+    assert_eq!(dialog.list.scroll, 1);
+    assert_eq!(dialog.list.selected, Some(1));
 }

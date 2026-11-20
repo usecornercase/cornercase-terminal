@@ -109,7 +109,7 @@ impl App {
             Target::Changes => ActivityItem::Changes,
             Target::Files => ActivityItem::Files,
             Target::Todo => ActivityItem::Todo,
-            Target::Settings | Target::Usage | Target::Remote => ActivityItem::More,
+            Target::Settings | Target::Usage | Target::Remote | Target::Queue => ActivityItem::More,
             Target::Help => ActivityItem::Help,
             _ => return None,
         };
@@ -145,7 +145,9 @@ impl App {
             Target::Files => areas.files_button,
             Target::Todo => areas.todo_button,
             Target::Search => areas.search_button,
-            Target::Settings | Target::Usage | Target::Remote => label_cells(areas.more, ui::MORE_LABEL),
+            Target::Settings | Target::Usage | Target::Remote | Target::Queue => {
+                label_cells(areas.more, ui::MORE_LABEL)
+            }
             _ => ui::help_button(areas.more),
         }
     }
