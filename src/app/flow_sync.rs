@@ -1,5 +1,5 @@
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
+use std::time::{Duration, Instant, SystemTime};
 
 use super::App;
 use super::control::machines::unknown;
@@ -21,6 +21,10 @@ use crate::paths;
 use crate::time::Stamp;
 use crate::ui;
 
+const RETRY_FIRST: Duration = Duration::from_secs(30);
+const RETRY_MOST: Duration = Duration::from_secs(600);
+const NONE_LINKED: &str = "no machine that syncs your flows is linked now: they get them when their link comes back";
+
 pub(super) const NONE_SYNC: &str = "no machine syncs your flows: tick `sync your flows to it` in Settings › Machines, or `cornercase machines edit NAME --sync-flows`";
 
 #[derive(Default)]
@@ -38,10 +42,17 @@ struct Peer {
     rounds: u64,
     same: Vec<(String, Option<SystemTime>)>,
     last: Option<MachineFlows>,
+    failures: u32,
+    retry_at: Option<Instant>,
+}
+
+enum Answer {
+    Request(u64),
+    Window(String),
 }
 
 struct Waiter {
-    key: u64,
+    answer: Answer,
     wanted: Vec<(String, String, u64)>,
     reports: Vec<MachineFlows>,
 }
@@ -207,15 +218,45 @@ impl App {
     }
 
     pub(super) fn flows_sync_now(&mut self) {
-        let started = self.sync_flows_now();
-        let notice = if self.flow_sync_machines().is_empty() {
-            NONE_SYNC.to_string()
-        } else if started.is_empty() {
-            "no machine that syncs your flows is linked now: they get them when their link comes back".to_string()
-        } else {
-            format!("sending your flows to {}…", started.join(", "))
-        };
-        self.flows_notice(notice);
+        self.follow_machines();
+        self.follow_flow_sync();
+        let Ok(targets) = self.flow_sync_targets(None) else { return self.flows_notice(NONE_SYNC.into()) };
+        let mut waiter = self.flow_sync_waiter(targets, Answer::Window(String::new()));
+        if waiter.wanted.is_empty() {
+            return self.flows_notice(NONE_LINKED.into());
+        }
+        let names: Vec<&str> = waiter.wanted.iter().map(|(_, name, _)| name.as_str()).collect();
+        let sending = format!("sending your flows to {}…", names.join(", "));
+        waiter.answer = Answer::Window(sending.clone());
+        let waiters = &mut self.machines.flows.waiters;
+        waiters.retain(|waiter| !matches!(waiter.answer, Answer::Window(_)));
+        waiters.push(waiter);
+        self.flows_notice(sending);
+    }
+
+    fn flows_sync_shown(&mut self, sending: &str, machines: &[MachineFlows]) {
+        let outcome: Vec<String> = machines.iter().map(MachineFlows::line).collect();
+        if let Some(dialog) = self.flows_dialog()
+            && dialog.notice.as_deref() == Some(sending)
+        {
+            dialog.notice = Some(outcome.join("; "));
+        }
+    }
+
+    pub(super) fn retry_flow_sync(&mut self, now: Instant) {
+        let mut due = Vec::new();
+        let waiting =
+            self.machines.flows.peers.iter_mut().filter(|peer| peer.failures > 0 && peer.linked && !peer.running);
+        for peer in waiting {
+            let at = *peer.retry_at.get_or_insert_with(|| now + retry_delay(peer.failures));
+            if at <= now {
+                peer.retry_at = None;
+                due.push(peer.destination.clone());
+            }
+        }
+        for destination in due {
+            self.start_flow_sync(&destination);
+        }
     }
 
     pub(super) fn flows_changed_here(&mut self) {
@@ -243,6 +284,8 @@ impl App {
                     rounds: 0,
                     same: Vec::new(),
                     last: None,
+                    failures: 0,
+                    retry_at: None,
                 });
             }
             let Some(peer) = syncing.peer_mut(&destination) else { continue };
@@ -319,6 +362,7 @@ impl App {
     pub(super) fn flows_synced(&mut self, destination: &str, synced: Synced) {
         let report = hidden_report(synced.report, destination);
         log_report(&report);
+        let failed = report.error.is_some() || !report.failed.is_empty();
         if let Some(started) = synced.started {
             let path = self.flow_journal();
             let mut journal = Journal::read(&path);
@@ -330,6 +374,8 @@ impl App {
         let Some(peer) = self.machines.flows.peer_mut(destination) else { return self.answer_flow_waiters() };
         peer.running = false;
         peer.rounds += 1;
+        peer.failures = if failed { peer.failures.saturating_add(1) } else { 0 };
+        peer.retry_at = None;
         if synced.started.is_some() {
             peer.same = synced.same;
         }
@@ -353,7 +399,10 @@ impl App {
             machines.extend(
                 waiter.wanted.iter().map(|(destination, name, round)| self.round_report(destination, name, *round)),
             );
-            self.answer_read(waiter.key, move |_| Ok(json(&FlowsSynced { machines })));
+            match waiter.answer {
+                Answer::Request(key) => self.answer_read(key, move |_| Ok(json(&FlowsSynced { machines }))),
+                Answer::Window(sending) => self.flows_sync_shown(&sending, &machines),
+            }
         }
     }
 
@@ -386,25 +435,22 @@ impl App {
         syncing_machines(&self.config.machines).map(|machine| machine.name.clone()).collect()
     }
 
-    pub(super) fn sync_flows_now(&mut self) -> Vec<String> {
-        self.follow_machines();
-        self.follow_flow_sync();
-        let targets: Vec<(String, String)> = syncing_machines(&self.config.machines)
-            .map(|machine| (machine.name.clone(), machine.destination.clone()))
-            .collect();
-        targets
-            .into_iter()
-            .filter(|(_, destination)| self.start_flow_sync(destination).is_some())
-            .map(|(name, _)| name)
-            .collect()
-    }
-
     pub(super) fn flow_sync_request(&mut self, client: u64, request: &FlowSync) -> Handled {
         self.follow_machines();
         self.follow_flow_sync();
         let targets = self.flow_sync_targets(request.machine.as_deref())?;
         let key = self.clients.requests.key();
-        let mut waiter = Waiter { key, wanted: Vec::new(), reports: Vec::new() };
+        let waiter = self.flow_sync_waiter(targets, Answer::Request(key));
+        if waiter.wanted.is_empty() {
+            return Ok(Some(json(&FlowsSynced { machines: waiter.reports })));
+        }
+        self.machines.flows.waiters.push(waiter);
+        self.pend_reading(client, key);
+        Ok(None)
+    }
+
+    fn flow_sync_waiter(&mut self, targets: Vec<(String, String)>, answer: Answer) -> Waiter {
+        let mut waiter = Waiter { answer, wanted: Vec::new(), reports: Vec::new() };
         for (name, destination) in targets {
             if let Some(round) = self.start_flow_sync(&destination) {
                 waiter.wanted.push((destination, name, round));
@@ -413,12 +459,7 @@ impl App {
                 waiter.reports.push(MachineFlows { machine: name, error, ..MachineFlows::default() });
             }
         }
-        if waiter.wanted.is_empty() {
-            return Ok(Some(json(&FlowsSynced { machines: waiter.reports })));
-        }
-        self.machines.flows.waiters.push(waiter);
-        self.pend_reading(client, key);
-        Ok(None)
+        waiter
     }
 
     fn flow_sync_targets(&self, machine: Option<&str>) -> Result<Vec<(String, String)>, Refusal> {
@@ -461,6 +502,11 @@ impl App {
 enum Arrival {
     New,
     Replaced,
+}
+
+fn retry_delay(failures: u32) -> Duration {
+    let doubled = 2u32.saturating_pow(failures.saturating_sub(1).min(16));
+    RETRY_FIRST.saturating_mul(doubled).min(RETRY_MOST)
 }
 
 fn present(flow: &Flow, now: SystemTime) -> Option<Flow> {

@@ -236,6 +236,7 @@ impl App {
     pub(super) fn sync_machines(&mut self, now: Instant, clock: i64) {
         self.follow_machines();
         self.follow_flow_sync();
+        self.retry_flow_sync(now);
         self.follow_pairing();
         let woke = self.machines.sleep.woke(clock, now);
         let moved = if self.machines.held.is_empty() {

@@ -67,7 +67,7 @@ impl App {
         self.overlay = Some(Overlay::Flows { dialog: Box::new(dialog), back });
     }
 
-    fn flows_dialog(&mut self) -> Option<&mut Dialog> {
+    pub(super) fn flows_dialog(&mut self) -> Option<&mut Dialog> {
         match &mut self.overlay {
             Some(Overlay::Flows { dialog, .. }) => Some(dialog.as_mut()),
             _ => None,

@@ -310,6 +310,48 @@ pub(crate) struct MachineFlows {
     pub(crate) error: Option<String>,
 }
 
+impl MachineFlows {
+    pub(crate) fn outcome(&self) -> String {
+        if let Some(error) = &self.error {
+            return format!("not synced: {}", flows::share::visible(error));
+        }
+        let names = |names: &[String]| {
+            names.iter().map(|name| flows::share::visible(name.trim())).collect::<Vec<_>>().join(", ")
+        };
+        let changes = [
+            ("sent", &self.sent),
+            ("deleted", &self.deleted),
+            ("deleted the built-in", &self.hidden),
+            ("restored", &self.restored),
+            ("kept its newer", &self.kept),
+        ];
+        let mut parts: Vec<String> = changes
+            .iter()
+            .filter(|(_, list)| !list.is_empty())
+            .map(|(verb, list)| format!("{verb} {}", names(list)))
+            .collect();
+        if self.same > 0 {
+            parts.push(format!("{} already the same", self.same));
+        }
+        if parts.is_empty() {
+            parts.push("nothing to sync".into());
+        }
+        parts.join(" · ")
+    }
+
+    pub(crate) fn line(&self) -> String {
+        let failed = self.failed.iter().map(|failed| {
+            format!(
+                "{} not synced: {}",
+                flows::share::visible(failed.name.trim()),
+                flows::share::visible(&failed.error)
+            )
+        });
+        let parts: Vec<String> = std::iter::once(self.outcome()).chain(failed).collect();
+        format!("{}: {}", flows::share::visible(&self.machine), parts.join(" · "))
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub(crate) struct FlowSyncFailure {

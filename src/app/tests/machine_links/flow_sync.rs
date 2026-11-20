@@ -31,17 +31,19 @@ impl There {
     }
 
     fn answer(&self, command: &str) -> Response {
+        let refused = {
+            let mut refused = self.refuse_once.lock();
+            refused.take_if(|refused| *refused == command).is_some()
+        };
+        if refused {
+            return Response::Error("the file is busy".into());
+        }
         if command == "flow-list" {
             if let Some(gate) = self.gate.lock().take() {
                 let _ = gate.recv();
             }
             let flows = Flows { flows: self.listed.lock().clone(), builtins: vec!["Quick".into()], ..Flows::default() };
             return Response::Ok(serde_json::to_value(flows).expect("a listing"));
-        }
-        let mut refused = self.refuse_once.lock();
-        if refused.is_some_and(|refused| refused == command) {
-            *refused = None;
-            return Response::Error("the file is busy".into());
         }
         Response::Ok(json!({"changed": true}))
     }
@@ -453,6 +455,98 @@ mod a_flow_of_yours_with_a_time_ahead {
         assert_ne!(fixed.changed.as_deref(), Some("2099-01-01T00:00:00.000Z"));
         assert_eq!((first.machines[0].sent.clone(), second.machines[0].same), (vec!["Duo".into()], 1));
         assert_eq!(rig.app.flow_synced_to(&fixed), ["vps"]);
+    }
+}
+
+mod settings_flows {
+    use super::*;
+    use crate::app::tests::flows_dialog::button;
+    use crate::flows::dialog::{Dialog, SYNC_NOW};
+    use crate::flows::store::Origin;
+
+    const WIDE: Rect = Rect { x: 0, y: 0, width: 150, height: 44 };
+
+    fn shown(rig: &Rig) -> &Dialog {
+        let Some(Overlay::Flows { dialog, .. }) = &rig.app.overlay else { panic!("the flows tab is not open") };
+        dialog
+    }
+
+    fn notes(rig: &Rig, origin: impl Fn(&Origin) -> bool) -> Vec<String> {
+        let dialog = shown(rig);
+        let rows = dialog.list_rows();
+        dialog.flows.iter().zip(rows).filter(|(saved, _)| origin(&saved.origin)).map(|(_, row)| row.note).collect()
+    }
+
+    fn buttons(rig: &Rig) -> Vec<&'static str> {
+        let ui::Overlay::Flows(view) = overlay_shown(&rig.app, WIDE) else { panic!("the flows tab is not shown") };
+        view.buttons
+    }
+
+    fn opened(there: &There) -> Rig {
+        let mut rig = synced_once(there);
+        rig.app.open_flows_tab();
+        rig
+    }
+
+    #[test]
+    fn name_the_machine_a_flow_of_yours_is_synced_to_and_no_other() {
+        let there = There::default();
+        let mut rig = opened(&there);
+
+        rig.save("Duo");
+        rig.until_rounds(2);
+        let after_the_round = notes(&rig, |origin| matches!(origin, Origin::User(_)));
+        rig.app.open_flows_tab();
+
+        assert!(after_the_round[0].ends_with("synced to vps"), "{after_the_round:?}");
+        assert!(notes(&rig, |origin| matches!(origin, Origin::User(_)))[0].ends_with("synced to vps"));
+        let built_ins = notes(&rig, |origin| *origin == Origin::BuiltIn);
+        assert!(!built_ins.is_empty() && built_ins.iter().all(|note| !note.contains("synced to")), "{built_ins:?}");
+    }
+
+    #[test]
+    fn offer_sync_now_only_while_a_machine_syncs_them() {
+        let mut rig = rig_with(vec![machine("vps", "vps.lan")], &There::default());
+        rig.app.open_flows_tab();
+        let without = buttons(&rig);
+
+        let with = buttons(&opened(&There::default()));
+
+        assert_eq!((without.contains(&SYNC_NOW), with.contains(&SYNC_NOW)), (false, true));
+    }
+
+    #[test]
+    fn sync_now_runs_a_round_and_then_says_what_it_sent() {
+        let there = There::default();
+        let mut rig = opened(&there);
+        store::save(&rig.yours(), &duo("Duo"), None).expect("save a flow by hand");
+
+        button(&mut rig.app, WIDE, SYNC_NOW);
+        let sending = shown(&rig).hint();
+        rig.until_rounds(2);
+
+        assert_eq!(sending, "sending your flows to vps…");
+        assert_eq!(shown(&rig).hint(), "vps: sent Duo");
+    }
+
+    #[test]
+    fn sync_now_says_why_a_round_failed_and_the_round_is_tried_again_later() {
+        let there = There::default();
+        let mut rig = opened(&there);
+        store::save(&rig.yours(), &duo("Duo"), None).expect("save a flow by hand");
+        *there.refuse_once.lock() = Some("flow-list");
+
+        button(&mut rig.app, WIDE, SYNC_NOW);
+        rig.until_rounds(2);
+        let failed = shown(&rig).hint();
+        rig.refresh(Duration::from_secs(10));
+        let soon = (rig.rounds(), there.count("flow-list"));
+        rig.refresh(Duration::from_secs(40));
+        rig.until_rounds(3);
+
+        assert!(failed.starts_with("vps: not synced: ") && failed.ends_with("the file is busy"), "{failed}");
+        assert_eq!(soon, (2, 2));
+        assert!(there.imported().iter().any(|text| text.contains("name = \"Duo\"")), "{:?}", there.imported());
     }
 }
 

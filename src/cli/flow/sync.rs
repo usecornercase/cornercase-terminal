@@ -23,34 +23,8 @@ pub(super) fn run(args: &FlowSyncArgs) -> Result<()> {
     }
 }
 
-fn names(names: &[String]) -> String {
-    names.iter().map(|name| share::visible(name.trim())).collect::<Vec<_>>().join(", ")
-}
-
-pub(super) fn machine_line(machine: &MachineFlows) -> String {
-    let name = share::visible(&machine.machine);
-    if let Some(error) = &machine.error {
-        return format!("{name}: not synced: {}\n", share::visible(error));
-    }
-    let changes = [
-        ("sent", &machine.sent),
-        ("deleted", &machine.deleted),
-        ("deleted the built-in", &machine.hidden),
-        ("restored", &machine.restored),
-        ("kept its newer", &machine.kept),
-    ];
-    let mut parts: Vec<String> = changes
-        .iter()
-        .filter(|(_, list)| !list.is_empty())
-        .map(|(verb, list)| format!("{verb} {}", names(list)))
-        .collect();
-    if machine.same > 0 {
-        parts.push(format!("{} already the same", machine.same));
-    }
-    if parts.is_empty() {
-        parts.push("nothing to sync".into());
-    }
-    let mut line = format!("{name}: {}\n", parts.join(" · "));
+fn machine_line(machine: &MachineFlows) -> String {
+    let mut line = format!("{}: {}\n", share::visible(&machine.machine), machine.outcome());
     for failed in &machine.failed {
         let _ = writeln!(line, "    {}: {}", share::visible(&failed.name), share::visible(&failed.error));
     }

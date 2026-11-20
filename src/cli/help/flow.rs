@@ -137,8 +137,9 @@ pub(in crate::cli) const FLOW_SYNC_HELP: &str =
     "Your flows (the files of flows/ next to config.json, built-ins you edited included) and the built-ins
 you deleted are kept the same on every machine marked to sync them (`sync your flows to it` in Settings › Machines,
 or `cornercase machines edit NAME --sync-flows`). The server sends each change on its own as soon as it is
-saved, and a machine that was out of reach gets what it missed when its link comes back; this command
-sends everything now and waits for the answers, for every such machine or only --machine's.
+saved, a machine that was out of reach gets what it missed when its link comes back, and a sync that
+failed while the machine stayed linked is tried again on its own (after 30 s, then less often, at most
+every 10 minutes); this command sends everything now and waits for the answers, for every such machine or only --machine's.
 
 A flow is sent when the machine has none of that name among its own, or an older one: each save stamps the
 flow's file with `changed`, and the last saved wins, by each computer's clock (a time more than 5 minutes
