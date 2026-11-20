@@ -117,7 +117,7 @@ fn draw_row(f: &mut Frame, view: &View, (row, chosen, when_width): (&QueueRow, b
         (format!("{meta}{hidden}"), title, row.colour.unwrap_or(view.muted))
     };
     let meta_width = meta.chars().count();
-    let title = truncate_right(&row.title, width.saturating_sub(fixed + meta_width + 1));
+    let title = cut(&row.title, width.saturating_sub(fixed + meta_width + 1));
     let gap = width.saturating_sub(fixed + title.chars().count() + meta_width);
     let line = Line::from(vec![
         rail(chosen, bg),
@@ -128,4 +128,12 @@ fn draw_row(f: &mut Frame, view: &View, (row, chosen, when_width): (&QueueRow, b
         Span::styled(format!("{meta} "), bg.fg(meta_colour)),
     ]);
     f.render_widget(Paragraph::new(line).style(bg), r);
+}
+
+fn cut(text: &str, room: usize) -> String {
+    match room {
+        0 => String::new(),
+        1 if text.chars().count() > 1 => "…".into(),
+        _ => truncate_right(text, room),
+    }
 }

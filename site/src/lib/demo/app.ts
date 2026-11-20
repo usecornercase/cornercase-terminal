@@ -219,7 +219,7 @@ export interface IssuesView {
 }
 
 export interface QueueListView {
-  rows: { fold: boolean | null; run: boolean; when: string; title: string; meta: string; hidden: string; colour?: number; dim: boolean }[];
+  rows: { id: number; fold: boolean | null; run: boolean; when: string; title: string; meta: string; hidden: string; colour?: number; dim: boolean }[];
   selected: number | null;
   scroll: number;
   empty: string;
@@ -4063,6 +4063,7 @@ export class App {
 
   queueListView(o: QueueListDialog): QueueListView {
     const shown = this.queueListShown(o);
+    if (o.selected === null) o.selected = shown[0]?.entry.id ?? null;
     const selected = queueIndex(o, shown);
     const item = selected === null ? undefined : shown[selected];
     const sel = item?.entry;
@@ -4072,6 +4073,7 @@ export class App {
     const width = Math.min(this.cols - 4, 110) - 4;
     return {
       rows: shown.map(({ entry, run, fold, hidden }) => ({
+        id: entry.id,
         fold,
         run,
         when: this.queueWhenText(entry),
@@ -4096,20 +4098,20 @@ export class App {
     this.dirty();
   }
 
-  queueListClick(i: number): void {
+  queueListClick(id: number): void {
     const o = this.overlay;
     if (o?.kind !== 'queuelist') return;
-    const item = this.queueListShown(o)[i];
+    const item = this.queueListShown(o).find((shown) => shown.entry.id === id);
     if (!item) return;
     o.selected = item.entry.id;
     this.openQueued(item.entry);
     this.dirty();
   }
 
-  queueListFold(i: number): void {
+  queueListFold(id: number): void {
     const o = this.overlay;
     if (o?.kind !== 'queuelist') return;
-    const item = this.queueListShown(o)[i];
+    const item = this.queueListShown(o).find((shown) => shown.entry.id === id);
     if (!item) return;
     o.selected = item.entry.id;
     this.toggleQueueFold(item.entry.id);
@@ -4714,7 +4716,10 @@ export class App {
     const back = this.queueBack;
     this.queueBack = null;
     if (back?.kind === 'issues' && saved !== undefined) return this.openQueue(saved);
-    if (back?.kind === 'queuelist' && saved !== undefined) back.selected = saved;
+    if (back?.kind === 'queuelist' && saved !== undefined) {
+      back.selected = saved;
+      if (!this.queueListShown(back).some((item) => item.entry.id === saved)) back.filter = '';
+    }
     this.overlay = back;
     this.dirty();
   }

@@ -184,6 +184,9 @@ impl Dialog {
     }
 
     pub(crate) fn set(&mut self, rows: Vec<Row>, folded: &BTreeSet<u64>, bot_routines: usize) {
+        if self.list.selected.is_none() {
+            self.list.selected = self.selected().map(|row| row.id);
+        }
         self.rows = arranged(rows);
         self.folded.clone_from(folded);
         self.bot_routines = bot_routines;
@@ -203,6 +206,9 @@ impl Dialog {
 
     pub(crate) fn select(&mut self, id: u64) {
         self.list = Chosen::new(Some(id));
+        if !self.ids().contains(&id) {
+            self.query.clear();
+        }
     }
 
     fn groups(&self) -> Vec<Group<'_>> {

@@ -1662,8 +1662,8 @@ export class Painter {
       x = this.span(x, row.y, `${indent}${item.when.padEnd(whenWidth)}  `, { ...style, fg: 6 });
       this.span(x, row.y, title, item.run ? { ...style, fg: item.colour ?? 8 } : item.dim ? { ...style, ...DARK } : style);
       this.span(right(row) - [...meta].length - 1, row.y, meta, { ...bg, fg: item.run ? 8 : item.colour ?? 8 });
-      this.region({ r: row, click: () => app.queueListClick(i), cursor: 'pointer' });
-      if (item.fold !== null) this.region({ r: rect(row.x, row.y, 3, 1), click: () => app.queueListFold(i), cursor: 'pointer' });
+      this.region({ r: row, click: () => app.queueListClick(item.id), cursor: 'pointer' });
+      if (item.fold !== null) this.region({ r: rect(row.x, row.y, 3, 1), click: () => app.queueListFold(item.id), cursor: 'pointer' });
     });
     if (view.tail && items.length < list.h) this.span(list.x + 1, list.y + Math.max(1, items.length), truncateRight(view.tail, Math.max(0, list.w - 2)), DARK);
     this.region({ r: list, wheel: (dy) => app.queueListScroll(dy) });

@@ -104,6 +104,27 @@ fn the_selection_stays_on_its_entry_when_a_routine_fires() {
 }
 
 #[test]
+fn a_save_that_the_filter_would_hide_clears_the_filter_and_selects_it() {
+    let (mut app, _rx, _repo, _config, _worktrees) = queued_app();
+    app.panels.queued.schedule(None, task(&app, time::now() + 600, None)).expect("an entry");
+    open_queue(&mut app);
+    app.handle_event(AppEvent::Input(Event::Paste("login".into())), AREA).expect("paste");
+    press_button(&mut app, "new");
+    let Some(Overlay::Queue(form)) = &mut app.overlay else { panic!("the form") };
+    form.prompt = Editor::new("update the docs");
+    save_queue_form(&mut app);
+    let saved = app
+        .panels
+        .queued
+        .queue()
+        .entries
+        .iter()
+        .find(|entry| entry.task.prompt == "update the docs")
+        .map(|entry| entry.id);
+    assert_eq!((queue_dialog(&app).query(), selected(&app)), ("", saved));
+}
+
+#[test]
 fn done_escape_and_a_click_outside_close_it() {
     let (mut app, _rx, _repo, _config, _worktrees) = queued_app();
     open_queue(&mut app);

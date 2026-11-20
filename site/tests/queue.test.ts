@@ -831,3 +831,50 @@ test('the prompt is taller in a tall window, and the wheel scrolls it with marks
   app.destroy();
 });
 
+const behind = (app: App, o: QueueListDialog, add: () => void) => {
+  app.overlay = null;
+  add();
+  app.overlay = o;
+};
+
+test('the row shown first stays selected when an earlier entry arrives above it', () => {
+  const app = appAt(140);
+  schedule(app, 'Fix the login', 60);
+  const first = app.queued[0].id;
+  const o = queueModal(app);
+  app.render();
+  behind(app, o, () => schedule(app, 'Update the docs', 1));
+  app.render();
+  assert.equal(app.queueListShown(o)[0].entry.label, 'Update the docs');
+  assert.equal(o.selected, first);
+  app.destroy();
+});
+
+test('a save the filter would hide clears the filter and selects the saved entry', () => {
+  const app = appAt(140);
+  schedule(app, 'Fix the login', 60);
+  const o = queueModal(app);
+  type(app, 'login');
+  pressButton(app, 'new');
+  type(app, 'Update the docs');
+  pick(form(app).agent, 'claude');
+  pressButton(app, 'schedule');
+  assert.equal(list(app), o);
+  assert.equal(o.filter, '');
+  assert.equal(o.selected, app.queued.find((entry) => entry.label === 'Update the docs')?.id);
+  app.destroy();
+});
+
+test('a click acts on the entry drawn under it even when a row arrives before the click', () => {
+  const app = appAt(140);
+  schedule(app, 'Fix the login', 60);
+  const o = queueModal(app);
+  app.render();
+  const row = app.textAt('Fix the login');
+  assert.ok(row);
+  behind(app, o, () => schedule(app, 'Update the docs', 1));
+  app.pointerDown(row.x, row.y, 0);
+  app.pointerUp();
+  assert.equal(o.selected, app.queued.find((entry) => entry.label === 'Fix the login')?.id);
+  app.destroy();
+});

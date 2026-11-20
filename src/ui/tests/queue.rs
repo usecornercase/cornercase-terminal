@@ -58,6 +58,19 @@ fn the_queue_lists_every_entry_with_its_state_in_colour() {
 }
 
 #[test]
+fn a_narrow_row_keeps_its_meta_inside_the_row() {
+    let meta = "failed · codex is not installed · codex · shop";
+    for width in 43..=60 {
+        let view = queue_view(vec![queue_row("2026-10-14 16:00", "Fix the login form", meta, Some(Color::Red))]);
+        let list = queue_list_rows(Rect::new(0, 0, width, 24));
+        let cut = crate::text::truncate_right(meta, usize::from(list.width) / 3);
+        let lines = lines(&render_sized(&view, width, 24));
+        let row = lines.iter().find(|l| l.contains("16:00")).expect("the row");
+        assert!(row.contains(&format!("{cut}  │")), "{width}: {row}");
+    }
+}
+
+#[test]
 fn the_queue_border_is_drawn_at_the_corners_of_its_area() {
     let (top_left, bottom_right) = corners_of_its_area(&queue_list());
     assert_eq!((top_left.as_str(), bottom_right.as_str()), ("╭", "╯"));

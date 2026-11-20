@@ -457,7 +457,6 @@ fn click(app: &mut App, pos: Position) {
     click_in(app, pos, AREA);
 }
 
-#[cfg(unix)]
 fn save_queue_form(app: &mut App) {
     click(app, ui::queue_form::schedule_button(AREA).as_position());
 }

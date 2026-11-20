@@ -173,6 +173,25 @@ mod selection {
     }
 
     #[test]
+    fn the_row_shown_first_stays_selected_when_an_earlier_entry_arrives() {
+        let mut dialog = dialog(vec![row(5, "Later", State::Pending)]);
+        assert_eq!(dialog.selected().map(|row| row.id), Some(5));
+        dialog.set(vec![row(1, "Sooner", State::Pending), row(5, "Later", State::Pending)], &BTreeSet::new(), 0);
+        assert_eq!(dialog.selected().map(|row| row.id), Some(5));
+    }
+
+    #[test]
+    fn selecting_an_entry_the_filter_hides_clears_the_filter_and_one_it_shows_keeps_it() {
+        let mut dialog =
+            dialog(vec![row(1, "Fix the login", State::Pending), row(2, "Update the docs", State::Pending)]);
+        dialog.paste("login");
+        dialog.select(1);
+        assert_eq!((dialog.query(), dialog.selected().map(|row| row.id)), ("login", Some(1)));
+        dialog.select(2);
+        assert_eq!((dialog.query(), dialog.selected().map(|row| row.id)), ("", Some(2)));
+    }
+
+    #[test]
     fn a_selection_that_is_gone_falls_back_to_the_first_row() {
         let mut dialog = dialog(grouped());
         dialog.select(77);

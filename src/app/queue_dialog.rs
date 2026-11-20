@@ -505,11 +505,12 @@ impl App {
                 browser.scheduling = false;
                 self.overlay = Some(Overlay::Issues(browser));
             }
-            (Some(Overlay::QueueList(mut dialog)), saved) => {
-                if let Some(id) = saved {
+            (Some(Overlay::QueueList(dialog)), saved) => {
+                self.overlay = Some(Overlay::QueueList(dialog));
+                self.sync_queued();
+                if let (Some(id), Some(Overlay::QueueList(dialog))) = (saved, &mut self.overlay) {
                     dialog.select(id);
                 }
-                self.overlay = Some(Overlay::QueueList(dialog));
             }
             (back, _) => self.overlay = back,
         }
