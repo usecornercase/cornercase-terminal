@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use crate::agents::headless::Access;
 use crate::agents::{self, Known};
 use crate::app::App;
@@ -258,13 +260,23 @@ impl App {
         }
         let followed = self.panels.bots.live[at].bot.follow;
         bot.follow = edit.follow.unwrap_or(followed);
-        let saved = folder::save(&self.panels.bots.live[at].folder, &bot);
-        saved.map_err(|error| Refusal::new(Code::Failed, error.to_string()))?;
+        save_edited(&self.panels.bots.live[at].folder, &bot, edit.about.is_some())?;
         self.panels.bots.live[at].bot = bot;
         self.follow_changed(at, followed);
         self.publish_bot_change(at, "edited");
         Ok(at)
     }
+}
+
+fn save_edited(folder: &Path, bot: &Bot, about_written: bool) -> Done<()> {
+    folder::save(folder, bot).map_err(|error| {
+        let text = if about_written {
+            format!("the about text was saved but the settings were not: {error}")
+        } else {
+            format!("the settings were not saved: {error}")
+        };
+        Refusal::new(Code::Failed, text)
+    })
 }
 
 fn last(line: &chat::Line) -> BotLast {
