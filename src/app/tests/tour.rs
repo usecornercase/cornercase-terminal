@@ -203,6 +203,17 @@ mod completing {
         t.app.offer_tour(Instant::now());
         assert_eq!(t.step(), Some(("todo", "add")));
     }
+
+    #[test]
+    fn opening_the_queue_completes_its_first_step() {
+        let mut t = Tour::with(1, false, Some(&Saved::default()));
+        let queue = TOURS.iter().position(|t| t.id == "queue").expect("queue");
+        t.app.start_tour(queue, None, true);
+        render(&mut t.app, AREA);
+        from_more(&mut t.app, "queue");
+        t.app.offer_tour(Instant::now());
+        assert_eq!(t.step(), Some(("queue", "new")));
+    }
 }
 
 mod around_the_card {
@@ -496,6 +507,15 @@ mod sections {
         t.app.start_tour(tour_of("todo"), Some(1), true);
         t.press(TourButton::End);
         assert_eq!(t.app.screen.side, Some(Side::Todo));
+    }
+
+    #[test]
+    fn a_queue_step_opens_the_queue_modal() {
+        let mut t = started("queue", 1);
+        assert!(matches!(t.app.overlay, Some(Overlay::QueueList(_))));
+        t.press(TourButton::Back);
+        assert_eq!(t.step(), Some(("queue", "open")));
+        assert!(t.app.overlay.is_none());
     }
 
     #[test]
