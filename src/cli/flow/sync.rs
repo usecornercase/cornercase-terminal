@@ -17,8 +17,8 @@ pub(super) fn run(args: &FlowSyncArgs) -> Result<()> {
     } else {
         print_out(&synced_text(&synced))?;
     }
-    match synced.machines.iter().find(|machine| machine.error.is_some()) {
-        Some(machine) => Err(Error::Control(format!("{} could not be synced", share::visible(&machine.machine)))),
+    match synced.machines.iter().find(|machine| machine.error.is_some() || !machine.failed.is_empty()) {
+        Some(machine) => Err(Error::Control(format!("{} was not fully synced", share::visible(&machine.machine)))),
         None => Ok(()),
     }
 }

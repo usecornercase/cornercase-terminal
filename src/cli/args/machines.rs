@@ -5,7 +5,8 @@ use crate::cli::help::{MACHINES_ADD_HELP, MACHINES_UPDATE_HELP};
 
 const ICON: &str = "Its icon, by glyph or name: ☁ server, ▭ laptop, ▣ desktop, ◫ mini, ⌂ home server, ◆ other";
 const NAME: &str = "The machine's name, as `cornercase machines` lists it";
-const SYNC_FLOWS: &str = "Keep your flows in sync there: a flow made, changed or deleted here is sent to it";
+const SYNC_FLOWS: &str =
+    "Keep your flows in sync there: a flow made, changed or deleted here is sent to it, its env values included";
 
 #[derive(Debug, Args)]
 #[command(args_conflicts_with_subcommands = true)]

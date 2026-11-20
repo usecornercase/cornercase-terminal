@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
-use std::time::SystemTime;
+use std::path::Path;
+use std::time::{Duration, SystemTime};
 
 use serde::{Deserialize, Serialize};
 
@@ -8,8 +8,8 @@ use super::store::same_name;
 use crate::persist;
 use crate::time::Stamp;
 
-const FILE: &str = "flow-sync.json";
 const KEPT: usize = 256;
+pub(crate) const SKEW: Duration = Duration::from_mins(5);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -31,10 +31,8 @@ pub(crate) struct Event {
 pub(crate) struct Journal {
     pub(crate) events: Vec<Event>,
     pub(crate) synced: BTreeMap<String, String>,
-}
-
-pub(crate) fn path(config: &Path) -> PathBuf {
-    config.with_file_name(FILE)
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub(crate) retry: BTreeMap<String, Vec<Event>>,
 }
 
 impl Journal {
@@ -62,6 +60,23 @@ impl Journal {
     pub(crate) fn synced(&self, destination: &str) -> Option<SystemTime> {
         self.synced.get(destination).map(String::as_str).and_then(Stamp::parse)
     }
+
+    pub(crate) fn round_ended(&mut self, destination: &str, started: SystemTime, retry: Vec<Event>) {
+        self.synced.insert(destination.to_string(), Stamp(started).to_string());
+        if retry.is_empty() {
+            self.retry.remove(destination);
+        } else {
+            self.retry.insert(destination.to_string(), retry);
+        }
+    }
+}
+
+pub(crate) fn not_after(changed: Option<SystemTime>, now: SystemTime) -> Option<SystemTime> {
+    changed.map(|changed| changed.min(now))
+}
+
+pub(crate) fn in_the_future(changed: &str, now: SystemTime) -> bool {
+    Stamp::parse(changed).is_some_and(|changed| changed > now + SKEW)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -77,6 +92,7 @@ pub(crate) struct Ours<S> {
     pub(crate) hidden: Vec<String>,
     pub(crate) events: Vec<Event>,
     pub(crate) synced: Option<SystemTime>,
+    pub(crate) retry: Vec<Event>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -136,7 +152,7 @@ pub(crate) fn plan<S: PartialEq>(ours: &Ours<S>, theirs: &Theirs<S>) -> Plan {
             _ => plan.ops.push(Op::Send(mine.name.clone())),
         }
     }
-    for event in events(ours) {
+    for event in pending(ours) {
         if find(&ours.flows, &event.name).is_some() {
             continue;
         }
@@ -147,6 +163,18 @@ pub(crate) fn plan<S: PartialEq>(ours: &Ours<S>, theirs: &Theirs<S>) -> Plan {
         }
     }
     plan
+}
+
+pub(crate) fn pending<S>(ours: &Ours<S>) -> Vec<Event> {
+    let mut pending = events(ours);
+    for event in &ours.retry {
+        let later = pending.iter().any(|newer| same_name(&newer.name, &event.name));
+        let current = ours.events.iter().all(|e| !same_name(&e.name, &event.name) || e == event);
+        if !later && current {
+            pending.push(event.clone());
+        }
+    }
+    pending
 }
 
 fn events<S>(ours: &Ours<S>) -> Vec<Event> {

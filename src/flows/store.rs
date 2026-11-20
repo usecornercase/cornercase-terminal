@@ -324,11 +324,16 @@ pub(crate) fn save(dir: &Path, flow: &Flow, previous: Option<&Path>) -> Result<P
         .map(|stem| dir.join(format!("{stem}.{EXTENSION}")))
         .find(|path| Some(path.as_path()) == previous || !path.exists())
         .ok_or_else(|| Error::FlowFile { path: dir.to_path_buf(), reason: "too many flows share its name".into() })?;
-    persist::write_bytes(&path, text.as_bytes(), persist::Kind::Synced)?;
+    persist::write_bytes(&path, text.as_bytes(), kind(flow))?;
     if let Some(previous) = previous.filter(|previous| *previous != path) {
         std::fs::remove_file(previous)?;
     }
     Ok(path)
+}
+
+fn kind(flow: &Flow) -> persist::Kind {
+    let sets_env = std::iter::once(&flow.orchestrator).chain(&flow.roles).any(|role| !role.env.is_empty());
+    if sets_env { persist::Kind::Private } else { persist::Kind::Synced }
 }
 
 pub(crate) fn delete(path: &Path) -> Result<()> {

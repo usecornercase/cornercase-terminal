@@ -16,11 +16,19 @@ fn held(name: &str, changed: Option<u64>, spec: &str) -> Held<String> {
 }
 
 fn ours(flows: Vec<Held<String>>) -> Ours<String> {
-    Ours { flows, hidden: Vec::new(), events: Vec::new(), synced: Some(at(1)) }
+    Ours { flows, hidden: Vec::new(), events: Vec::new(), synced: Some(at(1)), retry: Vec::new() }
 }
 
 fn theirs(flows: Vec<Held<String>>) -> Theirs<String> {
     Theirs { flows, hidden: Vec::new(), builtins: vec!["Quick".into(), "Arena".into()] }
+}
+
+fn changed(events: Vec<Event>) -> Ours<String> {
+    Ours { events, ..ours(Vec::new()) }
+}
+
+fn retried(events: Vec<Event>, failed: Event) -> Ours<String> {
+    Ours { synced: Some(at(40)), retry: vec![failed], ..changed(events) }
 }
 
 fn event(name: &str, change: Change, secs: u64) -> Event {
@@ -86,8 +94,7 @@ mod a_deleted_flow {
 
     #[test]
     fn is_deleted_there_when_its_copy_is_older() {
-        let mut ours = ours(Vec::new());
-        ours.events = vec![event("Duo", Change::Deleted, 30)];
+        let ours = changed(vec![event("Duo", Change::Deleted, 30)]);
 
         let plan = plan(&ours, &theirs(vec![held("Duo", Some(20), "a")]));
 
@@ -96,8 +103,7 @@ mod a_deleted_flow {
 
     #[test]
     fn stays_there_when_it_was_saved_there_after() {
-        let mut ours = ours(Vec::new());
-        ours.events = vec![event("Duo", Change::Deleted, 30)];
+        let ours = changed(vec![event("Duo", Change::Deleted, 30)]);
 
         let plan = plan(&ours, &theirs(vec![held("Duo", Some(40), "a")]));
 
@@ -106,8 +112,7 @@ mod a_deleted_flow {
 
     #[test]
     fn of_an_edited_built_in_restores_it_there() {
-        let mut ours = ours(Vec::new());
-        ours.events = vec![event("Quick", Change::Deleted, 30)];
+        let ours = changed(vec![event("Quick", Change::Deleted, 30)]);
 
         let plan = plan(&ours, &theirs(vec![held("Quick", Some(20), "a")]));
 
@@ -116,8 +121,7 @@ mod a_deleted_flow {
 
     #[test]
     fn is_not_sent_again_after_a_sync_that_followed_it() {
-        let mut ours = ours(Vec::new());
-        ours.events = vec![event("Duo", Change::Deleted, 30)];
+        let mut ours = changed(vec![event("Duo", Change::Deleted, 30)]);
         ours.synced = Some(at(40));
 
         let plan = plan(&ours, &theirs(vec![held("Duo", None, "a")]));
@@ -127,8 +131,7 @@ mod a_deleted_flow {
 
     #[test]
     fn is_never_sent_to_a_machine_that_never_synced() {
-        let mut ours = ours(Vec::new());
-        ours.events = vec![event("Duo", Change::Deleted, 30)];
+        let mut ours = changed(vec![event("Duo", Change::Deleted, 30)]);
         ours.synced = None;
 
         let plan = plan(&ours, &theirs(vec![held("Duo", None, "a")]));
@@ -152,8 +155,7 @@ mod a_built_in {
 
     #[test]
     fn deleted_here_is_deleted_there() {
-        let mut ours = ours(Vec::new());
-        ours.events = vec![event("Arena", Change::Hidden, 30)];
+        let ours = changed(vec![event("Arena", Change::Hidden, 30)]);
 
         let plan = plan(&ours, &theirs(Vec::new()));
 
@@ -162,8 +164,7 @@ mod a_built_in {
 
     #[test]
     fn already_deleted_there_is_left_alone() {
-        let mut ours = ours(Vec::new());
-        ours.events = vec![event("Arena", Change::Hidden, 30)];
+        let ours = changed(vec![event("Arena", Change::Hidden, 30)]);
         let mut theirs = theirs(Vec::new());
         theirs.hidden = vec!["arena".into()];
 
@@ -172,8 +173,7 @@ mod a_built_in {
 
     #[test]
     fn restored_here_is_restored_where_it_is_deleted() {
-        let mut ours = ours(Vec::new());
-        ours.events = vec![event("Arena", Change::Restored, 30)];
+        let ours = changed(vec![event("Arena", Change::Restored, 30)]);
         let mut theirs = theirs(Vec::new());
         theirs.hidden = vec!["Arena".into()];
 
@@ -207,7 +207,7 @@ mod the_journal {
     #[test]
     fn keeps_one_change_per_name_and_survives_a_read() {
         let dir = TempDir::new();
-        let path = path(&dir.path().join("config.json"));
+        let path = dir.path().join("flow-sync.json");
         let mut journal = Journal::default();
         journal.record("Duo", Change::Deleted, &stamp(10));
         journal.record(" duo ", Change::Hidden, &stamp(20));
@@ -247,5 +247,57 @@ mod the_journal {
         std::fs::write(&path, "not json").expect("write");
 
         assert_eq!(Journal::read(&path), Journal::default());
+    }
+}
+
+mod a_failed_change {
+    use super::*;
+
+    #[test]
+    fn is_sent_again_though_a_later_round_moved_past_it() {
+        let deleted = event("Duo", Change::Deleted, 30);
+        let ours = retried(vec![deleted.clone()], deleted);
+
+        let plan = plan(&ours, &theirs(vec![held("Duo", Some(20), "a")]));
+
+        assert_eq!(plan.ops, [Op::Delete("Duo".into())]);
+    }
+
+    #[test]
+    fn is_dropped_once_the_name_changed_again() {
+        let ours = retried(vec![event("Arena", Change::Restored, 50)], event("Arena", Change::Hidden, 30));
+        let mut theirs = theirs(Vec::new());
+        theirs.hidden = vec!["Arena".into()];
+
+        assert_eq!(plan(&ours, &theirs).ops, [Op::Restore("Arena".into())]);
+    }
+
+    #[test]
+    fn is_kept_per_machine_until_a_round_has_none() {
+        let mut journal = Journal::default();
+        journal.round_ended("vps.lan", at(10), vec![event("Duo", Change::Deleted, 5)]);
+        assert_eq!(journal.retry.get("vps.lan").map(Vec::len), Some(1));
+
+        journal.round_ended("vps.lan", at(20), Vec::new());
+
+        assert_eq!((journal.retry.len(), journal.synced("vps.lan")), (0, Some(at(20))));
+    }
+}
+
+mod times {
+    use super::*;
+
+    #[test]
+    fn a_time_in_the_future_is_sent_as_now() {
+        assert_eq!(not_after(Some(at(50)), at(40)), Some(at(40)));
+        assert_eq!(not_after(Some(at(30)), at(40)), Some(at(30)));
+    }
+
+    #[test]
+    fn only_a_time_past_the_skew_is_in_the_future() {
+        let now = at(1_000);
+        assert!(!in_the_future(&stamp(1_000 + 60), now));
+        assert!(in_the_future(&stamp(1_000 + 3_600), now));
+        assert!(!in_the_future("not a time", now));
     }
 }

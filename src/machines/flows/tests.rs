@@ -76,9 +76,16 @@ fn listed(flows: &[(&str, &str, Option<&str>)], hidden: &[&str]) -> Value {
 fn sending(names: &[&str]) -> Sending {
     let flows = names.iter().map(|name| Held { name: (*name).into(), changed: None, spec: FlowSpec::default() });
     Sending {
-        ours: Ours { flows: flows.collect(), hidden: vec!["Arena".into()], events: Vec::new(), synced: None },
+        ours: Ours {
+            flows: flows.collect(),
+            hidden: vec!["Arena".into()],
+            events: Vec::new(),
+            synced: None,
+            retry: Vec::new(),
+        },
         texts: names.iter().map(|name| ((*name).to_string(), format!("name = \"{name}\""))).collect(),
         from: Some("laptop".into()),
+        started: SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(7),
     }
 }
 
@@ -140,5 +147,40 @@ mod a_sync {
         assert_eq!((synced.report.kept, synced.report.same), (vec!["Duo".to_string()], 1));
         assert_eq!(synced.same, [("Pair".to_string(), None)]);
         assert_eq!(machine.asked().len(), 1);
+    }
+}
+
+mod a_refused_deletion {
+    use super::*;
+
+    #[test]
+    fn is_kept_to_be_sent_again_and_the_round_still_counts() {
+        let mut machine = Machine::new(listed(&[("Old", "user", None)], &["Arena"]));
+        machine.refuses = Some("flow-delete");
+        let mut sending = sending(&[]);
+        let deleted =
+            Event { name: "Old".into(), change: sync::Change::Deleted, at: "2026-11-20T10:00:00.000Z".into() };
+        sending.ours.events = vec![deleted.clone()];
+        sending.ours.synced = Some(SystemTime::UNIX_EPOCH);
+
+        let synced = sync(&machine, "vps", &sending);
+
+        assert_eq!(synced.retry, [deleted]);
+        assert_eq!(synced.started, Some(sending.started));
+        assert_eq!(synced.report.failed.len(), 1);
+    }
+}
+
+mod the_sender {
+    use super::*;
+
+    #[test]
+    fn is_one_short_line_without_hidden_characters() {
+        let name = format!("lap\u{202e}top\nsecond {}", "x".repeat(200));
+
+        let shown = sender(&name);
+
+        assert!(shown.starts_with("laptop second"), "{shown}");
+        assert!(shown.chars().count() <= 64);
     }
 }

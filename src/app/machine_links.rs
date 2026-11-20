@@ -211,7 +211,6 @@ impl Machines {
         self.network = network;
     }
 
-    #[cfg(unix)]
     pub(super) fn set_status(&mut self, at: usize, status: Status) {
         self.held[at].status = status;
     }

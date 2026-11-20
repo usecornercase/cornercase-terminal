@@ -1,8 +1,10 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 use ratatui::layout::Rect;
 
 use super::{Graphics, OTHER_BUILD, Server};
+use crate::app::App;
 use crate::control::{
     self,
     start_server::{SizeFrom, Started},
@@ -23,6 +25,21 @@ pub(super) fn config_file() -> PathBuf {
         log::warning!("machines", "machines.json could not be moved into config.json", error = error);
     }
     paths::config()
+}
+
+pub(super) fn load_saved(app: &mut App, session: &Path) {
+    let first_run = crate::tour::first_run(session, &paths::stats(session), &crate::star::load(&paths::star(session)));
+    let stats = crate::agents::stats::load(&paths::stats(session), SystemTime::now());
+    log::info!(
+        "stats",
+        "loaded",
+        since = stats.view(SystemTime::now()).since,
+        hours = stats.saved(SystemTime::now()).hours.len()
+    );
+    app.set_stats(stats);
+    app.set_star(paths::star(session));
+    app.set_flow_journal(paths::flow_sync(session));
+    app.set_tour(paths::tour(session), first_run);
 }
 
 pub(super) struct Opened {

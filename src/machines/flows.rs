@@ -10,16 +10,18 @@ use crate::control::{
     MachineFlows, Response,
 };
 use crate::flows::store::same_name;
-use crate::flows::sync::{self, Held, Op, Ours, Theirs};
+use crate::flows::sync::{self, Event, Held, Op, Ours, Theirs};
 use crate::time::Stamp;
 
 const USER: &str = "user";
 const YOURS: &str = "yours";
+const SENDER_KEPT: usize = 64;
 
 pub(crate) struct Sending {
     pub(crate) ours: Ours<FlowSpec>,
     pub(crate) texts: Vec<(String, String)>,
     pub(crate) from: Option<String>,
+    pub(crate) started: SystemTime,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -27,6 +29,11 @@ pub(crate) struct Synced {
     pub(crate) report: MachineFlows,
     pub(crate) same: Vec<(String, Option<SystemTime>)>,
     pub(crate) started: Option<SystemTime>,
+    pub(crate) retry: Vec<Event>,
+}
+
+pub(crate) fn sender(text: &str) -> String {
+    link::clean_within(text, SENDER_KEPT).trim().to_string()
 }
 
 impl Sending {
@@ -56,7 +63,6 @@ impl Sending {
 }
 
 pub(crate) fn sync(connect: &dyn Connect, machine: &str, sending: &Sending) -> Synced {
-    let started = SystemTime::now();
     let mut synced =
         Synced { report: MachineFlows { machine: machine.into(), ..MachineFlows::default() }, ..Synced::default() };
     let theirs = match listed(connect, machine) {
@@ -73,11 +79,19 @@ pub(crate) fn sync(connect: &dyn Connect, machine: &str, sending: &Sending) -> S
     for op in &plan.ops {
         match sending.command(op).and_then(|command| told(connect, machine, command)) {
             Ok(()) => done(&mut synced, sending, op),
-            Err(error) => synced.report.failed.push(FlowSyncFailure { name: op.name().into(), error }),
+            Err(error) => failed(&mut synced, sending, op, error),
         }
     }
-    synced.started = Some(started);
+    synced.started = Some(sending.started);
     synced
+}
+
+fn failed(synced: &mut Synced, sending: &Sending, op: &Op, error: String) {
+    if !matches!(op, Op::Send(_)) {
+        let event = sync::pending(&sending.ours).into_iter().find(|event| same_name(&event.name, op.name()));
+        synced.retry.extend(event);
+    }
+    synced.report.failed.push(FlowSyncFailure { name: op.name().into(), error });
 }
 
 fn done(synced: &mut Synced, sending: &Sending, op: &Op) {

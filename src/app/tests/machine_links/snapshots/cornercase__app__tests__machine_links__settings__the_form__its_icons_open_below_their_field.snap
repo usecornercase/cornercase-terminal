@@ -27,7 +27,7 @@ expression: rig.shown(WIDE)
 "  │                link it and show its workspaces and agents next to yours                                                                  │  "
 "  │                                                                                                                                          │  "
 "  │                [ ] sync your flows to it                                                                                                 │  "
-"  │                a flow you make or change here is saved there too; its own flows stay                                                     │  "
+"  │                a flow made or changed here is saved there too, its env values included                                                   │  "
 "  │                                                                                                                                          │  "
 "  │                                                                                                                                          │  "
 "  │                                                                                                                                          │  "

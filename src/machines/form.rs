@@ -49,7 +49,7 @@ impl Field {
             Self::Folder => "where its clones go there: an absolute path or one starting with ~/",
             Self::Command => "optional: what runs cornercase there, for a window you open there",
             Self::Shown => "link it and show its workspaces and agents next to yours",
-            Self::SyncFlows => "a flow you make or change here is saved there too; its own flows stay",
+            Self::SyncFlows => "a flow made or changed here is saved there too, its env values included",
         }
     }
 

@@ -80,3 +80,27 @@ mod saving {
         assert!(!old.exists());
     }
 }
+
+#[cfg(unix)]
+mod modes {
+    use std::os::unix::fs::PermissionsExt;
+
+    use super::*;
+
+    fn mode(path: &Path) -> u32 {
+        std::fs::metadata(path).expect("metadata").permissions().mode() & 0o777
+    }
+
+    #[test]
+    fn a_flow_that_sets_env_is_readable_only_by_its_owner() {
+        let dir = TempDir::new();
+        let mut secret = named("Deploy");
+        secret.roles[0].env.insert("TOKEN".into(), "abc".into());
+
+        let private = save(dir.path(), &secret, None).expect("save it");
+        let plain = save(dir.path(), &named("Plain"), None).expect("save it");
+
+        assert_eq!(mode(&private), 0o600);
+        assert_ne!(mode(&plain), 0o600);
+    }
+}
