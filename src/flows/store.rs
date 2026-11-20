@@ -5,8 +5,6 @@ use crate::error::{Error, Result};
 use crate::persist;
 
 pub(crate) const EXTENSION: &str = "toml";
-const PROJECT_FOLDER: &str = ".cornercase";
-const FLOWS_FOLDER: &str = "flows";
 const MAX_COPIES: u32 = 1000;
 const MAX_SLUG: usize =
     persist::MAX_NAME - ("-".len() + MAX_COPIES.ilog10() as usize + 1) - (".".len() + EXTENSION.len());
@@ -211,7 +209,7 @@ pub(crate) fn tag(builtins: &[String], saved: &Saved) -> Option<&'static str> {
 }
 
 pub(crate) fn project_dir(project: &Path) -> PathBuf {
-    project.join(PROJECT_FOLDER).join(FLOWS_FOLDER)
+    project.join(".cornercase").join("flows")
 }
 
 pub(crate) fn list(builtins: Vec<Flow>, chosen: Chosen, user: &Path, project: Option<&Path>) -> Listing {
@@ -318,7 +316,27 @@ pub(crate) fn file_name(name: &str) -> String {
     if slug.is_empty() { "flow".to_string() } else { slug.to_string() }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Folder {
+    Yours,
+    Project,
+}
+
+impl Folder {
+    fn kind(self) -> persist::Kind {
+        match self {
+            Self::Yours => persist::Kind::Private,
+            Self::Project => persist::Kind::Synced,
+        }
+    }
+}
+
+#[cfg(test)]
 pub(crate) fn save(dir: &Path, flow: &Flow, previous: Option<&Path>) -> Result<PathBuf> {
+    save_in(dir, flow, previous, Folder::Yours)
+}
+
+pub(crate) fn save_in(dir: &Path, flow: &Flow, previous: Option<&Path>, folder: Folder) -> Result<PathBuf> {
     let text = to_text(flow).map_err(|reason| Error::FlowFile { path: dir.to_path_buf(), reason })?;
     let stem = file_name(&flow.name);
     let path = (1..=MAX_COPIES)
@@ -326,16 +344,11 @@ pub(crate) fn save(dir: &Path, flow: &Flow, previous: Option<&Path>) -> Result<P
         .map(|stem| dir.join(format!("{stem}.{EXTENSION}")))
         .find(|path| Some(path.as_path()) == previous || !path.exists())
         .ok_or_else(|| Error::FlowFile { path: dir.to_path_buf(), reason: "too many flows share its name".into() })?;
-    persist::write_bytes(&path, text.as_bytes(), kind(dir))?;
+    persist::write_bytes(&path, text.as_bytes(), folder.kind())?;
     if let Some(previous) = previous.filter(|previous| *previous != path) {
         std::fs::remove_file(previous)?;
     }
     Ok(path)
-}
-
-fn kind(dir: &Path) -> persist::Kind {
-    let project = dir.ends_with(Path::new(PROJECT_FOLDER).join(FLOWS_FOLDER));
-    if project { persist::Kind::Synced } else { persist::Kind::Private }
 }
 
 pub(crate) fn delete(path: &Path) -> Result<()> {

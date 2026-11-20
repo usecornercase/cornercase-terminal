@@ -10,7 +10,7 @@ use super::toast::Toast;
 use crate::control::contract::{Code, Refusal};
 use crate::control::{FlowSpec, FlowSync, FlowsSynced, MachineFlows};
 use crate::flows::dialog::SyncShown;
-use crate::flows::store::{self, Origin};
+use crate::flows::store::{self, Folder, Origin};
 use crate::flows::sync::{self, Change, Journal, Ours};
 use crate::flows::{Flow, share};
 use crate::host;
@@ -96,6 +96,11 @@ impl App {
         self.machines.flows.journal.clone().unwrap_or_else(beside_config)
     }
 
+    pub(super) fn folder_of(&self, dir: &Path) -> Folder {
+        let project = self.projects.iter().any(|project| dir == store::project_dir(&project.path));
+        if project && dir != self.yours_flows() { Folder::Project } else { Folder::Yours }
+    }
+
     pub(super) fn stamped(&self, dir: &Path, flow: &Flow) -> Flow {
         let changed = (dir == self.yours_flows()).then(stamp_now);
         Flow { changed, ..flow.clone() }
@@ -145,7 +150,8 @@ impl App {
             Some(_) if yours => kept_time(flow),
             _ => self.stamped(dir, flow),
         };
-        let saved = store::save(dir, &flow, replaced).map_err(|e| format!("could not save the flow: {e}"))?;
+        let saved = store::save_in(dir, &flow, replaced, self.folder_of(dir))
+            .map_err(|e| format!("could not save the flow: {e}"))?;
         if yours {
             self.journal_flow(&flow.name, None);
             let arrived = match &before {
@@ -473,7 +479,7 @@ fn in_the_present(saved: &store::Saved, now: SystemTime) -> Flow {
         return saved.flow.clone();
     };
     let dir = path.parent().unwrap_or(path);
-    match store::save(dir, &fixed, Some(path)) {
+    match store::save_in(dir, &fixed, Some(path), Folder::Yours) {
         Ok(_) => log::warning!("flows", "a flow's time is in the future: it is saved with this computer's time"),
         Err(e) => log::warning!("flows", "a flow's time in the future could not be fixed", why = e),
     }

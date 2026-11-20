@@ -15,7 +15,7 @@ use crate::editor::Editor;
 use crate::error::Error;
 use crate::flows::dialog::{Action, Agents, Dialog, Editing, Hit, Place, Preview, Room, RowText};
 use crate::flows::registry::{self, Source};
-use crate::flows::store::{self, Origin};
+use crate::flows::store::{self, Folder, Origin};
 use crate::flows::sync::Change;
 use crate::flows::{Flow, builtin, share};
 use crate::log::{self, Job, Level};
@@ -255,7 +255,7 @@ impl App {
         let old = previous.and_then(|path| store::read(path).ok()).map(|flow| flow.name);
         let was_default = previous.is_some_and(|path| self.is_default_file(path));
         let flow = &self.stamped(dir, flow);
-        let saved = save(dir, flow, previous);
+        let saved = save(dir, flow, previous, self.folder_of(dir));
         if let Ok(path) = &saved {
             log::info!("flows", "flow saved", file = file_name(path));
             self.journal_saved(dir, flow, previous.zip(old.as_deref()));
@@ -502,8 +502,8 @@ impl App {
     }
 }
 
-fn save(dir: &Path, flow: &Flow, previous: Option<&Path>) -> Result<PathBuf, String> {
-    store::save(dir, flow, previous).map_err(|e| e.to_string())
+fn save(dir: &Path, flow: &Flow, previous: Option<&Path>, folder: Folder) -> Result<PathBuf, String> {
+    store::save_in(dir, flow, previous, folder).map_err(|e| e.to_string())
 }
 
 fn file_name(path: &Path) -> String {

@@ -97,10 +97,21 @@ mod modes {
         let mut secret = named("Deploy");
         secret.roles[0].args = vec!["--api-key=abc".into()];
 
-        let yours = save(&dir.path().join("flows"), &secret, None).expect("save it");
-        let project = save(&project_dir(dir.path()), &named("Plain"), None).expect("save it");
+        let yours = save_in(&dir.path().join("flows"), &secret, None, Folder::Yours).expect("save it");
+        let project = save_in(&project_dir(dir.path()), &named("Plain"), None, Folder::Project).expect("save it");
 
         assert_eq!(mode(&yours), 0o600);
         assert_ne!(mode(&project), 0o600);
+    }
+
+    #[test]
+    fn a_folder_of_yours_named_like_a_project_s_is_still_yours() {
+        let dir = TempDir::new();
+        let yours = dir.path().join(".cornercase").join("flows");
+
+        let saved = save_in(&yours, &named("Deploy"), None, Folder::Yours).expect("save it");
+        let unsaid = save(&yours, &named("Quick"), None).expect("save it");
+
+        assert_eq!((mode(&saved), mode(&unsaid)), (0o600, 0o600));
     }
 }

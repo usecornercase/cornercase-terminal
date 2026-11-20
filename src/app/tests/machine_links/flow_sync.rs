@@ -455,3 +455,30 @@ mod a_flow_of_yours_with_a_time_ahead {
         assert_eq!(rig.app.flow_synced_to(&fixed), ["vps"]);
     }
 }
+
+#[cfg(unix)]
+mod file_modes {
+    use std::os::unix::fs::PermissionsExt;
+
+    use super::*;
+
+    fn mode(path: &Path) -> u32 {
+        std::fs::metadata(path).expect("metadata").permissions().mode() & 0o777
+    }
+
+    #[test]
+    fn only_an_open_project_s_flows_folder_is_not_private() {
+        let mut rig = rig_with(Vec::new(), &There::default());
+        let project = rig.dir.path().join("shop");
+        std::fs::create_dir_all(&project).expect("a project folder");
+        rig.app.add_project(project.clone(), AREA).expect("open the project");
+        let elsewhere = rig.dir.path().join("other");
+
+        let theirs = rig.app.save_flow_file(&store::project_dir(&project), &duo("Shared"), None).expect("save");
+        let unknown = rig.app.save_flow_file(&store::project_dir(&elsewhere), &duo("Odd"), None).expect("save");
+        let yours = rig.save("Duo");
+
+        assert_ne!(mode(&theirs), 0o600);
+        assert_eq!((mode(&unknown), mode(&yours)), (0o600, 0o600));
+    }
+}
