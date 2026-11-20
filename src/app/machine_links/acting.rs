@@ -2,6 +2,8 @@ use ratatui::layout::Position;
 use serde_json::Value;
 
 use super::relay::Asking;
+use super::selection::RemoteItem;
+use super::stream::Watched;
 use super::{Held, MachineEvent, OLDER};
 use crate::app::App;
 use crate::app::dialogs::named;
@@ -13,9 +15,10 @@ use crate::app::worktrees;
 use crate::control::contract::{Code, Refusal};
 use crate::control::{self, WorkspaceInfo};
 use crate::log::{self, Job, Level};
-use crate::machines::act::{Act, WARNING};
+use crate::machines::act::{Act, Scope, WARNING};
 use crate::machines::link::Down;
 use crate::machines::send::folding;
+use crate::machines::stream::orders::Order;
 use crate::machines::{self, State};
 use crate::ui;
 
@@ -25,6 +28,7 @@ const NOTHING_SENT: &str = "nothing was sent";
 const UNLISTED: &str = "that machine is no longer listed";
 const NOTHING_REMOVED: &str = "nothing was removed";
 const WAITING: &str = "is still waiting for its last action";
+const PANE: &str = "the pane";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::app) struct Aim {
@@ -40,7 +44,21 @@ pub(in crate::app) struct Acting {
 
 impl Acting {
     pub(in crate::app) fn busy(&self, link: u64, workspace: u64) -> bool {
-        self.busy.iter().any(|(aim, _)| aim.link == link && aim.workspace == workspace)
+        let on = |aim: &Aim, act: &Act| aim.workspace == workspace && act.scope() == Scope::Workspace;
+        self.busy.iter().any(|(aim, act)| aim.link == link && on(aim, act))
+    }
+
+    pub(in crate::app) fn busy_tab(&self, link: u64, tab: u64) -> bool {
+        self.busy.iter().any(|(aim, act)| aim.link == link && act.scope() == Scope::Tab(tab))
+    }
+
+    pub(in crate::app) fn closing(&self, link: u64, tab: u64) -> bool {
+        self.busy.iter().any(|(aim, act)| aim.link == link && *act == Act::CloseTab(tab))
+    }
+
+    #[cfg(test)]
+    pub(in crate::app) fn waiting(&self) -> usize {
+        self.busy.len()
     }
 
     pub(in crate::app) fn removing(&self, link: u64, workspace: u64) -> bool {
@@ -55,10 +73,11 @@ pub(crate) struct Acted {
     act: Act,
     label: String,
     machine: String,
+    picks: u64,
     result: Result<Value, Refusal>,
 }
 
-struct Target {
+pub(super) struct Target {
     machine: String,
     destination: String,
     boot: String,
@@ -67,7 +86,7 @@ struct Target {
 
 impl App {
     pub(in crate::app) fn send_act(&mut self, aim: Aim, act: Act) {
-        match self.aimed(aim) {
+        match self.aimed(aim, act.scope()) {
             Ok(target) => self.spawn_act(aim, act, target),
             Err(why) => self.not_sent(&why),
         }
@@ -98,12 +117,12 @@ impl App {
     }
 
     pub(in crate::app) fn remote_menu(&mut self, aim: Aim, at: Position) {
-        self.noted_menu(aim.link, MenuAction::RemoteRename(aim), at);
+        self.noted_menu(aim.link, vec![MenuAction::RemoteRename(aim)], at);
     }
 
-    pub(super) fn noted_menu(&mut self, link: u64, action: MenuAction, at: Position) {
+    pub(super) fn noted_menu(&mut self, link: u64, entries: Vec<MenuAction>, at: Position) {
         let note = (!self.linked(link)).then_some(MenuAction::MachineNote(link));
-        let actions = note.into_iter().chain([action]).collect();
+        let actions = note.into_iter().chain(entries).collect();
         self.overlay = Some(Overlay::Menu { at, actions });
     }
 
@@ -114,7 +133,7 @@ impl App {
                 !self.linked(aim.link) || self.machines.acting.busy(aim.link, aim.workspace)
             }
             MenuAction::RemoteAgentFold(aim) => !self.linked(aim.link),
-            _ => false,
+            other => self.remote_tab_disabled(other),
         }
     }
 
@@ -125,7 +144,7 @@ impl App {
             }
             MenuAction::RemoteRename(_) => Some(RENAME_WORKSPACE_LABEL.into()),
             MenuAction::RemoteAgentFold(aim) => Some(folding(aim.collapse).into()),
-            _ => None,
+            other => Self::remote_tab_label(other),
         }
     }
 
@@ -134,7 +153,7 @@ impl App {
             MenuAction::RemoteRename(aim) if !self.remote_disabled(action) => self.remote_rename(aim),
             MenuAction::RemoteAgentFold(aim) if !self.remote_disabled(action) => self.send_agent_fold(aim),
             MenuAction::RemoteRename(_) | MenuAction::RemoteAgentFold(_) | MenuAction::MachineNote(_) => {}
-            other => return Some(other),
+            other => return self.remote_tab_action(other),
         }
         None
     }
@@ -147,18 +166,23 @@ impl App {
         Ok(held)
     }
 
-    fn aimed(&self, aim: Aim) -> Result<Target, String> {
+    pub(super) fn aimed(&self, aim: Aim, scope: Scope) -> Result<Target, String> {
         let held = self.linked_held(aim.link)?;
         let (seen, workspace) = sighted(held, aim)?;
-        if self.machines.acting.busy(aim.link, aim.workspace) {
-            return Err(format!("{} {WAITING}", named(&workspace.name, Some(&held.name))));
+        let label = labelled(held, workspace, scope)?;
+        let waiting = |label: &str| format!("{} {WAITING}", named(label, Some(&held.name)));
+        let acting = &self.machines.acting;
+        if acting.removing(aim.link, aim.workspace)
+            || (scope == Scope::Workspace && acting.busy(aim.link, aim.workspace))
+        {
+            return Err(waiting(&workspace.name));
         }
-        Ok(Target {
-            machine: held.name.clone(),
-            destination: held.destination.clone(),
-            boot: seen.boot.clone(),
-            label: workspace.name.clone(),
-        })
+        if let Scope::Tab(tab) = scope
+            && acting.busy_tab(aim.link, tab)
+        {
+            return Err(waiting(&label));
+        }
+        Ok(Target { machine: held.name.clone(), destination: held.destination.clone(), boot: seen.boot.clone(), label })
     }
 
     fn spawn_act(&mut self, aim: Aim, act: Act, target: Target) {
@@ -167,46 +191,90 @@ impl App {
         let job = Job::new(Level::Info, "machines", "act")
             .with("name", &asking.machine)
             .with("workspace", aim.workspace)
-            .with("act", act.verb());
+            .with("act", act.name());
+        let picks = self.machines.picks;
         self.machines.acting.busy.push((aim, act.clone()));
         self.spawn_ask(job, asking, act.command(aim.workspace), move |result, asking, job| {
             let result = asking.heard(result, job).map(|value| warned(value, |why| asking.hide(why)));
             let machine = asking.machine.clone();
-            AppEvent::Machine(MachineEvent::Acted(Acted { aim, act, label, machine, result }))
+            AppEvent::Machine(MachineEvent::Acted(Acted { aim, act, label, machine, picks, result }))
         });
     }
 
     pub(super) fn follow_remote_acts(&mut self) {
         let busy = std::mem::take(&mut self.machines.acting.busy);
-        self.machines.acting.busy = busy.into_iter().filter(|(aim, _)| self.sights(*aim)).collect();
+        self.machines.acting.busy = busy.into_iter().filter(|(aim, act)| self.sights(*aim, act.scope())).collect();
         let Some(Overlay::MachineWorkspace(dialog)) = &self.overlay else { return };
-        if !self.sights(dialog.aim) {
+        if !self.sights(dialog.aim, dialog.kind.scope()) {
             log::info!("machines", "remote dialog dropped", link = dialog.aim.link, workspace = dialog.aim.workspace);
             self.overlay = None;
         }
     }
 
-    fn sights(&self, aim: Aim) -> bool {
-        self.held_by(aim.link).is_some_and(|held| sighted(held, aim).is_ok())
+    pub(super) fn sights(&self, aim: Aim, scope: Scope) -> bool {
+        self.held_by(aim.link)
+            .is_some_and(|held| sighted(held, aim).and_then(|(_, workspace)| labelled(held, workspace, scope)).is_ok())
     }
 
     pub(super) fn acted(&mut self, acted: Acted) {
-        let Acted { aim, act, label, machine, result } = acted;
-        let waits = result.is_ok() && matches!(act, Act::Close | Act::Remove { .. });
+        let Acted { aim, act, label, machine, picks, result } = acted;
+        let waits = result.is_ok() && matches!(act, Act::Close | Act::Remove { .. } | Act::CloseTab(_));
         if !waits {
-            self.machines.acting.busy.retain(|(busy, _)| *busy != aim);
+            let busy = &mut self.machines.acting.busy;
+            if let Some(at) = busy.iter().position(|(busy, done)| *busy == aim && *done == act) {
+                busy.remove(at);
+            }
         }
         if act == Act::Check {
             return self.remote_checked(aim, result, &label, &machine);
         }
+        if let Ok(value) = &result {
+            self.made(aim, picks, &act, value);
+        }
         if let Some(toast) = told(&act, &label, &machine, &result) {
             self.messages.toast = Some(toast);
+        }
+    }
+
+    fn made(&mut self, aim: Aim, picks: u64, act: &Act, value: &Value) {
+        match act {
+            Act::NewTab => {
+                let held = self.held_by(aim.link).filter(|held| held.era == aim.era);
+                let boot = held.and_then(|held| held.seen.as_deref()).map(|seen| seen.boot.clone());
+                if let Some((tab, boot)) = value["tab"].as_u64().zip(boot).filter(|_| self.machines.picks == picks) {
+                    self.await_remote(aim.link, boot, RemoteItem::Tab(tab));
+                }
+            }
+            Act::Split { pane: split, .. } => {
+                let shown = self.shown_remote().is_some_and(|s| (s.link, s.workspace) == (aim.link, aim.workspace));
+                let framed = self.watched().and_then(Watched::live).map(|(_, screen)| &screen.panes);
+                let there = framed.is_some_and(|panes| panes.iter().any(|framed| framed.pane == *split));
+                let watched = self.machines.watched.as_mut().filter(|_| shown && there);
+                if let Some((watched, pane)) = watched.zip(value["pane"].as_u64()) {
+                    watched.order(Order::Focus(pane));
+                }
+            }
+            _ => {}
         }
     }
 }
 
 fn seen_in(held: &Held, era: u64) -> Result<&control::Report, String> {
     held.seen.as_deref().filter(|_| held.era == era).ok_or_else(|| format!("{} restarted", held.name))
+}
+
+fn labelled(held: &Held, workspace: &WorkspaceInfo, scope: Scope) -> Result<String, String> {
+    match scope {
+        Scope::Workspace => Ok(workspace.name.clone()),
+        Scope::Tab(id) => {
+            let tab = workspace.tabs.iter().find(|tab| tab.id == id).ok_or_else(|| gone("tab", held))?;
+            Ok(tab.name.clone())
+        }
+        Scope::Pane(id) => {
+            let mut panes = workspace.tabs.iter().flat_map(|tab| &tab.panes);
+            if panes.any(|pane| pane.id == id) { Ok(PANE.into()) } else { Err(gone("pane", held)) }
+        }
+    }
 }
 
 fn gone(what: &str, held: &Held) -> String {

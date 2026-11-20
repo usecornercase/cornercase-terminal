@@ -1,5 +1,6 @@
 ---
 source: src/ui/tests/machine_rows.rs
+assertion_line: 114
 expression: "rendered(Sidebar::ProjectsOnTop, None).backend()"
 ---
 "  ⌕ search projects, workspa…  │                                                                    "
@@ -34,16 +35,16 @@ expression: "rendered(Sidebar::ProjectsOnTop, None).backend()"
 "  ▾ api-vps         ☁ vps      │                                                                    "
 "  ├ ⠸ claude                   │                                                                    "
 "  │   opus · 40%               │                                                                    "
-"  └ › zsh                      │                                                                    "
+"  ├ › zsh                      │                                                                    "
+"  └ + Tab                      │                                                                    "
 "                               │                                                                    "
 "  ▾ api-pi           ☁ pi      │                                                                    "
 "  ├ ⠋ claude                   │                                                                    "
 "  │   working · seen 2 min ago │                                                                    "
-"  └ › zsh                      │                                                                    "
+"  ├ › zsh                      │                                                                    "
+"  └ + Tab                      │                                                                    "
 "                               │                                                                    "
 "  + New                        │                                                                    "
-"                               │                                                                    "
-"                               │                                                                    "
 "                               │                                                                    "
 "                               │                                                                    "
 " ───────────────────────────── │                                                                    "

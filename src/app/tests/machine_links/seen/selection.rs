@@ -95,10 +95,10 @@ mod picking {
     #[case::a_project_s_row(|app: &mut App, id| app.click_row(Target::Project(id)))]
     #[case::the_next_tab_by_key(|app: &mut App, _| { app.go_shortcut(Action::NextTab, AREA); })]
     #[case::a_tab_by_key(|app: &mut App, _| { app.go_shortcut(Action::Tab(0), AREA); })]
-    #[case::a_split_by_key(|app: &mut App, _| {
+    #[case::a_mark_by_key(|app: &mut App, _| {
         app.config.prefix_key = "ctrl+]".into();
         send_key(app, KeyCode::Char(']'), KeyModifiers::CONTROL);
-        send_key(app, KeyCode::Char('|'), KeyModifiers::NONE);
+        send_key(app, KeyCode::Char('m'), KeyModifiers::NONE);
     })]
     fn something_here_goes_back_to_it(#[case] pick: fn(&mut App, u64)) {
         let (mut rig, _ends, _theirs) = seen_by();

@@ -4,6 +4,7 @@ use rstest::rstest;
 use serde_json::{Value, json};
 
 use super::*;
+use crate::app::machine_links::TabAim;
 use crate::app::machine_links::acting::Aim;
 use crate::control::contract::{Code, Refusal, Structured};
 use crate::control::{PaneInfo, ProjectInfo, TabInfo, WorkspaceInfo};
@@ -16,6 +17,9 @@ const RESTARTED: &str = "vps-2";
 const WORKSPACE: u64 = 7;
 const PATH: &str = "/home/ana/api";
 const REMOVE: Act = Act::Remove { force: false, unlock: false };
+const SHELL: u64 = 11;
+const AGENT: u64 = 13;
+const MADE: u64 = 21;
 
 #[derive(Clone, Copy)]
 enum Reply {
@@ -102,6 +106,35 @@ fn snapshot(boot: &str) -> control::Report {
     holding(boot, workspace())
 }
 
+fn tabbed() -> WorkspaceInfo {
+    let pane =
+        |id, program: &str, active| PaneInfo { id, program: Some(program.into()), active, ..PaneInfo::default() };
+    let shell = TabInfo { id: SHELL, name: "zsh".into(), panes: vec![pane(12, "zsh", true)], ..TabInfo::default() };
+    let agent = TabInfo {
+        id: AGENT,
+        name: "review".into(),
+        custom_name: Some("review".into()),
+        status: Some("working".into()),
+        panes: vec![pane(14, "claude", true), pane(15, "zsh", false)],
+        ..TabInfo::default()
+    };
+    WorkspaceInfo { tabs: vec![shell, agent], ..workspace() }
+}
+
+fn with_tabs(reply: Reply) -> Remote {
+    seeing_in(reply, holding(BOOT, tabbed()))
+}
+
+fn made_tab() -> Value {
+    json!({ "workspace": WORKSPACE, "tab": MADE, "pane": MADE + 1 })
+}
+
+fn listing_the_made_tab() -> control::Report {
+    let mut workspace = tabbed();
+    workspace.tabs.push(TabInfo { id: MADE, name: "zsh".into(), ..TabInfo::default() });
+    holding(BOOT, workspace)
+}
+
 fn seeing(reply: Reply) -> Remote {
     seeing_in(reply, snapshot(BOOT))
 }
@@ -138,6 +171,16 @@ fn unseen(reply: Reply) -> Remote {
 impl Remote {
     fn aim(&self) -> Aim {
         Aim { link: self.link, era: self.rig.app.machines.held()[0].era, workspace: WORKSPACE }
+    }
+
+    fn tab_aim(&self, tab: u64) -> TabAim {
+        TabAim { aim: self.aim(), tab }
+    }
+
+    fn closing(&self) -> Vec<bool> {
+        let app = &self.rig.app;
+        let remote = app.remote_projects();
+        app.alone_entries(&remote).flatten().flat_map(|entry| entry.tabs).map(|tab| tab.closing).collect()
     }
 
     fn ask_close(&mut self) {
@@ -286,6 +329,55 @@ mod an_act {
         assert_eq!(remote.rig.seen("ask"), 1);
     }
 
+    #[rstest]
+    #[case::tab(Act::CloseTab(99), "that tab is no longer on vps; nothing was sent")]
+    #[case::pane(Act::ClosePane(99), "that pane is no longer on vps; nothing was sent")]
+    fn is_not_sent_for_a_tab_or_a_pane_the_machine_no_longer_has(#[case] act: Act, #[case] told: &str) {
+        let mut remote = with_tabs(Reply::Agree);
+
+        remote.send(act);
+
+        assert_eq!(toast(&remote.rig.app), Some(told));
+        assert_eq!(remote.rig.seen("ask"), 0);
+    }
+
+    #[test]
+    fn waits_for_the_one_in_flight_on_its_tab() {
+        let mut remote = with_tabs(Reply::Agree);
+
+        remote.send(Act::RenameTab { tab: SHELL, name: "logs".into() });
+        remote.send(Act::CloseTab(SHELL));
+        assert_eq!(toast(&remote.rig.app), Some("zsh on vps is still waiting for its last action; nothing was sent"));
+        remote.send(Act::CloseTab(AGENT));
+
+        wait_until("both are asked", || remote.asked().len() == 2);
+        let closed = |asked: &Value| asked["command"] == "close" && asked["args"]["item"] == json!({ "tab": AGENT });
+        assert!(remote.asked().iter().any(closed), "{:?}", remote.asked());
+    }
+
+    #[test]
+    fn on_a_tab_waits_while_its_workspace_is_removed() {
+        let mut remote = with_tabs(Reply::Agree);
+
+        remote.send(REMOVE);
+        remote.send(Act::CloseTab(SHELL));
+
+        assert_eq!(toast(&remote.rig.app), Some("api on vps is still waiting for its last action; nothing was sent"));
+        remote.heard();
+        assert_eq!(remote.rig.seen("ask"), 1);
+    }
+
+    #[test]
+    fn on_a_pane_never_waits() {
+        let mut remote = with_tabs(Reply::Agree);
+
+        remote.send(Act::Split { pane: 14, down: false });
+        remote.send(Act::Split { pane: 14, down: true });
+
+        wait_until("both are asked", || remote.asked().len() == 2);
+        assert_eq!(toast(&remote.rig.app), None);
+    }
+
     #[test]
     fn is_not_sent_for_a_workspace_the_machine_no_longer_has() {
         let mut remote = seeing(Reply::Agree);
@@ -331,6 +423,32 @@ mod an_answer {
 
         let toast = remote.rig.app.messages.toast.as_ref().expect("a toast");
         assert_eq!((toast.message.as_str(), toast.icon), (told, icon));
+    }
+
+    #[rstest]
+    #[case::new_tab(Act::NewTab, "could not open a tab in api on vps: the worktree on vps is in use")]
+    #[case::rename_tab(Act::RenameTab { tab: SHELL, name: "logs".into() }, "could not rename zsh on vps: the worktree on vps is in use")]
+    #[case::close_tab(Act::CloseTab(AGENT), "could not close review on vps: the worktree on vps is in use")]
+    #[case::split(Act::Split { pane: 14, down: false }, "could not split the pane on vps: the worktree on vps is in use")]
+    #[case::close_pane(Act::ClosePane(15), "could not close the pane on vps: the worktree on vps is in use")]
+    fn refusing_a_tab_s_act_says_it_with_the_machine_s_words(#[case] act: Act, #[case] told: &str) {
+        let mut remote = with_tabs(Reply::Refuse);
+
+        remote.send(act);
+        remote.heard();
+
+        assert_eq!(toast(&remote.rig.app), Some(told));
+        assert_eq!(remote.closing(), [false, false]);
+    }
+
+    #[test]
+    fn to_a_tab_s_act_from_a_machine_that_restarted_says_nothing_was_changed() {
+        let mut remote = with_tabs(Reply::Restarted);
+
+        remote.send(Act::CloseTab(SHELL));
+        remote.heard();
+
+        assert_eq!(toast(&remote.rig.app), Some("vps restarted; nothing was changed there"));
     }
 
     #[test]

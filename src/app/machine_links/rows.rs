@@ -42,7 +42,7 @@ impl App {
         ui::WorkspaceEntry {
             name: workspace.name.clone(),
             collapsed: self.machines.folded.iter().any(folded),
-            tabs: workspace.tabs.iter().map(|tab| self.remote_tab(tab)).collect(),
+            tabs: workspace.tabs.iter().map(|tab| self.remote_tab(remote.link, tab)).collect(),
             machine: Some(remote.tag.clone()),
             removing: self.machines.acting.removing(remote.link, workspace.id),
             ..ui::WorkspaceEntry::default()
@@ -60,7 +60,7 @@ impl App {
         unpaired(remote).map(|r| workspaces_of(r).map(|(r, workspace)| self.remote_workspace(r, workspace)).collect())
     }
 
-    fn remote_tab(&self, tab: &TabInfo) -> ui::TabEntry {
+    fn remote_tab(&self, link: u64, tab: &TabInfo) -> ui::TabEntry {
         let known = |pane: &&PaneInfo| pane.model.is_some() || pane.compacted;
         let shown = tab.panes.iter().find(|pane| pane.active).filter(known).or_else(|| tab.panes.iter().find(known));
         let memory = tab.panes.iter().filter_map(|pane| pane.memory).reduce(u64::saturating_add);
@@ -76,6 +76,7 @@ impl App {
                 ..details
             },
             others: tab.panes.len().saturating_sub(1),
+            closing: self.machines.acting.closing(link, tab.id),
         }
     }
 }
