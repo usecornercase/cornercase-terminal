@@ -47,7 +47,7 @@ pub(crate) fn field(area: Rect, field: Field) -> Rect {
     let wanted = match field {
         Field::Name => NAME,
         Field::Icon => ICON,
-        Field::Destination | Field::Folder | Field::Command | Field::Shown => WIDE,
+        Field::Destination | Field::Folder | Field::Command | Field::Shown | Field::SyncFlows => WIDE,
     };
     let width = wanted.min(r.width.saturating_sub(LABEL));
     Rect::new(r.x.saturating_add(LABEL), r.y, width, r.height.min(1))
@@ -96,15 +96,15 @@ fn draw_field(f: &mut Frame, view: &View, form: &Form, field: Field) -> Option<P
     let dim = Style::default().fg(view.muted);
     let focused = form.focus == field;
     let label = if focused { Style::default().fg(Color::Cyan) } else { dim };
-    if field != Field::Shown {
+    if field.check_text().is_none() {
         f.render_widget(Paragraph::new(Span::styled(field.label(), label)), Rect { width: LABEL, height: 1, ..r });
     }
     let at = self::field(screen, field);
     if pitch(rows(screen)[1]) > 1 {
         draw_note(f, view, form, field, note(screen, field));
     }
-    if field == Field::Shown {
-        draw_shown(f, at, form.shown, focused);
+    if let (Some(text), Some(on)) = (field.check_text(), form.checked_box(field)) {
+        draw_check(f, at, text, on, focused);
         return None;
     }
     if let Some(editor) = form.editor_of(field) {
@@ -123,9 +123,9 @@ fn draw_note(f: &mut Frame, view: &View, form: &Form, field: Field, below: Rect)
     f.render_widget(Paragraph::new(Span::styled(truncate_right(about, usize::from(below.width)), style)), below);
 }
 
-fn draw_shown(f: &mut Frame, r: Rect, shown: bool, focused: bool) {
+fn draw_check(f: &mut Frame, r: Rect, text: &str, on: bool, focused: bool) {
     let style = if focused { Style::default().add_modifier(Modifier::BOLD) } else { Style::default() };
-    let text = format!("{} show its work here", if shown { "[x]" } else { "[ ]" });
+    let text = format!("{} {text}", if on { "[x]" } else { "[ ]" });
     let inside = Rect { x: r.x + 1, ..r }.intersection(r);
     f.render_widget(Paragraph::new(Span::styled(text, style)), inside);
 }

@@ -33,7 +33,12 @@ impl App {
             None => self.here(caller).project,
         };
         let listing = self.flow_listing(p.map(|p| self.projects[p].path.as_path()));
-        let (flows, hidden) = manage::info_listing(&listing);
+        let (mut flows, hidden) = manage::info_listing(&listing);
+        for (info, saved) in flows.iter_mut().zip(&listing.flows) {
+            if matches!(saved.origin, Origin::User(_)) {
+                info.synced = self.flow_synced_to(&saved.flow);
+            }
+        }
         let builtins = listing.builtins;
         let broken = listing.broken.into_iter().map(|(path, error)| BrokenFlow { path, error }).collect();
         Ok(Some(json(&Flows { flows, broken, hidden, builtins })))
@@ -87,8 +92,7 @@ impl App {
             (To::Project, Some(path)) => store::project_dir(path),
             _ => paths::flows(self.config_file.path()),
         };
-        let saved =
-            store::save(&dir, &flow, replaced.as_deref()).map_err(|e| format!("could not save the flow: {e}"))?;
+        let saved = self.save_imported(&dir, &flow, replaced.as_deref(), import.synced_from.as_deref())?;
         log::info!("flows", "flow imported", place = imported.origin, bytes = import.text.len());
         imported.path = Some(saved);
         self.refresh_flows();
@@ -375,6 +379,8 @@ fn flow_info(flow: &Flow, origin: &Origin) -> FlowInfo {
         flow: FlowSpec::from(flow),
         edited: false,
         default: false,
+        changed: flow.changed.clone().filter(|_| matches!(origin, Origin::User(_))),
+        synced: Vec::new(),
     }
 }
 

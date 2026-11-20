@@ -13,6 +13,7 @@ pub(crate) const SET_DEFAULT: &str = "set default";
 pub(crate) const EXPORT: &str = "export";
 pub(crate) const IMPORT: &str = "import";
 pub(crate) const NEW: &str = "new";
+pub(crate) const SYNC_NOW: &str = "sync now";
 pub(crate) const SAVE: &str = "save";
 pub(crate) const CANCEL: &str = "cancel";
 pub(crate) const DIAGRAM: &str = "diagram";
@@ -64,6 +65,7 @@ pub(crate) enum Action {
     Find(char),
     Restart,
     Share,
+    SyncNow,
     ReadModels(Known),
     Fetch(registry::Source),
 }
@@ -182,6 +184,23 @@ pub(crate) struct Dialog {
     pub(crate) importing: Option<Importing>,
     pub(crate) preview: u16,
     pub(crate) diagram: bool,
+    pub(crate) sync: SyncShown,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct SyncShown {
+    pub(crate) machines: Vec<String>,
+    pub(crate) synced: Vec<(String, Vec<String>)>,
+}
+
+impl SyncShown {
+    fn note(&self, saved: &Saved) -> Option<String> {
+        if !matches!(saved.origin, Origin::User(_)) {
+            return None;
+        }
+        let (_, machines) = self.synced.iter().find(|(name, _)| store::same_name(name, &saved.flow.name))?;
+        (!machines.is_empty()).then(|| format!("synced to {}", machines.join(", ")))
+    }
 }
 
 impl Dialog {
@@ -206,6 +225,7 @@ impl Dialog {
             importing: None,
             preview: 0,
             diagram: false,
+            sync: SyncShown::default(),
         }
     }
 
@@ -540,7 +560,10 @@ impl Dialog {
 
     pub(crate) fn list_rows(&self) -> Vec<RowText> {
         let default = self.default.as_deref();
-        let flows = self.flows.iter().map(|saved| flow_row(&self.flows, &self.builtins, default, saved));
+        let flows = self
+            .flows
+            .iter()
+            .map(|saved| with_note(flow_row(&self.flows, &self.builtins, default, saved), self.sync.note(saved)));
         let broken = self.broken.iter().map(|(path, reason)| RowText {
             label: path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
             value: reason.clone(),
@@ -585,11 +608,14 @@ impl Dialog {
             buttons.push(if self.diagram { LIST } else { DIAGRAM });
         }
         buttons.extend([IMPORT, NEW]);
+        if !self.sync.machines.is_empty() {
+            buttons.push(SYNC_NOW);
+        }
         if self.in_settings {
             buttons.extend([crate::settings::SHARE, crate::settings::RESTART]);
         }
         buttons.push(DONE);
-        for dropped in [crate::settings::SHARE, IMPORT, EXPORT, SET_DEFAULT, DUPLICATE] {
+        for dropped in [crate::settings::SHARE, SYNC_NOW, IMPORT, EXPORT, SET_DEFAULT, DUPLICATE] {
             if !room.wide && room.width > 0 && row_width(&buttons) > room.width {
                 buttons.retain(|label| *label != dropped);
             }
@@ -682,6 +708,7 @@ impl Dialog {
             RESTORE_BUILT_IN => return self.unhide(),
             crate::settings::RESTART => return Action::Restart,
             crate::settings::SHARE => return Action::Share,
+            SYNC_NOW => return Action::SyncNow,
             NEW => self.open_new(),
             DONE => return Action::Close,
             _ => {}
@@ -743,6 +770,13 @@ pub(crate) fn flow_row(flows: &[Saved], builtins: &[String], default: Option<&st
         ),
     };
     RowText { label: saved.flow.name.clone(), value, note, red: !problems.is_empty(), ..RowText::default() }
+}
+
+fn with_note(mut row: RowText, note: Option<String>) -> RowText {
+    if let Some(note) = note {
+        row.note = if row.note.is_empty() { note } else { format!("{} · {note}", row.note) };
+    }
+    row
 }
 
 pub(crate) fn project_risks(flow: &Flow) -> Option<String> {

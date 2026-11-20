@@ -152,6 +152,7 @@ fn pushed(list: &mut Vec<Machine>, destination: String, command: Option<String>,
         command,
         shown: false,
         unreached,
+        sync_flows: false,
     };
     list.push(machine.clone());
     machine

@@ -16,6 +16,7 @@ use crate::error::Error;
 use crate::flows::dialog::{Action, Agents, Dialog, Editing, Hit, Place, Preview, Room, RowText};
 use crate::flows::registry::{self, Source};
 use crate::flows::store::{self, Origin};
+use crate::flows::sync::Change;
 use crate::flows::{Flow, builtin, share};
 use crate::log::{self, Job, Level};
 use crate::paths;
@@ -34,8 +35,11 @@ impl App {
         let path = project.and_then(|id| self.project_path(id));
         let installed = builtin::installed(&self.config);
         let agents = Agents::new(installed, Known::of(&self.config.agent), path.is_some());
-        let mut dialog = Dialog::new(self.flow_listing(path.as_deref()), agents);
+        let listing = self.flow_listing(path.as_deref());
+        let sync = self.sync_shown(&listing);
+        let mut dialog = Dialog::new(listing, agents);
         dialog.project = project;
+        dialog.sync = sync;
         dialog
     }
 
@@ -170,6 +174,7 @@ impl App {
             Action::Export(flow) => self.flow_exported(&flow),
             Action::ReadModels(kind) => self.read_models(kind),
             Action::Fetch(source) => self.fetch_flow(source),
+            Action::SyncNow => self.flows_sync_now(),
         }
     }
 
@@ -235,7 +240,7 @@ impl App {
         dialog.notice = Some(format!("restored {name}"));
     }
 
-    fn flows_notice(&mut self, notice: String) {
+    pub(super) fn flows_notice(&mut self, notice: String) {
         if let Some(dialog) = self.flows_dialog() {
             dialog.notice = Some(notice);
         }
@@ -249,9 +254,11 @@ impl App {
     ) -> Result<PathBuf, String> {
         let old = previous.and_then(|path| store::read(path).ok()).map(|flow| flow.name);
         let was_default = previous.is_some_and(|path| self.is_default_file(path));
+        let flow = &self.stamped(dir, flow);
         let saved = save(dir, flow, previous);
         if let Ok(path) = &saved {
             log::info!("flows", "flow saved", file = file_name(path));
+            self.journal_saved(dir, flow, previous.zip(old.as_deref()));
             if let Some(old) = old.filter(|old| !store::same_name(old, &flow.name)) {
                 self.flow_renamed(&old, &flow.name, was_default);
             }
@@ -283,12 +290,14 @@ impl App {
     pub(in crate::app) fn delete_flow_file(&mut self, path: &Path, project: Option<&Path>) -> Result<(), String> {
         let was_default =
             self.flow_listing(project).default_flow().is_some_and(|saved| saved.origin.path() == Some(path));
+        let name = store::read(path).ok().map(|flow| flow.name);
         let deleted = store::delete(path);
         if deleted.is_ok() {
             log::info!("flows", "flow deleted", file = file_name(path));
             if was_default {
                 self.clear_default_flow();
             }
+            self.journal_deleted(path, name.as_deref());
         }
         self.refresh_flows();
         deleted.map_err(|e| format!("could not delete the flow: {e}"))
@@ -378,6 +387,8 @@ impl App {
         self.refresh_flows();
         if saved.is_ok() {
             log::info!("flows", "built-in flow hidden", name = name);
+            self.journal_flow(name, Some(Change::Hidden));
+            self.flows_changed_here();
         }
         saved
     }
@@ -392,6 +403,8 @@ impl App {
         self.refresh_flows();
         if saved.is_ok() {
             log::info!("flows", "built-in flow restored", name = name);
+            self.journal_flow(name, Some(Change::Restored));
+            self.flows_changed_here();
         }
         saved
     }
@@ -445,8 +458,10 @@ impl App {
 
     pub(in crate::app) fn refresh_flows(&mut self) {
         let listing = self.flow_listing(self.flows_project().as_deref());
+        let sync = self.sync_shown(&listing);
         if let Some(dialog) = self.flows_dialog() {
             dialog.set_listing(listing);
+            dialog.sync = sync;
         }
     }
 

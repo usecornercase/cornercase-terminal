@@ -29,6 +29,8 @@ pub(crate) struct MachineSet {
     pub(crate) create: Option<bool>,
     pub(crate) command: Option<String>,
     pub(crate) shown: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) sync_flows: Option<bool>,
 }
 
 impl Machines {
@@ -40,7 +42,8 @@ impl Machines {
                 .add("name", &set.name)
                 .maybe("new_name", set.new_name.as_ref())
                 .add("destination", set.destination.is_some())
-                .maybe("shown", set.shown),
+                .maybe("shown", set.shown)
+                .maybe("sync_flows", set.sync_flows),
             Self::Remove(name) => fields.add("action", "remove").add("name", name),
             Self::Update(name) => fields.add("action", "update").add("name", name),
             Self::Retry(name) => fields.add("action", "retry").maybe("name", name.as_ref()),

@@ -51,6 +51,7 @@ pub(crate) fn request(args: &MachinesArgs) -> (Machines, &Print) {
                 command: add.command.clone(),
                 shown: add.hidden.then_some(false),
                 create: Some(true),
+                sync_flows: add.sync_flows.then_some(true),
                 ..MachineSet::default()
             };
             (Machines::Set(set), &add.print)
@@ -64,6 +65,7 @@ pub(crate) fn request(args: &MachinesArgs) -> (Machines, &Print) {
                 folder: edit.folder.clone(),
                 command: edit.command.clone(),
                 create: Some(false),
+                sync_flows: edit.sync_flows.then_some(true).or(edit.no_sync_flows.then_some(false)),
                 ..MachineSet::default()
             };
             (Machines::Set(set), &edit.print)
@@ -86,7 +88,8 @@ pub(crate) fn list_text(list: &MachineList, now: SystemTime) -> String {
         let name = format!("{:names$}", machine.name);
         let destination = format!("{:destinations$}", machine.destination);
         let (mark, icon, folder, note) = (machine.mark(), &machine.icon, &machine.folder, machine.note(now));
-        let _ = writeln!(text, "{mark} {icon} {name}  {destination}  {folder}  {note}");
+        let syncs = if machine.sync_flows { " · syncs flows" } else { "" };
+        let _ = writeln!(text, "{mark} {icon} {name}  {destination}  {folder}  {note}{syncs}");
         if let Some(error) = &machine.error {
             let _ = writeln!(text, "    {error}");
         }

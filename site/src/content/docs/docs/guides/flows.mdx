@@ -255,6 +255,24 @@ cornercase flow import octocat/security-audit
 - An import is a copy: a repository changed or deleted later does not change yours, and the page shows the file as it was at the last refresh, so read the file you actually import.
 - The list leaves out flows that set `env` or `args`, but a flow you import from any address can; the import shows them in red.
 
+## Sync your flows with your machines
+
+A flow you made or tuned on your laptop can be on every [machine](../machines/) too. Tick **sync your flows to it** in a machine's form in **settings → Machines**, or run `cornercase machines edit vps --sync-flows`, and cornercase keeps your flows there the same as here, so [starting one on that machine](../machines/#start-work-on-a-machine) runs the version you just saved.
+
+- **What goes there**: your flows (built-in flows you edited included) and the built-in flows you deleted. Your default flow and your order stay on each computer. A project's flows already travel with its repository.
+- **When**: each change is sent as soon as you save, rename, delete, hide or restore a flow. A machine that is off or out of reach gets what it missed when its link comes back. **`sync now`**, in **settings → Flows** while a machine syncs flows, sends everything at once, and each flow of yours says which machines have it (`synced to vps`).
+- **The last saved wins**: saving a flow writes the time in its file (`changed`). A flow saved later on the machine is kept there, and if that machine syncs to this computer too, it comes back here, with a note that it was replaced. A flow only the machine has is never deleted, and the first sync with a machine deletes nothing there.
+- **Nothing asks**: both ends are your machines and you ticked the box, so a synced flow is saved there without the question an import asks, even when it sets `env` or `args`. Agents the flow uses that are not installed there are named on that machine's Flows list, as usual.
+
+From a terminal, `cornercase flow sync` sends everything now and prints what changed on each machine (`--machine vps` for one, `--json` for programs):
+
+```sh
+cornercase flow sync
+cornercase flow sync --machine vps --json
+```
+
+Only machines in **settings → Machines** that show their work here sync flows: a hidden machine, or a computer you only open a window on, has no link to send them through.
+
 ## Where flows are kept
 
 | Flows | Where |
@@ -313,7 +331,7 @@ cornercase flow save draft.json --check
 cornercase flow hide Quick
 ```
 
-`flow export` and `flow import` [share a flow](#share-a-flow). `flow save`, `flow delete`, `flow hide` and `flow restore` [manage them](../scripts-and-agents/#manage-flows), `flow runs`, `flow messages` and `flow files` [follow a run](../scripts-and-agents/#follow-a-flow-run), and a program with an editor of its own reads each flow whole in `flow list --json` and saves one with `flow save` (the `flow-save` request). `flow list` lists the flows with their agents and their problems. `flow run` starts one, answering once the tabs exist with the workspace's id and each role's pane id; nothing changes in the window unless you pass `--focus`. An agent can use them too, and [`start`](../scripts-and-agents/#start-an-agent) takes `--model`, `--mode` and `--effort` to start a single agent with a model, a mode and an effort of its own. See [Start a flow](../scripts-and-agents/#start-a-flow) in Scripts and agents.
+`flow export` and `flow import` [share a flow](#share-a-flow), and `flow sync` [sends your flows to your machines](#sync-your-flows-with-your-machines). `flow save`, `flow delete`, `flow hide` and `flow restore` [manage them](../scripts-and-agents/#manage-flows), `flow runs`, `flow messages` and `flow files` [follow a run](../scripts-and-agents/#follow-a-flow-run), and a program with an editor of its own reads each flow whole in `flow list --json` and saves one with `flow save` (the `flow-save` request). `flow list` lists the flows with their agents and their problems. `flow run` starts one, answering once the tabs exist with the workspace's id and each role's pane id; nothing changes in the window unless you pass `--focus`. An agent can use them too, and [`start`](../scripts-and-agents/#start-an-agent) takes `--model`, `--mode` and `--effort` to start a single agent with a model, a mode and an effort of its own. See [Start a flow](../scripts-and-agents/#start-a-flow) in Scripts and agents.
 
 `cornercase status --json` gives each workspace that runs a flow a `run` with its `end`, whether it was `reached` and, when the run closes its agents once merged, `close_when_merged` (and `free_builds` when it also frees their builds), and `exited`, the roles whose agent exited by itself, while there are any.
 

@@ -133,6 +133,28 @@ does with the delete button on a built-in flow. Hiding one that is already hidde
 
 Examples:
   cornercase flow hide Quick";
+pub(in crate::cli) const FLOW_SYNC_HELP: &str =
+    "Your flows (the files of flows/ next to config.json, built-ins you edited included) and the built-ins
+you deleted are kept the same on every machine marked to sync them (`sync flows` in Settings › Machines,
+or `cornercase machines edit NAME --sync-flows`). The server sends each change on its own as soon as it is
+saved, and a machine that was out of reach gets what it missed when its link comes back; this command
+sends everything now and waits for the answers, for every such machine or only --machine's.
+
+A flow is sent when the machine has none of that name among its own, or an older one: each save stamps the
+flow's file with `changed`, and the last saved wins, so a flow edited there later is kept (`kept`) and that
+machine's own sync brings it back here. A flow deleted, a built-in deleted or restored here is done there
+too, unless it was saved there after. A flow only the machine has is never deleted, and the first sync with
+a machine sends no deletions. Nothing asks: both ends are yours and the machine was marked on purpose. The
+default flow and the order stay per computer.
+
+It prints one line per machine; with --json {\"machines\": [{\"machine\", \"sent\", \"deleted\", \"hidden\",
+\"restored\", \"kept\", \"same\", \"failed\": [{\"name\", \"error\"}], \"error\"}]}: the names of the flows
+each change touched, how many were already the same, and error when the machine could not be reached.
+It exits with 1 when no machine syncs your flows, or when --machine names one that does not.
+
+Examples:
+  cornercase flow sync
+  cornercase flow sync --machine vps --json";
 pub(in crate::cli) const FLOW_RESTORE_HELP: &str =
     "It brings a deleted built-in flow back, and when you edited it, deletes your version so the built-in
 is the one that runs again. A flow that is shown and not edited has nothing to restore.

@@ -64,6 +64,10 @@ pub(crate) struct FlowInfo {
     pub(crate) flow: FlowSpec,
     pub(crate) edited: bool,
     pub(crate) default: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) changed: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) synced: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -172,6 +176,7 @@ impl FlowSpec {
         Flow {
             version: flows::VERSION,
             name: self.name,
+            changed: None,
             description: self.description,
             notes: self.notes,
             end: self.end,
@@ -275,6 +280,41 @@ pub(crate) struct FlowImport {
     pub(crate) place: String,
     pub(crate) replace: bool,
     pub(crate) check: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) synced_from: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct FlowSync {
+    pub(crate) machine: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct FlowsSynced {
+    pub(crate) machines: Vec<MachineFlows>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct MachineFlows {
+    pub(crate) machine: String,
+    pub(crate) sent: Vec<String>,
+    pub(crate) deleted: Vec<String>,
+    pub(crate) hidden: Vec<String>,
+    pub(crate) restored: Vec<String>,
+    pub(crate) kept: Vec<String>,
+    pub(crate) same: usize,
+    pub(crate) failed: Vec<FlowSyncFailure>,
+    pub(crate) error: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct FlowSyncFailure {
+    pub(crate) name: String,
+    pub(crate) error: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -465,6 +505,13 @@ impl FlowImport {
         fields.add("text_bytes", self.text.len()).maybe("name", self.name.as_ref());
         fields.maybe("project", self.project).add("place", &self.place);
         fields.add("replace", self.replace).add("check", self.check);
+        fields.add("synced", self.synced_from.is_some());
+    }
+}
+
+impl FlowSync {
+    pub(super) fn fields(&self, fields: &mut Fields) {
+        fields.maybe("machine", self.machine.as_ref());
     }
 }
 

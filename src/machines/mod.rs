@@ -11,6 +11,7 @@ use link::Down;
 pub(crate) mod act;
 pub(crate) mod ask;
 pub(crate) mod clone_form;
+pub(crate) mod flows;
 pub(crate) mod follow;
 pub(crate) mod form;
 pub(crate) mod heard;
@@ -58,6 +59,8 @@ pub(crate) struct Machine {
     pub(crate) shown: bool,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub(crate) unreached: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) sync_flows: bool,
 }
 
 impl Default for Machine {
@@ -70,6 +73,7 @@ impl Default for Machine {
             command: None,
             shown: true,
             unreached: false,
+            sync_flows: false,
         }
     }
 }
@@ -88,6 +92,7 @@ impl<'de> Deserialize<'de> for Machine {
             command,
             shown: flag("shown", true),
             unreached: flag("unreached", false),
+            sync_flows: flag("sync_flows", false),
         })
     }
 }
@@ -338,6 +343,8 @@ pub(crate) struct Info {
     pub(crate) error: Option<String>,
     pub(crate) updating: bool,
     pub(crate) problem: Option<String>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) sync_flows: bool,
 }
 
 impl Info {
@@ -363,6 +370,7 @@ impl Info {
             error,
             updating: status.is_some_and(|status| status.updating),
             problem,
+            sync_flows: machine.sync_flows,
         }
     }
 
