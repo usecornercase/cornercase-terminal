@@ -215,6 +215,13 @@ mod hiding {
         menu_disabled(app)[at]
     }
 
+    fn own() -> (App, Receiver<AppEvent>, crate::test_util::TempDir) {
+        let dir = crate::test_util::TempDir::new();
+        let (mut app, rx) = new_app(dir.path().join("config.json"));
+        app.open_here(AREA).expect("open the first project");
+        (app, rx, dir)
+    }
+
     fn submenu(app: &mut App, row: &str) -> Vec<String> {
         open_menu(app);
         pick(app, row);
@@ -251,7 +258,7 @@ mod hiding {
 
     #[test]
     fn show_its_work_here_hides_a_shown_machine_and_says_so() {
-        let (mut app, _rx) = app();
+        let (mut app, _rx, _dir) = own();
         reaches(&mut app, None, &["devbox", "vps"]);
         submenu(&mut app, "  devbox ▸");
 
@@ -264,7 +271,7 @@ mod hiding {
 
     #[test]
     fn show_its_work_here_shows_a_hidden_machine() {
-        let (mut app, _rx) = app();
+        let (mut app, _rx, _dir) = own();
         reaches(&mut app, None, &["devbox"]);
         app.config.machines[0].shown = false;
         submenu(&mut app, "  devbox ▸");
@@ -277,7 +284,7 @@ mod hiding {
 
     #[test]
     fn only_this_computer_hides_every_machine() {
-        let (mut app, _rx) = app();
+        let (mut app, _rx, _dir) = own();
         reaches(&mut app, None, &["devbox", "vps"]);
         open_menu(&mut app);
 
@@ -289,7 +296,7 @@ mod hiding {
 
     #[test]
     fn show_all_shows_every_machine() {
-        let (mut app, _rx) = app();
+        let (mut app, _rx, _dir) = own();
         reaches(&mut app, None, &["devbox", "vps"]);
         app.config.machines.iter_mut().for_each(|machine| machine.shown = false);
         open_menu(&mut app);
