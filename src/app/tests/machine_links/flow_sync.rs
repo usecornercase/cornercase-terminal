@@ -251,10 +251,11 @@ mod the_request {
         let mut one = rig_with(vec![hidden], &There::default());
 
         let (code, _) = none.refused(&json!({}));
+        let (all_hidden, how) = one.refused(&json!({}));
         let (hidden_code, why) = one.refused(&json!({"machine": "vps"}));
 
-        assert_eq!((code.as_str(), hidden_code.as_str()), ("conflict", "not-found"));
-        assert!(why.contains("cornercase machines show vps"), "{why}");
+        assert_eq!((code.as_str(), all_hidden.as_str(), hidden_code.as_str()), ("conflict", "conflict", "not-found"));
+        assert!(why.contains("cornercase machines show vps") && how.contains("cornercase machines show vps"), "{how}");
     }
 
     #[test]
@@ -313,7 +314,8 @@ mod settings_flows {
 
     #[test]
     fn offer_sync_all_and_a_flow_s_sync_only_while_a_machine_is_shown_here() {
-        let mut alone = rig_with(Vec::new(), &There::default());
+        let hidden = Machine { shown: false, ..machine("vps", "vps.lan") };
+        let mut alone = rig_with(vec![hidden], &There::default());
         store::save(&alone.yours(), &duo("Duo"), None).expect("save a flow by hand");
         alone.app.open_flows_tab();
         select(&mut alone, "Duo");
@@ -326,6 +328,37 @@ mod settings_flows {
         assert!(!buttons(&alone).contains(&SYNC_ALL) && !buttons(&alone).contains(&SYNC));
         assert!(on_yours.contains(&SYNC_ALL) && on_yours.contains(&SYNC), "{on_yours:?}");
         assert!(on_a_built_in.contains(&SYNC_ALL) && !on_a_built_in.contains(&SYNC), "{on_a_built_in:?}");
+    }
+
+    #[test]
+    fn follow_a_machine_shown_or_hidden_while_the_tab_is_open() {
+        let hidden = || vec![Machine { shown: false, ..machine("vps", "vps.lan") }];
+        let mut rig = rig_with(hidden(), &There::default());
+        store::save(&rig.yours(), &duo("Duo"), None).expect("save a flow by hand");
+        rig.app.open_flows_tab();
+        select(&mut rig, "Duo");
+        let before = buttons(&rig);
+
+        rig.edit(vec![machine("vps", "vps.lan")], Duration::from_secs(3));
+        let shown = buttons(&rig);
+        rig.edit(hidden(), Duration::from_secs(5));
+        let hidden_again = buttons(&rig);
+
+        assert!(!before.contains(&SYNC_ALL) && !before.contains(&SYNC), "{before:?}");
+        assert!(shown.contains(&SYNC_ALL) && shown.contains(&SYNC), "{shown:?}");
+        assert!(!hidden_again.contains(&SYNC_ALL) && !hidden_again.contains(&SYNC), "{hidden_again:?}");
+    }
+
+    #[test]
+    fn leave_a_notice_put_after_the_click_alone_when_the_machines_answer() {
+        let there = There::default();
+        let mut rig = opened(&there);
+        button(&mut rig.app, WIDE, SYNC_ALL);
+
+        rig.app.flows_dialog().expect("the flows tab").notice = Some("saved Duo".into());
+        rig.passes("the machines answer", |app| app.machines.flows.waiting() == 0);
+
+        assert_eq!((shown(&rig).hint(), there.imported().len()), ("saved Duo".to_string(), 2));
     }
 
     #[test]

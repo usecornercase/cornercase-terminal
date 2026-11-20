@@ -48,6 +48,11 @@ struct Started {
 }
 
 impl Syncing {
+    #[cfg(test)]
+    pub(super) fn waiting(&self) -> usize {
+        self.waiters.len()
+    }
+
     fn wait(&mut self, started: Started, answer: Answer) {
         if matches!(answer, Answer::Window(_)) {
             self.waiters.retain(|waiter| !matches!(waiter.answer, Answer::Window(_)));
@@ -86,6 +91,13 @@ impl App {
 
     pub(super) fn flow_sync_machines(&self) -> Vec<String> {
         machines::linked(&self.config.machines).map(|machine| machine.name.clone()).collect()
+    }
+
+    pub(super) fn follow_flow_sync_machines(&mut self) {
+        let names = self.flow_sync_machines();
+        if let Some(dialog) = self.flows_dialog() {
+            dialog.sync_to = names;
+        }
     }
 
     pub(super) fn save_imported(
@@ -240,7 +252,7 @@ impl App {
             .map(|machine| (machine.name.clone(), machine.destination.clone()))
             .collect();
         let Some(asked) = machine.map(str::trim) else {
-            return if all.is_empty() { Err(conflict(NONE_LINKED)) } else { Ok(all) };
+            return if all.is_empty() { Err(conflict(self.none_linked())) } else { Ok(all) };
         };
         let listed = self.config.machines.iter().find(|listed| listed.name.eq_ignore_ascii_case(asked));
         let Some(listed) = listed else { return Err(unknown(asked)) };
@@ -254,6 +266,16 @@ impl App {
             }
         };
         found.map(|found| vec![found]).ok_or_else(|| Refusal::new(Code::NotFound, why()))
+    }
+
+    fn none_linked(&self) -> String {
+        match self.config.machines.iter().find(|machine| !machine.shown) {
+            Some(hidden) => format!(
+                "no machine is shown here to sync your flows to: `cornercase machines show {}` links it again",
+                hidden.name
+            ),
+            None => NONE_LINKED.into(),
+        }
     }
 
     fn linked_destination(&self, destination: &str) -> bool {

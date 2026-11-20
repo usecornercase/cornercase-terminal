@@ -254,6 +254,7 @@ impl App {
     pub(super) fn follow_machines(&mut self) {
         if self.machines.synced != self.config.machines {
             self.match_machines();
+            self.follow_flow_sync_machines();
             self.clients.events.snapshots.mark_changed();
         }
     }
