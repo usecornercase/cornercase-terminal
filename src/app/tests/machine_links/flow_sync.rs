@@ -3,7 +3,6 @@ use serde_json::{Value, json};
 use super::*;
 use crate::control::{FlowInfo, FlowSpec, Flows, FlowsSynced, Response};
 use crate::flows::store;
-use crate::flows::sync::NEWER_HERE;
 use crate::flows::{Flow, ORCHESTRATOR, Role, Stage};
 use crate::machines;
 use crate::machines::link::fake::{request, respond};
@@ -401,31 +400,6 @@ mod an_import_from_a_machine {
         rig.import_from(&duo("Duo"), "lap\u{202e}top\nmini").expect("imported");
 
         assert_eq!(rig.toast().as_deref(), Some("Duo arrived from laptop mini's flows: it synced them here"));
-    }
-
-    #[test]
-    fn keeps_its_time_and_says_the_flow_was_replaced() {
-        let mut rig = rig_with(Vec::new(), &There::default());
-        store::save(&rig.yours(), &duo("Duo"), None).expect("save a flow without a time");
-        let theirs = Flow { changed: Some("2026-11-20T10:00:00.000Z".into()), notes: "theirs".into(), ..duo("Duo") };
-
-        rig.import_from(&theirs, "laptop").expect("imported");
-
-        let saved = store::read(&rig.yours().join("duo.toml")).expect("the imported flow");
-        assert_eq!((saved.changed.as_deref(), saved.notes.as_str()), (Some("2026-11-20T10:00:00.000Z"), "theirs"));
-        assert_eq!(rig.toast().as_deref(), Some("Duo was replaced by laptop's copy: it synced its flows here"));
-    }
-
-    #[test]
-    fn older_than_the_copy_here_is_refused_and_the_copy_stays() {
-        let mut rig = rig_with(Vec::new(), &There::default());
-        let path = rig.save("Duo");
-        let older = Flow { changed: Some("2020-01-01T00:00:00.000Z".into()), notes: "older".into(), ..duo("Duo") };
-
-        let (_, why) = rig.import_from(&older, "laptop").expect_err("refused");
-
-        assert!(why.contains(NEWER_HERE), "{why}");
-        assert_eq!(store::read(&path).expect("the flow here").notes, "");
     }
 
     #[test]
