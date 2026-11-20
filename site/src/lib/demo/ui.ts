@@ -2,6 +2,7 @@ import { drawBotForm, botFormBounds } from './botform';
 import { botRoutinesBounds, drawBotRoutines } from './botroutines';
 import { drawBotsSection, drawCard, drawChat } from './botchat';
 import { drawQueueForm, queueBounds } from './queue';
+import type { QueueListDialog } from './queuelist';
 import { counting, factor, duration, ramp, rows as statRows } from '../stats/model';
 import type { Cursor } from '../term/canvas';
 import { BOLD, DIM, INVERSE, type Grid, type Rect, type Style, UNDERLINE, contains, rect } from '../term/grid';
@@ -1146,6 +1147,7 @@ export class Painter {
     if (o.kind === 'bot') { this.dialogBackdrop(botFormBounds(this.app.cols, this.app.rows, o)); return drawBotForm(this, o); }
     if (o.kind === 'botroutines') { this.dialogBackdrop(botRoutinesBounds(this.app.cols, this.app.rows)); return drawBotRoutines(this, o); }
     if (o.kind === 'issues') return this.issues(o);
+    if (o.kind === 'queuelist') return this.queueList(o);
     if (o.kind === 'search') return this.results(areas);
   }
 
@@ -1626,6 +1628,49 @@ export class Painter {
     rightAligned(buttonsRow, labels, buttonWidth, 1).forEach((br, i) => {
       this.span(br.x, br.y, ` ${labels[i]} `, this.pill(br, i === 0));
       this.region({ r: br, click: () => app.issuesButton(labels[i]), cursor: 'pointer' });
+    });
+  }
+
+  private queueList(o: QueueListDialog): void {
+    const app = this.app;
+    const r = issuesArea(app.cols, app.rows);
+    this.dialogBackdrop(r);
+    this.box(r, 'Queue');
+    const c = inner(r);
+    const list = rect(c.x, c.y + 2, c.w, Math.max(0, c.h - 4));
+    const noteRow = rect(c.x, bottom(c) - 2, c.w, 1);
+    const buttonsRow = rect(c.x, bottom(c) - 1, c.w, 1);
+    const view = app.queueListView(o);
+    this.input(rect(c.x, c.y, c.w, 1), '', o.filter);
+    const items = view.rows;
+    if (!items.length) this.span(list.x, list.y, ` ${view.empty}`, DARK);
+    const whenWidth = Math.max(0, ...items.map((i) => [...i.when].length));
+    const first = Math.min(view.scroll, Math.max(0, items.length - list.h));
+    items.slice(first, first + list.h).forEach((item, k) => {
+      const i = first + k;
+      const row = rect(list.x, list.y + k, list.w, 1);
+      const chosen = view.selected === i;
+      const bg = this.pickBackground(chosen, row);
+      const style: Style = chosen ? { ...bg, add: BOLD } : bg;
+      this.g.fill(row, bg);
+      const indent = item.run ? '  ' : '';
+      const fixed = 6 + indent.length + whenWidth;
+      const meta = item.run ? truncateRight(item.meta, Math.floor(row.w / 2)) : truncateRight(item.meta, Math.max(0, Math.floor(row.w / 3) - [...item.hidden].length)) + item.hidden;
+      const title = truncateRight(item.title, Math.max(0, row.w - fixed - [...meta].length - 1));
+      this.line(rect(row.x, row.y, 1, 1), [rail(chosen, bg)]);
+      let x = this.span(row.x + 1, row.y, item.fold === null ? '  ' : item.fold ? '▸ ' : '▾ ', { ...bg, ...DARK });
+      x = this.span(x, row.y, `${indent}${item.when.padEnd(whenWidth)}  `, { ...style, fg: 6 });
+      this.span(x, row.y, title, item.run ? { ...style, fg: item.colour ?? 8 } : item.dim ? { ...style, ...DARK } : style);
+      this.span(right(row) - [...meta].length - 1, row.y, meta, { ...bg, fg: item.run ? 8 : item.colour ?? 8 });
+      this.region({ r: row, click: () => app.queueListClick(i), cursor: 'pointer' });
+      if (item.fold !== null) this.region({ r: rect(row.x, row.y, 3, 1), click: () => app.queueListFold(i), cursor: 'pointer' });
+    });
+    if (view.tail && items.length < list.h) this.span(list.x + 1, list.y + Math.max(1, items.length), truncateRight(view.tail, Math.max(0, list.w - 2)), DARK);
+    this.region({ r: list, wheel: (dy) => app.queueListScroll(dy) });
+    this.span(noteRow.x, noteRow.y, truncateRight(view.hint, noteRow.w), DARK);
+    rightAligned(buttonsRow, view.buttons, buttonWidth, 1).forEach((br, i) => {
+      this.span(br.x, br.y, ` ${view.buttons[i]} `, this.pill(br, i === 0));
+      this.region({ r: br, click: () => app.queueListButton(view.buttons[i]), cursor: 'pointer' });
     });
   }
 

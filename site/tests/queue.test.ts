@@ -3,11 +3,12 @@ import { test } from 'node:test';
 import { App } from '../src/lib/demo/app';
 import { type Combo, chooseCombo, combo, comboLabel, comboList } from '../src/lib/demo/combo';
 import type { IssuesOverlay } from '../src/lib/demo/model';
+import type { QueueListDialog } from '../src/lib/demo/queuelist';
 import { Agent } from '../src/lib/demo/programs';
 import { inputKey } from '../src/lib/demo/client';
 import { type QueueControl, type QueueForm, focusQueue, queueAt, queueControls, queueRect, queueWhen, whenCombo } from '../src/lib/demo/queue';
 import { world } from '../src/lib/demo/world';
-import { menuArea } from '../src/lib/demo/layout';
+import { inner, issuesArea, menuArea } from '../src/lib/demo/layout';
 import { rect } from '../src/lib/term/grid';
 
 const key = (key: string, shift = false) => ({ key, metaKey: false, isComposing: false, ctrlKey: false, altKey: false, shiftKey: shift });
@@ -33,11 +34,15 @@ function issues(app: App): IssuesOverlay {
   return o;
 }
 
-function queueTab(app: App): IssuesOverlay {
-  app.openIssues();
-  app.advance(1000);
-  app.issuesTab(app.config.sources.length);
-  return issues(app);
+function list(app: App): QueueListDialog {
+  const o = app.overlay;
+  if (o?.kind !== 'queuelist') throw new Error('queue modal');
+  return o;
+}
+
+function queueModal(app: App): QueueListDialog {
+  app.openQueue();
+  return list(app);
 }
 
 function schedule(app: App, prompt: string, minutes: number): void {
@@ -88,13 +93,13 @@ function clickOption(app: App, control: QueueControl, label: string): void {
 }
 
 for (const cols of [140, 70]) {
-  test(`the Queue tab schedules, edits and cancels prompts and the form comes back to it at ${cols} columns`, () => {
+  test(`the Queue window schedules, edits and cancels prompts and the form comes back to it at ${cols} columns`, () => {
     const app = appAt(cols);
-    const browser = queueTab(app);
+    const browser = queueModal(app);
     const start = app.now();
     app.render();
     assert.ok(app.textAt('nothing queued: new schedules a prompt'));
-    assert.deepEqual(app.issuesView(browser).buttons, ['new', 'cancel']);
+    assert.deepEqual(app.queueListView(browser).buttons, ['new', 'done']);
     pressButton(app, 'new');
     type(app, 'Fix the login');
     const o = form(app);
@@ -104,11 +109,11 @@ for (const cols of [140, 70]) {
     app.render();
     assert.ok(app.textAt('Queued agents always accept'));
     assert.ok(app.textAt('Schedule an agent'));
-    inputKey(app, key('Enter'));
+    pressButton(app, 'schedule');
     assert.equal(app.queued[0].state, 'pending');
     assert.equal(app.queued[0].at, start + 60000);
-    assert.equal(issues(app), browser);
-    assert.equal(browser.tab, app.config.sources.length);
+    assert.equal(list(app), browser);
+    assert.equal(browser.selected, app.queued[0].id);
     app.render();
     assert.ok(app.textAt(`${queueWhen(start + 60000)}  Fix the login`));
     assert.ok(app.textAt('pending · '));
@@ -118,13 +123,13 @@ for (const cols of [140, 70]) {
     assert.equal(queueAt(edit), queueWhen(start + 60000));
     assert.equal(edit.prompt, 'Fix the login');
     edit.when = whenCombo('in'); edit.amount = '2'; pick(edit.unit, 'minutes');
-    inputKey(app, key('Enter'));
+    pressButton(app, 'schedule');
     assert.equal(app.queued.length, 1);
     assert.equal(app.queued[0].at, start + 120000);
-    assert.equal(issues(app).tab, app.config.sources.length);
+    assert.equal(list(app), browser);
     pressButton(app, 'new');
     inputKey(app, key('Escape'));
-    assert.equal(issues(app), browser);
+    assert.equal(list(app), browser);
     inputKey(app, key('Escape'));
     assert.equal(app.overlay, null);
     app.queued = [];
@@ -183,22 +188,20 @@ for (const cols of [140, 70]) {
   });
 }
 
-test('the Queue tab is the last one and lists every entry with its state in colour', () => {
+test('the Queue window lists every entry with its state in colour', () => {
   const app = appAt(140);
   for (const [prompt, minutes] of [['Fix the login', 1], ['Update the docs', 2], ['Fix logout', 3], ['Review the tests', 4]] as const) schedule(app, prompt, minutes);
   const [started, failed, missed] = app.queued;
   app.runQueue(started);
   failed.state = 'failed'; failed.error = 'codex is not installed';
   missed.state = 'missed';
-  const browser = queueTab(app);
-  const view = app.issuesView(browser);
-  assert.equal(view.tabs[view.tabs.length - 1], 'Queue');
-  assert.deepEqual(view.toggles, []);
-  assert.deepEqual(view.items.map((item) => item.meta), [
-    `started · pane ${started.pane} · claude · web-shop › feat-dark-mode`,
-    'failed · codex is not installed · claude · web-shop › feat-dark-mode',
-    'missed · claude · web-shop › feat-dark-mode',
+  const browser = queueModal(app);
+  const view = app.queueListView(browser);
+  assert.deepEqual(view.rows.map((item) => item.meta), [
     'pending · claude · web-shop › feat-dark-mode',
+    'missed · claude · web-shop › feat-dark-mode',
+    'failed · codex is not installed · claude · web-shop › feat-dark-mode',
+    `started · pane ${started.pane} · claude · web-shop › feat-dark-mode`,
   ]);
   const grid = app.render().grid;
   assert.equal(app.textAt('[ ] closed'), null);
@@ -208,8 +211,8 @@ test('the Queue tab is the last one and lists every entry with its state in colo
     assert.equal(grid.at(at.x, at.y)?.fg, colour, text);
   }
   assert.ok(app.textAt(queueWhen(started.at)));
-  const tab = app.textAt('Queue');
-  assert.ok(tab && tab.y < (app.textAt('Fix the login')?.y ?? 0));
+  const title = app.textAt('Queue');
+  assert.ok(title && title.y < (app.textAt('Fix the login')?.y ?? 0));
   app.destroy();
 });
 
@@ -219,17 +222,17 @@ test('the buttons and the hint follow the selected entry', () => {
   const [started, failed] = app.queued;
   app.runQueue(started);
   failed.state = 'failed'; failed.error = 'project closed';
-  const browser = queueTab(app);
-  const view = () => app.issuesView(browser);
-  assert.deepEqual(view().buttons, ['new', 'remove', 'clear started', 'cancel']);
-  assert.equal(view().hint, "enter opens its pane · every project's scheduled agents");
-  inputKey(app, key('ArrowDown'));
-  assert.deepEqual(view().buttons, ['new', 'start now', 'remove', 'clear started', 'cancel']);
+  const browser = queueModal(app);
+  const view = () => app.queueListView(browser);
+  assert.deepEqual(view().buttons, ['new', 'start now', 'remove', 'clear started', 'done']);
   assert.equal(view().hint, 'enter edits it · start now runs it at once');
-  inputKey(app, key('ArrowDown'));
-  assert.deepEqual(view().buttons, ['new', 'start now', 'remove', 'clear started', 'cancel']);
+  inputKey(app, key('End'));
+  assert.deepEqual(view().buttons, ['new', 'remove', 'clear started', 'done']);
+  assert.equal(view().hint, "enter opens its pane · every project's scheduled agents");
+  inputKey(app, key('ArrowUp'));
+  assert.deepEqual(view().buttons, ['new', 'start now', 'remove', 'clear started', 'done']);
   type(app, 'nothing like it');
-  assert.deepEqual(view().buttons, ['new', 'clear started', 'cancel']);
+  assert.deepEqual(view().buttons, ['new', 'clear started', 'done']);
   assert.equal(view().empty, 'nothing matches');
   assert.equal(view().hint, "every project's scheduled agents");
   app.destroy();
@@ -238,9 +241,9 @@ test('the buttons and the hint follow the selected entry', () => {
 test('typing filters the entries and start now runs one at once', () => {
   const app = appAt(140);
   for (const [prompt, minutes] of [['Fix the login', 1], ['Fix logout', 2]] as const) schedule(app, prompt, minutes);
-  const browser = queueTab(app);
+  const browser = queueModal(app);
   type(app, 'LOGOUT');
-  assert.deepEqual(app.issuesView(browser).items.map((item) => item.title), ['Fix logout']);
+  assert.deepEqual(app.queueListView(browser).rows.map((item) => item.title), ['Fix logout']);
   pressButton(app, 'start now');
   assert.equal(app.overlay, browser);
   assert.equal(app.queued[1].state, 'started');
@@ -256,7 +259,7 @@ test('a started entry closes the modal and shows its pane', () => {
   schedule(app, 'Fix the login', 1);
   app.runQueue(app.queued[0]);
   assert.notEqual(app.tab()?.panes[0].id, app.queued[0].pane);
-  queueTab(app);
+  queueModal(app);
   app.render();
   const row = app.textAt('Fix the login');
   assert.ok(row);
@@ -271,17 +274,17 @@ test('a started entry whose pane is closed says it shows its result and a click 
   schedule(app, 'Fix the login', 1);
   app.runQueue(app.queued[0]);
   app.queued[0].pane = 987654;
-  const browser = queueTab(app);
-  assert.equal(app.issuesView(browser).hint, "enter shows its result · every project's scheduled agents");
+  const browser = queueModal(app);
+  assert.equal(app.queueListView(browser).hint, "enter shows its result · every project's scheduled agents");
   app.render();
   const row = app.textAt('Fix the login');
   assert.ok(row);
   click(app, row.x, row.y);
-  assert.equal(app.overlay?.kind, 'issues');
+  assert.equal(app.overlay?.kind, 'queuelist');
   app.destroy();
 });
 
-test('an issue schedule carries its title and branch and comes back to the Queue tab', () => {
+test('an issue schedule carries its title and branch and a save opens the Queue window with it selected', () => {
   const app = appAt(140);
   app.openIssues(); app.advance(1000);
   const browser = issues(app);
@@ -309,11 +312,9 @@ test('an issue schedule carries its title and branch and comes back to the Queue
   app.submitQueue();
   assert.equal(app.queued[0].at, app.now() + 2 * 3600000);
   assert.equal(app.queued[0].branch, o.branch);
-  assert.equal(app.overlay, browser);
-  assert.equal(browser.tab, app.config.sources.length);
-  assert.equal(browser.detail, null);
-  assert.equal(browser.filter, '');
-  const [row] = app.issuesView(browser).items;
+  const queue = list(app);
+  assert.equal(queue.selected, app.queued[0].id);
+  const [row] = app.queueListView(queue).rows;
   assert.equal(row.title, o.label);
   assert.ok(row.meta.startsWith('pending · ') && row.meta.endsWith(` · web-shop › ${o.branch}`));
   app.destroy();
@@ -411,12 +412,12 @@ test('entries due together start separate agents without starting early or movin
   app.destroy();
 });
 
-test('remove and clear started on the Queue tab come back with undo', () => {
+test('remove and clear started in the Queue window come back with undo', () => {
   const app = appAt(140);
   for (const [prompt, minutes] of [['Fix the login', 1], ['Fix logout', 2]] as const) schedule(app, prompt, minutes);
   const before = [...app.queued];
   const toast = () => app.toast;
-  const browser = queueTab(app);
+  const browser = queueModal(app);
   pressButton(app, 'remove');
   assert.deepEqual(app.queued, [before[1]]);
   assert.equal(app.overlay, browser);
@@ -429,7 +430,7 @@ test('remove and clear started on the Queue tab come back with undo', () => {
   pressButton(app, 'clear started');
   assert.deepEqual(app.queued, [before[1]]);
   assert.equal(toast()?.text, 'cleared 1 started');
-  assert.ok(!app.issuesView(browser).buttons.includes('clear started'));
+  assert.ok(!app.queueListView(browser).buttons.includes('clear started'));
   toast()?.undo?.();
   assert.deepEqual(app.queued, before);
   app.destroy();
@@ -528,10 +529,11 @@ test('a routine scheduled from the form fires on its grid and each run gets a ne
   assert.equal(worktrees(app).length, 2);
   assert.ok(runs(app).every((run) => run.state === 'started' && run.repeat === undefined && run.routine === entry.id));
   assert.match(worktrees(app)[0].branch ?? '', /^routine\/check-the-dependencies-\d{8}-\d{4}$/);
-  const browser = queueTab(app);
-  const view = app.issuesView(browser);
-  assert.equal(view.items.filter((item) => item.meta.startsWith('started · pane')).length, 2);
-  assert.ok(view.items.some((item) => item.meta.startsWith('↻ every 2h')));
+  const browser = queueModal(app);
+  const view = app.queueListView(browser);
+  assert.deepEqual(view.rows.map((item) => [item.run, item.fold]), [[false, false], [true, null], [true, null]]);
+  assert.equal(view.rows.filter((item) => item.title.startsWith('started · pane')).length, 2);
+  assert.ok(view.rows[0].meta.startsWith('↻ every 2h'));
   app.destroy();
 });
 
@@ -551,16 +553,16 @@ test('pause stops a routine and resume restarts it on the grid', () => {
   const app = appAt(140);
   routine(app);
   const [entry] = app.queued;
-  const browser = queueTab(app);
-  assert.deepEqual(app.issuesView(browser).buttons, ['new', 'start now', 'pause', 'remove', 'cancel']);
-  assert.equal(app.issuesView(browser).hint, 'enter edits it · start now runs it once more');
+  const browser = queueModal(app);
+  assert.deepEqual(app.queueListView(browser).buttons, ['new', 'start now', 'pause', 'remove', 'done']);
+  assert.equal(app.queueListView(browser).hint, 'enter edits it · start now runs it once more');
   pressButton(app, 'pause');
   assert.equal(app.toast?.text, `paused routine ${entry.id}`);
-  assert.equal(app.issuesView(browser).items[0].key, 'paused');
-  assert.equal(app.issuesView(browser).items[0].colour, 8);
+  assert.equal(app.queueListView(browser).rows[0].when, 'paused');
+  assert.equal(app.queueListView(browser).rows[0].colour, 8);
   app.advance(5 * 3600000);
   assert.equal(runs(app).length, 0);
-  assert.deepEqual(app.issuesView(browser).buttons, ['new', 'start now', 'resume', 'remove', 'cancel']);
+  assert.deepEqual(app.queueListView(browser).buttons, ['new', 'start now', 'resume', 'remove', 'done']);
   pressButton(app, 'resume');
   assert.match(app.toast?.text ?? '', new RegExp(`^resumed routine ${entry.id}, next at \\d{4}-`));
   assert.ok(entry.at > app.now());
@@ -576,17 +578,16 @@ test('an every day at routine shows its repeat in the row and start now adds a r
   const [entry] = app.queued;
   assert.equal(entry.repeat, 'day 09:00');
   const at = entry.at;
-  const browser = queueTab(app);
-  assert.ok(app.issuesView(browser).items[0].meta.includes('↻ every day 09:00'));
+  const browser = queueModal(app);
+  assert.ok(app.queueListView(browser).rows[0].meta.includes('↻ every day 09:00'));
   pressButton(app, 'start now');
   assert.equal(entry.at, at);
   assert.equal(runs(app).length, 1);
   assert.equal(app.toast?.text, 'started routine Check the dependencies');
-  const view = app.issuesView(browser);
-  const run = view.items.findIndex((item) => item.meta.startsWith('started'));
-  browser.selected = run;
-  assert.deepEqual(app.issuesView(browser).buttons, ['new', 'remove', 'clear started', 'cancel']);
-  assert.equal(app.issuesView(browser).hint, 'enter opens its pane · a run of a routine');
+  assert.equal(app.queueListView(browser).rows[1].title.startsWith('started'), true);
+  inputKey(app, key('ArrowDown'));
+  assert.deepEqual(app.queueListView(browser).buttons, ['new', 'remove', 'clear started', 'done']);
+  assert.equal(app.queueListView(browser).hint, 'enter opens its pane · a run of a routine');
   app.destroy();
 });
 
@@ -597,8 +598,7 @@ test('removing a routine removes its runs and undo brings them back', () => {
   app.advance(4 * 3600000 + 1000);
   const before = [...app.queued];
   assert.equal(before.length, 3);
-  const browser = queueTab(app);
-  browser.selected = app.issuesView(browser).items.findIndex((item) => item.meta.startsWith('↻'));
+  queueModal(app);
   pressButton(app, 'remove');
   assert.equal(app.queued.length, 0);
   assert.equal(app.toast?.text, `removed routine ${entry.id} and its 2 runs`);
@@ -700,12 +700,134 @@ test('a long prompt names its entry and its tab with its first words', () => {
   app.destroy();
 });
 
-test('typing in the Queue tab finds an entry by a word its cut name lost', () => {
+test('typing in the Queue window finds an entry by a word its cut name lost', () => {
   const app = appAt(140);
   schedule(app, 'Review the open pull requests and fix the failing checks on main, then write a short summary', 1);
-  queueTab(app);
-  issues(app).filter = 'failing';
+  queueModal(app);
+  type(app, 'failing');
   app.render();
   assert.ok(app.textAt('Review the open pull requests and fix…'));
   app.destroy();
 });
+
+test('More lists queue after new bot and opens the Queue window', () => {
+  const app = appAt(140);
+  app.render();
+  const more = app.textAt('More ▴');
+  assert.ok(more);
+  click(app, more.x + 1, more.y);
+  const item = app.textAt('queue');
+  assert.ok(item);
+  click(app, item.x + 1, item.y);
+  assert.equal(list(app).filter, '');
+  assert.ok(app.textAt('nothing queued'));
+  app.destroy();
+});
+
+test('upcoming entries come first, then paused routines, then what ran newest first, with each routine\'s runs under it', () => {
+  const app = appAt(140);
+  routine(app);
+  const [entry] = app.queued;
+  app.advance(4 * 3600000 + 1000);
+  schedule(app, 'Fix the login', 30);
+  routine(app, 'every day at');
+  const daily = app.queued.find((item) => item.repeat === 'day 09:00');
+  assert.ok(daily);
+  app.pauseQueued(daily, true);
+  const view = app.queueListView(queueModal(app));
+  const titles = view.rows.map((item) => `${item.run ? '  ' : ''}${item.title.split(' · ')[0]}`);
+  assert.deepEqual(titles, ['Fix the login', 'Check the dependencies', '  started', '  started', 'Check the dependencies']);
+  const ran = runs(app).filter((run) => run.routine === entry.id).map((run) => run.at);
+  assert.ok(ran[0] !== ran[1]);
+  const shown = app.queueListShown(list(app)).filter((item) => item.run).map((item) => item.entry.at);
+  assert.deepEqual(shown, [...shown].sort((a, b) => b - a));
+  assert.equal(view.rows[4].dim, true);
+  app.destroy();
+});
+
+test('a click on the mark or the arrow keys fold and unfold a routine\'s runs, and the fold stays', () => {
+  const app = appAt(140);
+  routine(app);
+  app.advance(4 * 3600000 + 1000);
+  const o = queueModal(app);
+  const box = inner(issuesArea(app.cols, app.rows));
+  click(app, box.x + 1, box.y + 2);
+  assert.equal(app.queueListView(o).rows.length, 1);
+  assert.equal(app.queueListView(o).rows[0].hidden, ' · 2 runs');
+  app.render();
+  assert.ok(app.textAt('▸ '));
+  assert.ok(app.textAt(' · 2 runs'));
+  inputKey(app, key('Escape'));
+  const again = queueModal(app);
+  assert.equal(app.queueListView(again).rows.length, 1);
+  inputKey(app, key('ArrowRight'));
+  assert.equal(app.queueListView(again).rows.length, 3);
+  inputKey(app, key('ArrowDown'));
+  assert.ok(app.queueListView(again).hint.startsWith('enter opens its pane'));
+  inputKey(app, key('ArrowLeft'));
+  assert.equal(app.queueListView(again).rows.length, 1);
+  assert.equal(again.selected, app.queued.find((item) => item.repeat)?.id);
+  type(app, 'started');
+  assert.deepEqual(app.queueListView(again).rows.map((item) => [item.run, item.fold]), [[false, null], [true, null], [true, null]]);
+  app.destroy();
+});
+
+test('the selection stays on its entry when a routine fires above it', () => {
+  const app = appAt(140);
+  routine(app);
+  app.advance(2 * 3600000 + 1000);
+  const o = queueModal(app);
+  inputKey(app, key('ArrowDown'));
+  const first = o.selected;
+  app.advance(2 * 3600000);
+  assert.equal(app.queueListShown(o)[1].entry.id !== first, true);
+  assert.equal(o.selected, first);
+  app.destroy();
+});
+
+test('Enter in the prompt adds a line, a paste keeps its line breaks and the schedule button saves', () => {
+  const app = appAt(140);
+  queueModal(app);
+  pressButton(app, 'new');
+  type(app, 'first');
+  inputKey(app, key('Enter'));
+  type(app, 'second');
+  assert.equal(form(app).prompt, 'first\nsecond');
+  assert.equal(app.overlay?.kind, 'queue');
+  app.paste('\nthird\r\nfourth');
+  assert.equal(form(app).prompt, 'first\nsecond\nthird\nfourth');
+  app.render();
+  assert.ok(app.textAt('enter breaks the line · tab moves on'));
+  assert.equal(app.textAt('↵'), null);
+  pick(form(app).agent, 'claude');
+  pressButton(app, 'schedule');
+  assert.equal(app.queued[0].prompt, 'first\nsecond\nthird\nfourth');
+  assert.equal(list(app).selected, app.queued[0].id);
+  app.destroy();
+});
+
+test('the prompt is taller in a tall window, and the wheel scrolls it with marks for the hidden lines', () => {
+  const app = appAt(140);
+  app.openQueueForm();
+  const o = form(app);
+  const tall = queueRect(screen(app), o, 'prompt');
+  assert.equal(tall.h, 8);
+  o.prompt = Array.from({ length: 12 }, (_, i) => `line ${i + 1}`).join('\n');
+  o.cursor = 0;
+  app.render();
+  assert.ok(app.textAt(' ↓ 4 more '));
+  const field = queueRect(screen(app), o, 'prompt');
+  app.wheel(field.x + 2, field.y, 3);
+  app.render();
+  assert.ok(app.textAt(' ↑ 3 more '));
+  assert.ok(app.textAt(' ↓ 1 more '));
+  assert.ok(app.textAt('line 4'));
+  click(app, field.x, field.y);
+  assert.equal(o.cursor, [...'line 1\nline 2\nline 3\n'].length);
+  const short = new App(); short.virtual = true; short.resize(100, 24); world(short, { scripted: true });
+  short.openQueueForm();
+  assert.equal(queueRect(screen(short), form(short), 'prompt').h, 3);
+  short.destroy();
+  app.destroy();
+});
+
