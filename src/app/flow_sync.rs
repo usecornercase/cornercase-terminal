@@ -48,7 +48,7 @@ struct Started {
 }
 
 impl Syncing {
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub(super) fn waiting(&self) -> usize {
         self.waiters.len()
     }
@@ -269,7 +269,7 @@ impl App {
     }
 
     fn none_linked(&self) -> String {
-        match self.config.machines.iter().find(|machine| !machine.shown) {
+        match machines::accepted(&self.config.machines).find(|machine| !machine.shown) {
             Some(hidden) => format!(
                 "no machine is shown here to sync your flows to: `cornercase machines show {}` links it again",
                 hidden.name
