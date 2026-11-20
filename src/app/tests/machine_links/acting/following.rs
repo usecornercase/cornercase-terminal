@@ -102,3 +102,87 @@ mod a_removal {
         assert!(!remote.busy());
     }
 }
+
+mod a_tab_s_close {
+    use super::*;
+
+    fn without_the_shell() -> control::Report {
+        let mut workspace = tabbed();
+        workspace.tabs.remove(0);
+        holding(BOOT, workspace)
+    }
+
+    #[test]
+    fn reads_closing_until_the_machine_no_longer_lists_the_tab() {
+        let mut remote = with_tabs(Reply::Agree);
+        remote.send(Act::CloseTab(SHELL));
+        remote.heard();
+        assert_eq!(remote.closing(), [true, false]);
+
+        serve(&mut remote.theirs, 2, without_the_shell());
+        remote.rig.until("the tab is gone", |app| {
+            app.machines.held()[0].seen.as_ref().is_some_and(|seen| seen.projects[0].workspaces[0].tabs.len() == 1)
+        });
+
+        assert_eq!(remote.closing(), [false]);
+        assert!(!remote.rig.app.machines.acting.busy_tab(remote.link, SHELL));
+    }
+
+    #[test]
+    fn of_two_tabs_drops_only_the_mark_of_the_one_answered() {
+        let mut remote = with_tabs(Reply::Refuse);
+        remote.send(Act::CloseTab(SHELL));
+        remote.send(Act::RenameTab { tab: AGENT, name: "logs".into() });
+
+        wait_until("both are asked", || remote.asked().len() == 2);
+        let (app, rx) = (&mut remote.rig.app, &remote.rig.rx);
+        let event = rx.recv_timeout(Duration::from_secs(10)).expect("an answer");
+        let AppEvent::Machine(MachineEvent::Acted(acted)) = &event else { panic!("not an answer: {event:?}") };
+        let first = format!("{acted:?}").contains("CloseTab");
+        app.handle_event(event, AREA).expect("handle event");
+
+        let busy = |tab| app.machines.acting.busy_tab(remote.link, tab);
+        assert_eq!((busy(SHELL), busy(AGENT)), (!first, first));
+    }
+
+    #[test]
+    fn does_not_keep_its_workspace_busy() {
+        let mut remote = with_tabs(Reply::Agree);
+
+        remote.send(Act::CloseTab(SHELL));
+
+        assert!(!remote.busy());
+        assert!(remote.rig.app.machines.acting.busy_tab(remote.link, SHELL));
+        remote.heard();
+    }
+}
+
+mod a_tab_s_dialog {
+    use super::*;
+
+    #[test]
+    fn closes_once_the_machine_no_longer_lists_its_tab() {
+        let mut remote = with_tabs(Reply::Agree);
+        let at = remote.tab_aim(SHELL);
+        remote.rig.app.remote_rename_tab(at);
+
+        let mut workspace = tabbed();
+        workspace.tabs.remove(0);
+        serve(&mut remote.theirs, 2, holding(BOOT, workspace));
+        remote.rig.until("the tab is gone", |app| app.overlay.is_none());
+
+        assert_eq!(remote.rig.seen("ask"), 0);
+    }
+
+    #[test]
+    fn closes_once_the_machine_restarts() {
+        let mut remote = with_tabs(Reply::Agree);
+        let at = remote.tab_aim(AGENT);
+        remote.rig.app.remote_close_tab(at, false);
+
+        remote.restarted();
+
+        assert!(remote.rig.app.overlay.is_none());
+        assert_eq!(remote.rig.seen("ask"), 0);
+    }
+}

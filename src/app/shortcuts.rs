@@ -70,6 +70,9 @@ impl App {
 
     fn shortcut(&mut self, action: Action, area: Rect) -> Result<()> {
         log::info!("ui", "shortcut", action = format!("{action:?}"));
+        if self.machine_shortcut(action) {
+            return Ok(());
+        }
         if acts_here(action) {
             self.leave_remote();
         }

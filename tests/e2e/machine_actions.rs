@@ -22,7 +22,8 @@ fn showing_at(workspace: &str, worktree: bool, destination: &str, teardown: &str
     }
     std::fs::write(machine.dir.join("config.json"), config.to_string()).expect("write the machine's config");
     let here = Session::new();
-    start_listing(&here, &[(VPS, destination)], &[(destination, &reach(&machine))], json!({}));
+    let config = json!({"prefix_key": "ctrl+]"});
+    start_listing(&here, &[(VPS, destination)], &[(destination, &reach(&machine))], config);
     wait_for_machine(&here, VPS, "the machine is linked", in_state("linked"));
     let repo = repository(&machine.dir, "api").display().to_string();
     let project = machine.says(&["open", &repo]);
@@ -62,6 +63,26 @@ impl Linked {
 
     fn menu(&mut self, name: &str) {
         let row = self.row(name).expect("the workspace's row");
+        self.menu_of(row);
+    }
+
+    fn below(&self, name: &str, text: &str) -> Option<Rect> {
+        let top = self.row(name)?.y;
+        let y = (top + 1..HIGH).find(|&y| column(&self.app, y).contains(text))?;
+        Some(Rect { y, height: 1, ..workspaces_list() })
+    }
+
+    fn tab_row(&self, name: &str) -> Rect {
+        let top = self.row(name).expect("the workspace's row");
+        Rect { y: top.y + 1, ..top }
+    }
+
+    fn pick(&mut self, name: &str) {
+        let row = self.row(name).expect("the workspace's row");
+        self.app.click(Position::new(row.x + 6, row.y));
+    }
+
+    fn menu_of(&mut self, row: Rect) {
         let (x, y) = (row.x + 4, row.y + 1);
         self.app.send(format!("\x1b[<35;{x};{y}M").as_bytes());
         let mut at = None;
@@ -138,6 +159,97 @@ fn a_machine_s_workspace_is_renamed_there_from_its_menu() {
     wait_until("the machine has the new name", || names(&linked.machine).iter().any(|n| n == "docs"));
     wait_until("the row shows it here", || linked.row("docs").is_some());
     linked.until_gone("notes");
+}
+
+fn tabs_of(machine: &Session, name: &str) -> Vec<Value> {
+    let status = status(machine);
+    let projects = status["projects"].as_array().cloned().unwrap_or_default();
+    let workspaces = projects.iter().flat_map(|p| p["workspaces"].as_array().cloned().unwrap_or_default());
+    let named = workspaces.filter(|w| w["name"] == name);
+    named.flat_map(|w| w["tabs"].as_array().cloned().unwrap_or_default()).collect()
+}
+
+fn workspace_id(machine: &Session, name: &str) -> String {
+    let status = status(machine);
+    let projects = status["projects"].as_array().cloned().unwrap_or_default();
+    let mut workspaces = projects.iter().flat_map(|p| p["workspaces"].as_array().cloned().unwrap_or_default());
+    workspaces.find(|w| w["name"] == name).expect("the workspace there")["id"].to_string()
+}
+
+fn panes_of(machine: &Session, name: &str) -> usize {
+    tabs_of(machine, name).first().and_then(|tab| tab["panes"].as_array()).map_or(0, Vec::len)
+}
+
+#[test]
+fn a_machine_s_workspace_gets_a_tab_there_from_its_new_tab_row_and_shows_it() {
+    let mut linked = showing("notes", false);
+    let new = linked.below("notes", "+ Tab").expect("its + Tab row");
+
+    linked.app.click(Position::new(new.x + 4, new.y));
+
+    let mut made = Value::Null;
+    wait_until("the machine has a second tab there", || {
+        let tabs = tabs_of(&linked.machine, "notes");
+        made = tabs.get(1).map(|tab| tab["id"].clone()).unwrap_or_default();
+        tabs.len() == 2
+    });
+    wait_until("the window shows it", || status(&linked.app.session)["shown_remote"]["tab"] == made);
+}
+
+#[test]
+fn a_machine_s_tab_is_closed_there_from_its_close_button() {
+    let mut linked = showing("notes", false);
+    linked.machine.says(&["new-tab", "--workspace", &workspace_id(&linked.machine, "notes")]);
+    wait_until("both tabs show here", || {
+        linked.below("notes", "+ Tab").map(|row| row.y) == Some(linked.tab_row("notes").y + 2)
+    });
+
+    let tab = linked.tab_row("notes");
+    linked.app.click(ui::row_close_button(tab, 1).as_position());
+
+    wait_until("the machine has one tab there", || tabs_of(&linked.machine, "notes").len() == 1);
+    wait_until("its row goes here", || linked.below("notes", "+ Tab").map(|row| row.y) == Some(tab.y + 1));
+}
+
+#[test]
+fn a_machine_s_tab_is_renamed_there_from_its_menu() {
+    let mut linked = showing("notes", false);
+
+    let tab = linked.tab_row("notes");
+    linked.menu_of(tab);
+    linked.app.wait_for("the menu opens", |s| s.contains("rename tab") && s.contains("close tab"));
+    let item = linked.app.position_of("rename tab");
+    linked.app.click(item);
+    linked.app.wait_for("the form opens", |s| s.contains("Rename tab"));
+    linked.app.send(&[0x7f; 64]);
+    linked.app.send(b"logs\r");
+
+    wait_until("the machine has the new name", || tabs_of(&linked.machine, "notes")[0]["name"] == "logs");
+    wait_until("the row shows it here", || linked.below("notes", "logs").is_some());
+}
+
+#[test]
+fn a_machine_s_pane_is_split_and_closed_there_from_the_keys_menu() {
+    let mut linked = showing("notes", false);
+    linked.pick("notes");
+    wait_until("the tab streams here", || {
+        let shown = status(&linked.app.session)["shown_remote"].clone();
+        shown["stream"] == "live" && shown["tab"] == tabs_of(&linked.machine, "notes")[0]["id"]
+    });
+
+    linked.app.send(b"\x1d");
+    linked.app.wait_for("the keys menu opens", |s| s.contains("split right"));
+    linked.app.send(b"|");
+    wait_until("the machine splits it", || panes_of(&linked.machine, "notes") == 2);
+    linked.app.wait_for("the split shows on its row here", |s| s.contains("+1"));
+    linked.app.send(b"\x1d");
+    linked.app.wait_for("the keys menu opens", |s| s.contains("close pane"));
+    linked.app.send(b"x");
+    linked.app.wait_for("it asks first", |s| s.contains("Close pane") && s.contains("on vps"));
+    linked.app.send(b"\r");
+
+    wait_until("the machine closes it", || panes_of(&linked.machine, "notes") == 1);
+    assert_eq!(status(&linked.app.session)["shown_remote"]["tab"], tabs_of(&linked.machine, "notes")[0]["id"]);
 }
 
 fn claude_with_a_child(machine: &Session) -> u64 {

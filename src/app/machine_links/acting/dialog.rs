@@ -3,16 +3,16 @@ use serde_json::Value;
 use super::{Aim, sighted, told};
 use crate::app::App;
 use crate::app::closed_agents::forgotten;
-use crate::app::dialogs::{close_question, confirm_view, rename_form};
-use crate::app::menus::{RENAME_WORKSPACE, RENAME_WORKSPACE_HINT};
+use crate::app::dialogs::{close_pane_question, close_question, close_tab_question, confirm_view, rename_form};
+use crate::app::menus::{RENAME_TAB, RENAME_TAB_HINT, RENAME_WORKSPACE, RENAME_WORKSPACE_HINT};
 use crate::app::overlay::{CLOSE_SUBMIT, Overlay, RENAME_SUBMIT};
 use crate::app::worktrees::{Check, Removing, removal_submit, removal_view};
-use crate::control::WorkspaceInfo;
 use crate::control::arrange::{Locked, Removal};
 use crate::control::contract::{Code, Refusal};
+use crate::control::{TabInfo, WorkspaceInfo};
 use crate::editor::Editor;
 use crate::git::worktree;
-use crate::machines::act::{self, Act};
+use crate::machines::act::{self, Act, Scope};
 use crate::ui;
 
 #[derive(Debug)]
@@ -26,10 +26,23 @@ pub(in crate::app) enum Kind {
     Close,
     Rename(Editor),
     Remove { check: Check, removal: Option<Removal> },
+    RenameTab { tab: u64, input: Editor },
+    CloseTab { tab: u64 },
+    ClosePane { tab: u64, pane: u64 },
+}
+
+impl Kind {
+    pub(in crate::app) fn scope(&self) -> Scope {
+        match self {
+            Self::Close | Self::Rename(_) | Self::Remove { .. } => Scope::Workspace,
+            Self::RenameTab { tab, .. } | Self::CloseTab { tab } => Scope::Tab(*tab),
+            Self::ClosePane { pane, .. } => Scope::Pane(*pane),
+        }
+    }
 }
 
 impl Dialog {
-    fn open(aim: Aim, kind: Kind) -> Overlay {
+    pub(in crate::app::machine_links) fn open(aim: Aim, kind: Kind) -> Overlay {
         Overlay::MachineWorkspace(Box::new(Self { aim, kind }))
     }
 
@@ -38,32 +51,35 @@ impl Dialog {
             Kind::Close => "close machine workspace",
             Kind::Rename(_) => "rename machine workspace",
             Kind::Remove { .. } => "remove machine workspace",
+            Kind::RenameTab { .. } => "rename machine tab",
+            Kind::CloseTab { .. } => "close machine tab",
+            Kind::ClosePane { .. } => "close machine pane",
         }
     }
 
     pub(in crate::app) fn submit_label(&self) -> &'static str {
         match &self.kind {
-            Kind::Close => CLOSE_SUBMIT,
-            Kind::Rename(_) => RENAME_SUBMIT,
+            Kind::Close | Kind::CloseTab { .. } | Kind::ClosePane { .. } => CLOSE_SUBMIT,
+            Kind::Rename(_) | Kind::RenameTab { .. } => RENAME_SUBMIT,
             Kind::Remove { check, removal } => removal_submit(*check, locked(removal.as_ref())),
         }
     }
 
     pub(in crate::app) fn input(&mut self) -> Option<&mut Editor> {
         match &mut self.kind {
-            Kind::Rename(input) => Some(input),
-            Kind::Close | Kind::Remove { .. } => None,
+            Kind::Rename(input) | Kind::RenameTab { input, .. } => Some(input),
+            Kind::Close | Kind::Remove { .. } | Kind::CloseTab { .. } | Kind::ClosePane { .. } => None,
         }
     }
 
     pub(in crate::app) fn takes_input(&self) -> bool {
-        matches!(self.kind, Kind::Rename(_))
+        matches!(self.kind, Kind::Rename(_) | Kind::RenameTab { .. })
     }
 }
 
 impl App {
     pub(in crate::app) fn remote_close(&mut self, aim: Aim) {
-        if let Err(why) = self.aimed(aim) {
+        if let Err(why) = self.aimed(aim, Scope::Workspace) {
             return self.not_sent(&why);
         }
         if self.remote_info(aim).is_some_and(|workspace| workspace.worktree) {
@@ -75,7 +91,7 @@ impl App {
     }
 
     pub(in crate::app) fn remote_rename(&mut self, aim: Aim) {
-        if let Err(why) = self.aimed(aim) {
+        if let Err(why) = self.aimed(aim, Scope::Workspace) {
             return self.not_sent(&why);
         }
         let Some(workspace) = self.remote_info(aim) else { return };
@@ -83,8 +99,12 @@ impl App {
         self.overlay = Some(Dialog::open(aim, Kind::Rename(Editor::new(name))));
     }
 
-    fn remote_info(&self, aim: Aim) -> Option<&WorkspaceInfo> {
+    pub(in crate::app::machine_links) fn remote_info(&self, aim: Aim) -> Option<&WorkspaceInfo> {
         sighted(self.held_by(aim.link)?, aim).ok().map(|(_, workspace)| workspace)
+    }
+
+    pub(in crate::app::machine_links) fn remote_tab_info(&self, aim: Aim, tab: u64) -> Option<&TabInfo> {
+        self.remote_info(aim)?.tabs.iter().find(|there| there.id == tab)
     }
 
     pub(in crate::app) fn machine_workspace_view(&self, dialog: &Dialog) -> Option<ui::Overlay> {
@@ -100,7 +120,6 @@ impl App {
             Kind::Rename(input) => rename_form(RENAME_WORKSPACE, RENAME_WORKSPACE_HINT, input),
             Kind::Remove { check, removal } => {
                 let path = crate::text::display_path(&workspace.path, seen.home.as_deref());
-                let lock = removal.as_ref().and_then(|removal| removal.lock.as_ref()).map(lock_of);
                 let removing = Removing {
                     label: &workspace.name,
                     path: &path,
@@ -109,8 +128,9 @@ impl App {
                     closed: &closed,
                     on,
                 };
-                removal_view(&removing, *check, lock.as_ref())
+                removal_view(&removing, *check, removal.as_ref().and_then(|r| r.lock.as_ref()).map(lock_of).as_ref())
             }
+            kind => tab_view(workspace, kind, on)?,
         })
     }
 
@@ -119,6 +139,9 @@ impl App {
         let act = match kind {
             Kind::Close => Act::Close,
             Kind::Rename(input) => Act::Rename(input.text().trim().to_string()),
+            Kind::RenameTab { tab, input } => Act::RenameTab { tab, name: input.text().trim().to_string() },
+            Kind::CloseTab { tab } => Act::CloseTab(tab),
+            Kind::ClosePane { pane, .. } => Act::ClosePane(pane),
             Kind::Remove { check: Check::Running | Check::Confirmed, removal } => {
                 return Some(Dialog::open(aim, Kind::Remove { check: Check::Confirmed, removal }));
             }
@@ -159,6 +182,22 @@ impl App {
             self.send_act(aim, Act::Remove { force: false, unlock: false });
         }
     }
+}
+
+fn tab_view(workspace: &WorkspaceInfo, kind: &Kind, on: Option<&str>) -> Option<ui::Overlay> {
+    let tab_of = |id: u64| workspace.tabs.iter().find(|tab| tab.id == id);
+    Some(match kind {
+        Kind::RenameTab { input, .. } => rename_form(RENAME_TAB, RENAME_TAB_HINT, input),
+        Kind::CloseTab { tab } => {
+            confirm_view("Close tab", close_tab_question(&tab_of(*tab)?.name, on), CLOSE_SUBMIT, None)
+        }
+        Kind::ClosePane { tab, pane } => {
+            let pane = tab_of(*tab)?.panes.iter().find(|there| there.id == *pane)?;
+            let program = pane.program.as_deref().unwrap_or("?");
+            confirm_view("Close pane", close_pane_question(program, on), CLOSE_SUBMIT, None)
+        }
+        Kind::Close | Kind::Rename(_) | Kind::Remove { .. } => return None,
+    })
 }
 
 fn removal_of(value: Value) -> Result<Removal, Refusal> {

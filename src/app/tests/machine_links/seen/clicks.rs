@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::menus::MenuAction;
 use crate::ui::{SidebarRow, WorkspaceRow};
 
 fn marked(app: &App) -> (usize, Option<usize>, usize, bool) {
@@ -59,14 +60,21 @@ mod a_machine_s_row {
     }
 
     #[test]
-    fn picks_its_tab_where_a_local_row_has_its_buttons() {
+    fn opens_its_tab_s_menu_on_a_right_click_instead_of_picking_it() {
         let Seeing { mut rig, .. } = seeing_two();
         let w = theirs_at(&rig.app);
 
-        click_close(&mut rig.app, WorkspaceRow::Tab(w, 0));
         right_click_row(&mut rig.app, WorkspaceRow::Tab(w, 0));
 
-        assert_eq!((picked(&rig.app), rig.app.overlay.is_none()), (Some((10, Some(11))), true));
+        let Some(Overlay::Menu { actions, .. }) = &rig.app.overlay else { panic!("a menu, not {:?}", rig.app.overlay) };
+        let tabs: Vec<u64> = actions
+            .iter()
+            .filter_map(|action| match action {
+                MenuAction::RemoteTabRename(at) | MenuAction::RemoteTabClose(at) => Some(at.tab),
+                _ => None,
+            })
+            .collect();
+        assert_eq!((tabs, picked(&rig.app)), (vec![11, 11], None));
     }
 
     #[test]

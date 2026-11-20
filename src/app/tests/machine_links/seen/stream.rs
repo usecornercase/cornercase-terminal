@@ -525,5 +525,6 @@ mod server_events {
     }
 }
 
+mod keys;
 mod mouse;
 mod typing;

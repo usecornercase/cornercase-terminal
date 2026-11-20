@@ -99,8 +99,8 @@ impl App {
         let (ours, theirs) = (column.ours, self.remote_entries(&column));
         let lines = ours.iter().map(lines).chain(theirs.iter().map(ui::WorkspaceEntry::tab_lines)).collect();
         let folded = ours.iter().map(|w| w.collapsed).chain(theirs.iter().map(|w| w.collapsed)).collect();
-        let bare = ours.iter().map(|_| false).chain(theirs.iter().map(|_| true)).collect();
-        ui::TabLines::new(lines, self.screen.drawn.tab_bar.is_empty()).folded(folded).bare(bare)
+        let machine = ours.iter().map(|_| false).chain(theirs.iter().map(|_| true)).collect();
+        ui::TabLines::new(lines, self.screen.drawn.tab_bar.is_empty()).folded(folded).theirs(machine)
     }
 
     pub(super) fn click_workspaces(&mut self, list: Rect, pitch: u16, pos: Position, area: Rect) -> Result<()> {

@@ -281,3 +281,108 @@ mod a_removal {
         assert_eq!(remote.commands(), ["removal-check"]);
     }
 }
+
+mod a_tab_s_rename {
+    use super::*;
+
+    #[rstest]
+    #[case::a_shell(SHELL, "zsh")]
+    #[case::an_agent(AGENT, "review")]
+    fn starts_from_its_name_on_the_machine(#[case] tab: u64, #[case] name: &str) {
+        let mut remote = with_tabs(Reply::Agree);
+        let at = remote.tab_aim(tab);
+
+        remote.rig.app.remote_rename_tab(at);
+
+        let ui::Overlay::Form(form) = overlay_shown(&remote.rig.app, AREA) else { panic!("not a form") };
+        assert_eq!((form.title, form.value.text()), ("Rename tab", name.to_string()));
+        assert_eq!(form.hint, "leave it empty to use the program name");
+    }
+
+    #[rstest]
+    #[case::named("logs", "logs")]
+    #[case::trimmed(" logs ", "logs")]
+    #[case::emptied("", "")]
+    fn sends_the_name_typed(#[case] typed: &str, #[case] name: &str) {
+        let mut remote = with_tabs(Reply::Agree);
+        let at = remote.tab_aim(SHELL);
+        remote.rig.app.remote_rename_tab(at);
+
+        for _ in 0.."zsh".len() {
+            remote.press(KeyCode::Backspace);
+        }
+        type_text(&mut remote.rig.app, typed);
+        remote.press(KeyCode::Enter);
+        remote.heard();
+
+        assert_eq!(remote.commands(), ["rename"]);
+        assert_eq!(remote.asked()[0]["args"], sent(&Act::RenameTab { tab: SHELL, name: name.into() }));
+    }
+}
+
+mod a_tab_s_close {
+    use super::*;
+
+    #[test]
+    fn asks_naming_the_machine_and_closes_it_there_once_confirmed() {
+        let mut remote = with_tabs(Reply::Agree);
+        let at = remote.tab_aim(AGENT);
+        remote.rig.app.remote_close_tab(at, false);
+
+        let shown = remote.shown();
+        let asked = "Close the tab review on vps? The programs running in it are stopped.";
+        assert_eq!((shown.title, shown.message.as_str(), shown.submit), ("Close tab", asked, CLOSE_SUBMIT));
+        remote.press(KeyCode::Enter);
+        remote.heard();
+
+        assert_eq!(remote.commands(), ["close"]);
+        assert_eq!(remote.asked()[0]["args"], sent(&Act::CloseTab(AGENT)));
+    }
+
+    #[test]
+    fn sends_nothing_when_cancelled() {
+        let mut remote = with_tabs(Reply::Agree);
+        let at = remote.tab_aim(SHELL);
+        remote.rig.app.remote_close_tab(at, true);
+
+        remote.press(KeyCode::Esc);
+
+        assert_eq!((remote.rig.app.overlay.is_none(), remote.rig.seen("ask")), (true, 0));
+    }
+}
+
+mod a_pane_s_close {
+    use super::*;
+    use crate::app::machine_links::acting::dialog::{Dialog, Kind};
+
+    fn ask(remote: &mut Remote) {
+        let aim = remote.aim();
+        let dialog = Dialog { aim, kind: Kind::ClosePane { tab: AGENT, pane: 15 } };
+        remote.rig.app.overlay = Some(Overlay::MachineWorkspace(Box::new(dialog)));
+    }
+
+    #[test]
+    fn asks_naming_the_program_and_the_machine_and_closes_it_there_once_confirmed() {
+        let mut remote = with_tabs(Reply::Agree);
+        ask(&mut remote);
+
+        let shown = remote.shown();
+        let asked = "Close the pane running zsh on vps? What runs in it is stopped.";
+        assert_eq!((shown.title, shown.message.as_str(), shown.submit), ("Close pane", asked, CLOSE_SUBMIT));
+        remote.press(KeyCode::Enter);
+        remote.heard();
+
+        assert_eq!(remote.commands(), ["close"]);
+        assert_eq!(remote.asked()[0]["args"], sent(&Act::ClosePane(15)));
+    }
+
+    #[test]
+    fn sends_nothing_when_cancelled() {
+        let mut remote = with_tabs(Reply::Agree);
+        ask(&mut remote);
+
+        remote.press(KeyCode::Esc);
+
+        assert_eq!((remote.rig.app.overlay.is_none(), remote.rig.seen("ask")), (true, 0));
+    }
+}

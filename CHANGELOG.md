@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.108
+
+- **Open, close and rename a machine's tabs from your sidebar.** A machine's workspace now has a `+ Tab` row, and its tabs a `×` and a ` ⋯ ` menu with **rename tab** and **close tab**, as yours. The `×` asks first when an agent works in the tab, and in the compact layout; a shell tab closes at once.
+- **The prefix key's menu works on a machine's tab**: **new tab**, **split right**, **split down**, **close pane**, **rename tab**, the arrows between panes, **rename workspace** and **close workspace** act there, and the machine's workspace stays picked.
+- While the machine closes a tab, its row reads `closing…`. A refusal shows the machine's own words (`could not split the pane on vps: pane 3 is too small to split right`), and a machine that is down or restarted says that nothing was sent or changed.
+
 ## 0.13.107
 
 - **Bots now talk on Telegram and Discord.** With a phone paired, a bot's answers reach it titled `🤖 <name>` (and `↻ <routine>` for a routine's), with their formatting; a failure starts with `✗`. What you wrote, its steps and its notices stay in cornercase.
