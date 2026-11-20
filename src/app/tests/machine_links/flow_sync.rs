@@ -3,7 +3,7 @@ use serde_json::{Value, json};
 use super::*;
 use crate::control::{FlowInfo, FlowSpec, Flows, FlowsSynced, Response};
 use crate::flows::store;
-use crate::flows::sync::{Change, Journal};
+use crate::flows::sync::NEWER_HERE;
 use crate::flows::{Flow, ORCHESTRATOR, Role, Stage};
 use crate::machines;
 use crate::machines::link::fake::{request, respond};
@@ -15,19 +15,12 @@ const CLIENT: u64 = 9;
 struct There {
     listed: Arc<Mutex<Vec<FlowInfo>>>,
     asked: Arc<Mutex<Vec<Value>>>,
-    gate: Arc<Mutex<Option<Receiver<()>>>>,
     refuse_once: Arc<Mutex<Option<&'static str>>>,
 }
 
 impl There {
     fn count(&self, command: &str) -> usize {
         self.commands().iter().filter(|asked| *asked == command).count()
-    }
-
-    fn held_back(&self) -> Sender<()> {
-        let (open, gate) = mpsc::channel();
-        *self.gate.lock() = Some(gate);
-        open
     }
 
     fn answer(&self, command: &str) -> Response {
@@ -39,9 +32,6 @@ impl There {
             return Response::Error("the file is busy".into());
         }
         if command == "flow-list" {
-            if let Some(gate) = self.gate.lock().take() {
-                let _ = gate.recv();
-            }
             let flows = Flows { flows: self.listed.lock().clone(), builtins: vec!["Quick".into()], ..Flows::default() };
             return Response::Ok(serde_json::to_value(flows).expect("a listing"));
         }
@@ -87,10 +77,6 @@ fn duo(name: &str) -> Flow {
     }
 }
 
-fn syncing(name: &str, destination: &str) -> Machine {
-    Machine { sync_flows: true, ..machine(name, destination) }
-}
-
 fn rig_with(machines: Vec<Machine>, there: &There) -> Rig {
     let mut rig = Rig::new(Vec::new(), super::There::Missing);
     let seen = rig.seen.clone();
@@ -110,17 +96,10 @@ fn rig_with(machines: Vec<Machine>, there: &There) -> Rig {
     rig
 }
 
-fn synced_once(there: &There) -> Rig {
-    let mut rig = rig_with(vec![syncing("vps", "vps.lan")], there);
-    rig.until_rounds(1);
+fn linked(there: &There) -> Rig {
+    let mut rig = rig_with(vec![machine("vps", "vps.lan")], there);
+    rig.passes("the machine links", |app| app.machines.held()[0].status.state == State::Linked);
     rig
-}
-
-fn held_in_first_round(there: &There) -> (Rig, Sender<()>) {
-    let open = there.held_back();
-    let mut rig = rig_with(vec![syncing("vps", "vps.lan")], there);
-    rig.passes("the first round asks the machine", |_| there.count("flow-list") == 1);
-    (rig, open)
 }
 
 impl Rig {
@@ -129,12 +108,8 @@ impl Rig {
         self.app.save_flow_file(&yours, &duo(name), None).expect("save a flow")
     }
 
-    fn until_rounds(&mut self, rounds: u64) {
-        self.passes("the rounds end", |app| app.machines.flows_rounds("vps.lan") >= rounds);
-    }
-
-    fn sync_now(&mut self) -> FlowsSynced {
-        let answer = self.ask_flows(&json!({}));
+    fn sync_now(&mut self, args: &Value) -> FlowsSynced {
+        let answer = self.ask_flows(args);
         self.answered_flows(answer)
     }
 
@@ -151,14 +126,14 @@ impl Rig {
         });
     }
 
-    fn synced_rounds(&mut self, there: &There, imports: usize) {
-        self.passes("the flows reach the machine", |_| there.imported().len() >= imports);
-    }
-
     fn ask_flows(&mut self, args: &Value) -> Option<std::result::Result<Value, (String, String)>> {
         let text = json!({"contract": 1, "command": "flow-sync", "args": args}).to_string();
         self.app.request(CLIENT, &text, Some(AREA), Instant::now());
         self.app.take_answers().pop().map(|(_, text)| replied(&text))
+    }
+
+    fn refused(&mut self, args: &Value) -> (String, String) {
+        self.ask_flows(args).expect("an answer at once").expect_err("refused")
     }
 
     fn answered_flows(&mut self, mut answer: Option<std::result::Result<Value, (String, String)>>) -> FlowsSynced {
@@ -169,15 +144,12 @@ impl Rig {
         serde_json::from_value(answer.expect("an answer").expect("synced")).expect("parse")
     }
 
-    fn rounds(&self) -> u64 {
-        self.app.machines.flows_rounds("vps.lan")
-    }
-
-    fn import_from(&mut self, flow: &Flow, from: &str) {
+    fn import_from(&mut self, flow: &Flow, from: &str) -> std::result::Result<Value, (String, String)> {
         let text = crate::flows::share::to_share(flow).expect("share");
         let args = json!({"text": text, "place": "yours", "replace": true, "synced_from": from});
         let request = json!({"contract": 1, "command": "flow-import", "args": args}).to_string();
         self.app.request(CLIENT, &request, Some(AREA), Instant::now());
+        self.app.take_answers().pop().map(|(_, text)| replied(&text)).expect("an answer at once")
     }
 
     fn toast(&self) -> Option<String> {
@@ -190,77 +162,22 @@ fn listed_as_yours(name: &str, changed: Option<&str>) -> Vec<FlowInfo> {
     vec![FlowInfo { name: name.into(), origin: "user".into(), changed, ..FlowInfo::default() }]
 }
 
-mod a_machine_that_syncs_flows {
+mod nothing {
     use super::*;
 
     #[test]
-    fn gets_your_flows_once_linked() {
+    fn is_sent_on_its_own_when_a_flow_changes_or_a_machine_links() {
         let there = There::default();
         let mut rig = rig_with(Vec::new(), &there);
-        rig.save("Duo");
-        rig.edit(vec![syncing("vps", "vps.lan")], Duration::from_secs(3));
-
-        rig.synced_rounds(&there, 1);
-
-        assert_eq!(there.commands()[..2], ["flow-list", "flow-import"]);
-        assert!(there.imported()[0].contains("name = \"Duo\""), "{:?}", there.imported());
-        assert!(there.asked.lock()[1]["args"]["synced_from"].is_string());
-    }
-
-    #[test]
-    fn gets_a_flow_saved_here_at_once_and_is_named_on_it() {
-        let there = There::default();
-        let mut rig = synced_once(&there);
-
-        rig.save("Duo");
-        rig.synced_rounds(&there, 1);
-        rig.until_rounds(2);
-
-        let flow = store::read(&rig.yours().join("duo.toml")).expect("the saved flow");
-        assert_eq!(rig.app.flow_synced_to(&flow), ["vps"]);
-    }
-
-    #[test]
-    fn is_told_when_a_flow_is_deleted_here() {
-        let there = There::default();
-        let mut rig = synced_once(&there);
         let path = rig.save("Duo");
-        rig.until_rounds(2);
-        *there.listed.lock() = vec![FlowInfo { name: "Duo".into(), origin: "user".into(), ..FlowInfo::default() }];
-
-        rig.app.delete_flow_file(&path, None).expect("delete the flow");
-        rig.passes("the deletion is sent", |_| there.commands().contains(&"flow-delete".to_string()));
-
-        let deleted = there.asked.lock().iter().find(|asked| asked["command"] == "flow-delete").cloned();
-        assert_eq!(deleted.map(|asked| asked["args"]["name"].clone()), Some(json!("Duo")));
-    }
-}
-
-mod a_machine_that_does_not_sync_flows {
-    use super::*;
-
-    #[test]
-    fn gets_nothing() {
-        let there = There::default();
-        let mut rig = rig_with(vec![machine("vps", "vps.lan")], &there);
+        rig.edit(vec![machine("vps", "vps.lan")], Duration::from_secs(3));
         rig.passes("the machine links", |app| app.machines.held()[0].status.state == State::Linked);
 
-        rig.save("Duo");
-        rig.refresh(Duration::from_secs(4));
+        rig.save("Trio");
+        rig.app.delete_flow_file(&path, None).expect("delete a flow");
+        rig.refresh(Duration::from_secs(60));
 
         assert_eq!(there.commands(), Vec::<String>::new());
-    }
-
-    #[test]
-    fn is_refused_by_name_with_how_to_turn_it_on() {
-        let there = There::default();
-        let mut rig = rig_with(vec![machine("vps", "vps.lan")], &there);
-
-        let refused = rig.ask_flows(&json!({"machine": "vps"})).expect("an answer at once");
-
-        let (code, message) = refused.expect_err("refused");
-        assert_eq!(code, "conflict");
-        assert!(message.contains("cornercase machines edit vps --sync-flows"), "{message}");
     }
 }
 
@@ -268,26 +185,261 @@ mod the_request {
     use super::*;
 
     #[test]
-    fn answers_what_it_sent_once_the_machine_answered() {
+    fn sends_every_flow_of_yours_and_answers_what_each_machine_got() {
         let there = There::default();
-        let mut rig = rig_with(vec![syncing("vps", "vps.lan")], &there);
-        rig.passes("the machine links", |app| app.machines.held()[0].status.state == State::Linked);
+        let mut rig = linked(&there);
         rig.save("Duo");
 
-        let answer = rig.ask_flows(&json!({}));
-        let synced = rig.answered_flows(answer);
+        let synced = rig.sync_now(&json!({}));
 
-        assert_eq!(synced.machines.len(), 1);
-        assert_eq!((synced.machines[0].machine.as_str(), synced.machines[0].error.as_deref()), ("vps", None));
+        assert_eq!(there.commands(), ["flow-list", "flow-import"]);
+        assert!(there.imported()[0].contains("name = \"Duo\""), "{:?}", there.imported());
+        assert!(there.asked.lock()[1]["args"]["synced_from"].is_string());
+        assert_eq!((synced.machines[0].machine.as_str(), synced.machines[0].sent.clone()), ("vps", vec!["Duo".into()]));
     }
 
     #[test]
-    fn is_refused_when_no_machine_syncs_flows() {
+    fn sends_only_the_flow_it_names() {
+        let there = There::default();
+        let mut rig = linked(&there);
+        rig.save("Duo");
+        rig.save("Trio");
+
+        let synced = rig.sync_now(&json!({"name": "trio"}));
+
+        assert_eq!((there.imported().len(), synced.machines[0].sent.clone()), (1, vec!["Trio".into()]));
+    }
+
+    #[test]
+    fn refuses_a_flow_that_is_not_yours_and_says_why() {
+        let mut rig = linked(&There::default());
+
+        let (missing, _) = rig.refused(&json!({"name": "Nope"}));
+        let (built_in, why) = rig.refused(&json!({"name": "Quick"}));
+
+        assert_eq!((missing.as_str(), built_in.as_str()), ("not-found", "conflict"));
+        assert!(why.contains("only your own flows sync"), "{why}");
+    }
+
+    #[test]
+    fn leaves_a_flow_saved_later_on_the_machine_and_says_so() {
+        let there = There::default();
+        *there.listed.lock() = listed_as_yours("Duo", Some("2099-01-01T00:00:00.000Z"));
+        let mut rig = linked(&there);
+        rig.save("Duo");
+
+        let synced = rig.sync_now(&json!({}));
+
+        assert_eq!((synced.machines[0].kept.clone(), there.count("flow-import")), (vec!["Duo".into()], 0));
+    }
+
+    #[test]
+    fn says_why_a_machine_still_connecting_got_nothing_without_waiting() {
+        let there = There::default();
+        let mut rig = rig_with(vec![machine("vps", "vps.lan")], &there);
+        let connecting = machines::Status { state: State::Connecting, ..machines::Status::default() };
+        rig.app.machines.set_status(0, connecting);
+
+        let synced = rig.ask_flows(&json!({})).expect("an answer at once").expect("synced");
+
+        assert_eq!(synced["machines"][0]["error"], "vps is still connecting");
+    }
+
+    #[test]
+    fn is_refused_when_no_machine_is_shown_or_the_one_named_is_hidden() {
+        let mut none = rig_with(Vec::new(), &There::default());
+        let hidden = Machine { shown: false, ..machine("vps", "vps.lan") };
+        let mut one = rig_with(vec![hidden], &There::default());
+
+        let (code, _) = none.refused(&json!({}));
+        let (hidden_code, why) = one.refused(&json!({"machine": "vps"}));
+
+        assert_eq!((code.as_str(), hidden_code.as_str()), ("conflict", "not-found"));
+        assert!(why.contains("cornercase machines show vps"), "{why}");
+    }
+
+    #[test]
+    fn reports_a_flow_too_large_to_share_as_failed() {
+        let there = There::default();
+        let mut rig = linked(&there);
+        let huge = Flow { notes: "x".repeat(300 * 1024), ..duo("Huge") };
+        store::save(&rig.yours(), &huge, None).expect("save a large flow by hand");
+
+        let synced = rig.sync_now(&json!({}));
+
+        let failed: Vec<&str> = synced.machines[0].failed.iter().map(|failed| failed.name.as_str()).collect();
+        assert_eq!((failed, there.count("flow-import")), (vec!["Huge"], 0));
+    }
+}
+
+mod settings_flows {
+    use super::*;
+    use crate::app::tests::flows_dialog::button;
+    use crate::flows::dialog::{Dialog, SYNC, SYNC_ALL};
+
+    const WIDE: Rect = Rect { x: 0, y: 0, width: 150, height: 44 };
+
+    fn shown(rig: &Rig) -> &Dialog {
+        let Some(Overlay::Flows { dialog, .. }) = &rig.app.overlay else { panic!("the flows tab is not open") };
+        dialog
+    }
+
+    fn buttons(rig: &Rig) -> Vec<&'static str> {
+        let ui::Overlay::Flows(view) = overlay_shown(&rig.app, WIDE) else { panic!("the flows tab is not shown") };
+        view.buttons
+    }
+
+    fn select(rig: &mut Rig, name: &str) {
+        let dialog = rig.app.flows_dialog().expect("the flows tab");
+        let at = dialog.flows.iter().position(|saved| saved.flow.name == name).expect("the flow is listed");
+        dialog.select(at);
+    }
+
+    fn opened(there: &There) -> Rig {
+        let mut rig = linked(there);
+        store::save(&rig.yours(), &duo("Duo"), None).expect("save a flow by hand");
+        store::save(&rig.yours(), &duo("Trio"), None).expect("save a flow by hand");
+        rig.app.open_flows_tab();
+        rig
+    }
+
+    fn after_the_click(rig: &mut Rig, label: &str) -> (String, String) {
+        button(&mut rig.app, WIDE, label);
+        let sending = shown(rig).hint();
+        rig.passes("the machine answers", |app| {
+            app.flows_dialog().is_some_and(|dialog| dialog.notice.as_ref().is_some_and(|n| !n.ends_with('…')))
+        });
+        (sending, shown(rig).hint())
+    }
+
+    #[test]
+    fn offer_sync_all_and_a_flow_s_sync_only_while_a_machine_is_shown_here() {
+        let mut alone = rig_with(Vec::new(), &There::default());
+        store::save(&alone.yours(), &duo("Duo"), None).expect("save a flow by hand");
+        alone.app.open_flows_tab();
+        select(&mut alone, "Duo");
+        let mut rig = opened(&There::default());
+        select(&mut rig, "Duo");
+        let on_yours = buttons(&rig);
+        select(&mut rig, "Quick");
+        let on_a_built_in = buttons(&rig);
+
+        assert!(!buttons(&alone).contains(&SYNC_ALL) && !buttons(&alone).contains(&SYNC));
+        assert!(on_yours.contains(&SYNC_ALL) && on_yours.contains(&SYNC), "{on_yours:?}");
+        assert!(on_a_built_in.contains(&SYNC_ALL) && !on_a_built_in.contains(&SYNC), "{on_a_built_in:?}");
+    }
+
+    #[test]
+    fn offer_no_sync_on_a_project_s_flow() {
+        let mut rig = linked(&There::default());
+        let project = rig.dir.path().join("shop");
+        std::fs::create_dir_all(&project).expect("a project folder");
+        rig.app.add_project(project.clone(), AREA).expect("open the project");
+        rig.app.save_flow_file(&store::project_dir(&project), &duo("Shared"), None).expect("save");
+        rig.app.open_flows_tab();
+        select(&mut rig, "Shared");
+
+        let on_the_project_s = buttons(&rig);
+
+        assert!(on_the_project_s.contains(&SYNC_ALL) && !on_the_project_s.contains(&SYNC), "{on_the_project_s:?}");
+    }
+
+    #[test]
+    fn sync_all_sends_every_flow_of_yours_and_then_says_what_it_sent() {
+        let there = There::default();
+        let mut rig = opened(&there);
+
+        let (sending, after) = after_the_click(&mut rig, SYNC_ALL);
+
+        assert_eq!(sending, "sending your flows to vps…");
+        assert_eq!(after, "vps: sent Duo, Trio");
+    }
+
+    #[test]
+    fn a_flow_s_sync_sends_only_it() {
+        let there = There::default();
+        let mut rig = opened(&there);
+        select(&mut rig, "Trio");
+
+        let (sending, after) = after_the_click(&mut rig, SYNC);
+
+        assert_eq!((sending.as_str(), after.as_str()), ("sending Trio to vps…", "vps: sent Trio"));
+        assert_eq!(there.imported().len(), 1);
+    }
+
+    #[test]
+    fn sync_all_says_why_a_machine_got_nothing() {
+        let there = There::default();
+        let mut rig = opened(&there);
+        *there.refuse_once.lock() = Some("flow-list");
+
+        let (_, after) = after_the_click(&mut rig, SYNC_ALL);
+
+        assert!(after.starts_with("vps: not synced: ") && after.ends_with("the file is busy"), "{after}");
+    }
+}
+
+mod an_import_from_a_machine {
+    use super::*;
+
+    #[test]
+    fn with_a_time_in_the_future_takes_this_computer_s() {
+        let mut rig = rig_with(Vec::new(), &There::default());
+        let pinned = Flow { changed: Some("9999-12-31T00:00:00.000Z".into()), ..duo("Duo") };
+
+        rig.import_from(&pinned, "laptop").expect("imported");
+
+        let saved = store::read(&rig.yours().join("duo.toml")).expect("the imported flow");
+        let changed = saved.changed.as_deref().and_then(crate::time::Stamp::parse).expect("a time");
+        assert!(changed <= SystemTime::now(), "{:?}", saved.changed);
+    }
+
+    #[test]
+    fn of_a_new_flow_says_where_it_came_from_in_one_clean_line() {
         let mut rig = rig_with(Vec::new(), &There::default());
 
-        let (code, _) = rig.ask_flows(&json!({})).expect("an answer at once").expect_err("refused");
+        rig.import_from(&duo("Duo"), "lap\u{202e}top\nmini").expect("imported");
 
-        assert_eq!(code, "conflict");
+        assert_eq!(rig.toast().as_deref(), Some("Duo arrived from laptop mini's flows: it synced them here"));
+    }
+
+    #[test]
+    fn keeps_its_time_and_says_the_flow_was_replaced() {
+        let mut rig = rig_with(Vec::new(), &There::default());
+        store::save(&rig.yours(), &duo("Duo"), None).expect("save a flow without a time");
+        let theirs = Flow { changed: Some("2026-11-20T10:00:00.000Z".into()), notes: "theirs".into(), ..duo("Duo") };
+
+        rig.import_from(&theirs, "laptop").expect("imported");
+
+        let saved = store::read(&rig.yours().join("duo.toml")).expect("the imported flow");
+        assert_eq!((saved.changed.as_deref(), saved.notes.as_str()), (Some("2026-11-20T10:00:00.000Z"), "theirs"));
+        assert_eq!(rig.toast().as_deref(), Some("Duo was replaced by laptop's copy: it synced its flows here"));
+    }
+
+    #[test]
+    fn older_than_the_copy_here_is_refused_and_the_copy_stays() {
+        let mut rig = rig_with(Vec::new(), &There::default());
+        let path = rig.save("Duo");
+        let older = Flow { changed: Some("2020-01-01T00:00:00.000Z".into()), notes: "older".into(), ..duo("Duo") };
+
+        let (_, why) = rig.import_from(&older, "laptop").expect_err("refused");
+
+        assert!(why.contains(NEWER_HERE), "{why}");
+        assert_eq!(store::read(&path).expect("the flow here").notes, "");
+    }
+
+    #[test]
+    fn without_a_sender_replaces_as_asked_whatever_its_time() {
+        let mut rig = rig_with(Vec::new(), &There::default());
+        let path = rig.save("Duo");
+        let older = Flow { changed: Some("2020-01-01T00:00:00.000Z".into()), notes: "older".into(), ..duo("Duo") };
+        let text = crate::flows::share::to_share(&older).expect("share");
+        let args = json!({"text": text, "place": "yours", "replace": true});
+        let request = json!({"contract": 1, "command": "flow-import", "args": args}).to_string();
+
+        rig.app.request(CLIENT, &request, Some(AREA), Instant::now());
+
+        assert_eq!(store::read(&path).expect("the flow here").notes, "older");
     }
 }
 
@@ -304,249 +456,21 @@ mod your_flows {
     }
 
     #[test]
-    fn renamed_leave_a_deletion_of_the_old_name_in_the_journal() {
-        let mut rig = rig_with(Vec::new(), &There::default());
-        let state = rig.dir.path().join("state").join("flow-sync.json");
-        rig.app.set_flow_journal(state.clone());
-        let path = rig.save("Duo");
-
-        rig.app.save_flow_file(&rig.yours(), &duo("Trio"), Some(&path)).expect("rename it");
-
-        assert!(!rig.dir.path().join("flow-sync.json").exists());
-        let journal = Journal::read(&state);
-        let events: Vec<(&str, Change)> = journal.events.iter().map(|e| (e.name.as_str(), e.change)).collect();
-        assert_eq!(events, [("Duo", Change::Deleted)]);
-    }
-
-    #[test]
-    fn imported_from_a_machine_keep_its_time_and_say_they_were_replaced() {
-        let mut rig = rig_with(Vec::new(), &There::default());
-        rig.save("Duo");
-        let theirs = Flow { changed: Some("2026-11-20T10:00:00.000Z".into()), notes: "theirs".into(), ..duo("Duo") };
-
-        rig.import_from(&theirs, "laptop");
-
-        let saved = store::read(&rig.yours().join("duo.toml")).expect("the imported flow");
-        assert_eq!((saved.changed.as_deref(), saved.notes.as_str()), (Some("2026-11-20T10:00:00.000Z"), "theirs"));
-        assert_eq!(rig.toast().as_deref(), Some("Duo was replaced by laptop's copy: your flows sync from there"));
-    }
-}
-
-mod a_round {
-    use super::*;
-
-    #[test]
-    fn retries_a_deletion_the_machine_refused() {
+    fn with_a_time_ahead_are_saved_with_this_computer_s_time_and_are_then_the_same_there() {
         let there = There::default();
-        let mut rig = synced_once(&there);
-        let path = rig.save("Duo");
-        rig.until_rounds(2);
-        *there.listed.lock() = listed_as_yours("Duo", None);
-        *there.refuse_once.lock() = Some("flow-delete");
-        rig.app.delete_flow_file(&path, None).expect("delete the flow");
-        rig.until_rounds(3);
-
-        let synced = rig.sync_now();
-
-        assert_eq!(there.count("flow-delete"), 2);
-        assert_eq!((synced.machines[0].deleted.clone(), synced.machines[0].failed.len()), (vec!["Duo".into()], 0));
-    }
-
-    #[test]
-    fn changed_while_it_runs_is_followed_by_one_more_that_the_request_waits_for() {
-        let there = There::default();
-        let (mut rig, open) = held_in_first_round(&there);
-        rig.save("Duo");
-        rig.save("Trio");
-        let pending = rig.ask_flows(&json!({}));
-        assert!(pending.is_none(), "it waits for the rounds");
-
-        drop(open);
-        let synced = rig.answered_flows(pending);
-
-        assert_eq!((rig.rounds(), there.count("flow-list")), (2, 2));
-        let mut sent = synced.machines[0].sent.clone();
-        sent.sort();
-        assert_eq!(sent, ["Duo", "Trio"]);
-    }
-
-    #[test]
-    fn whose_link_falls_answers_the_request_waiting_on_it() {
-        let there = There::default();
-        let (mut rig, open) = held_in_first_round(&there);
-        let pending = rig.ask_flows(&json!({}));
-        let down = machines::Status { state: State::Unreachable, ..machines::Status::default() };
-        rig.app.machines.set_status(0, down);
-
-        drop(open);
-        let synced = rig.answered_flows(pending);
-
-        let error = synced.machines[0].error.clone().unwrap_or_default();
-        assert!(error.ends_with("your flows go there when its link comes back"), "{error}");
-    }
-
-    #[test]
-    fn leaves_a_flow_saved_later_on_the_machine_and_says_so() {
-        let there = There::default();
-        *there.listed.lock() = listed_as_yours("Duo", Some("2099-01-01T00:00:00.000Z"));
-        let mut rig = synced_once(&there);
-        rig.save("Duo");
-
-        let synced = rig.sync_now();
-
-        assert_eq!((synced.machines[0].kept.clone(), there.count("flow-import")), (vec!["Duo".into()], 0));
-    }
-
-    #[test]
-    fn stops_at_once_when_the_machine_no_longer_syncs_flows() {
-        let there = There::default();
-        let mut rig = synced_once(&there);
-        let off = json!({"contract": 1, "command": "machines", "args": {"action": "set", "entry": {"name": "vps", "sync_flows": false}}});
-        rig.app.request(CLIENT, &off.to_string(), Some(AREA), Instant::now());
-
-        rig.save("Duo");
-
-        assert_eq!((rig.rounds(), there.count("flow-list")), (1, 1));
-    }
-}
-
-mod an_import_from_a_machine {
-    use super::*;
-
-    #[test]
-    fn with_a_time_in_the_future_takes_this_computer_s() {
-        let mut rig = rig_with(Vec::new(), &There::default());
-        let pinned = Flow { changed: Some("9999-12-31T00:00:00.000Z".into()), ..duo("Duo") };
-
-        rig.import_from(&pinned, "laptop");
-
-        let saved = store::read(&rig.yours().join("duo.toml")).expect("the imported flow");
-        let changed = saved.changed.as_deref().and_then(crate::time::Stamp::parse).expect("a time");
-        assert!(changed <= SystemTime::now(), "{:?}", saved.changed);
-    }
-
-    #[test]
-    fn of_a_new_flow_says_where_it_came_from_in_one_clean_line() {
-        let mut rig = rig_with(Vec::new(), &There::default());
-
-        rig.import_from(&duo("Duo"), "lap\u{202e}top\nmini");
-
-        assert_eq!(rig.toast().as_deref(), Some("Duo arrived from laptop mini's flows: your flows sync from there"));
-    }
-}
-
-mod a_flow_of_yours_with_a_time_ahead {
-    use super::*;
-
-    #[test]
-    fn is_saved_with_this_computer_s_time_and_is_then_the_same_there() {
-        let there = There::default();
-        let mut rig = synced_once(&there);
+        let mut rig = linked(&there);
         let ahead = Flow { changed: Some("2099-01-01T00:00:00.000Z".into()), ..duo("Duo") };
         store::save(&rig.yours(), &ahead, None).expect("save a flow by hand");
 
-        let first = rig.sync_now();
+        let first = rig.sync_now(&json!({}));
         let fixed = store::read(&rig.yours().join("duo.toml")).expect("the flow");
         let info =
             FlowInfo { flow: FlowSpec::from(&fixed), ..listed_as_yours("Duo", fixed.changed.as_deref()).remove(0) };
         *there.listed.lock() = vec![info];
-        let second = rig.sync_now();
+        let second = rig.sync_now(&json!({}));
 
         assert_ne!(fixed.changed.as_deref(), Some("2099-01-01T00:00:00.000Z"));
         assert_eq!((first.machines[0].sent.clone(), second.machines[0].same), (vec!["Duo".into()], 1));
-        assert_eq!(rig.app.flow_synced_to(&fixed), ["vps"]);
-    }
-}
-
-mod settings_flows {
-    use super::*;
-    use crate::app::tests::flows_dialog::button;
-    use crate::flows::dialog::{Dialog, SYNC_NOW};
-    use crate::flows::store::Origin;
-
-    const WIDE: Rect = Rect { x: 0, y: 0, width: 150, height: 44 };
-
-    fn shown(rig: &Rig) -> &Dialog {
-        let Some(Overlay::Flows { dialog, .. }) = &rig.app.overlay else { panic!("the flows tab is not open") };
-        dialog
-    }
-
-    fn notes(rig: &Rig, origin: impl Fn(&Origin) -> bool) -> Vec<String> {
-        let dialog = shown(rig);
-        let rows = dialog.list_rows();
-        dialog.flows.iter().zip(rows).filter(|(saved, _)| origin(&saved.origin)).map(|(_, row)| row.note).collect()
-    }
-
-    fn buttons(rig: &Rig) -> Vec<&'static str> {
-        let ui::Overlay::Flows(view) = overlay_shown(&rig.app, WIDE) else { panic!("the flows tab is not shown") };
-        view.buttons
-    }
-
-    fn opened(there: &There) -> Rig {
-        let mut rig = synced_once(there);
-        rig.app.open_flows_tab();
-        rig
-    }
-
-    #[test]
-    fn name_the_machine_a_flow_of_yours_is_synced_to_and_no_other() {
-        let there = There::default();
-        let mut rig = opened(&there);
-
-        rig.save("Duo");
-        rig.until_rounds(2);
-        let after_the_round = notes(&rig, |origin| matches!(origin, Origin::User(_)));
-        rig.app.open_flows_tab();
-
-        assert!(after_the_round[0].ends_with("synced to vps"), "{after_the_round:?}");
-        assert!(notes(&rig, |origin| matches!(origin, Origin::User(_)))[0].ends_with("synced to vps"));
-        let built_ins = notes(&rig, |origin| *origin == Origin::BuiltIn);
-        assert!(!built_ins.is_empty() && built_ins.iter().all(|note| !note.contains("synced to")), "{built_ins:?}");
-    }
-
-    #[test]
-    fn offer_sync_now_only_while_a_machine_syncs_them() {
-        let mut rig = rig_with(vec![machine("vps", "vps.lan")], &There::default());
-        rig.app.open_flows_tab();
-        let without = buttons(&rig);
-
-        let with = buttons(&opened(&There::default()));
-
-        assert_eq!((without.contains(&SYNC_NOW), with.contains(&SYNC_NOW)), (false, true));
-    }
-
-    #[test]
-    fn sync_now_runs_a_round_and_then_says_what_it_sent() {
-        let there = There::default();
-        let mut rig = opened(&there);
-        store::save(&rig.yours(), &duo("Duo"), None).expect("save a flow by hand");
-
-        button(&mut rig.app, WIDE, SYNC_NOW);
-        let sending = shown(&rig).hint();
-        rig.until_rounds(2);
-
-        assert_eq!(sending, "sending your flows to vps…");
-        assert_eq!(shown(&rig).hint(), "vps: sent Duo");
-    }
-
-    #[test]
-    fn sync_now_says_why_a_round_failed_and_the_round_is_tried_again_later() {
-        let there = There::default();
-        let mut rig = opened(&there);
-        store::save(&rig.yours(), &duo("Duo"), None).expect("save a flow by hand");
-        *there.refuse_once.lock() = Some("flow-list");
-
-        button(&mut rig.app, WIDE, SYNC_NOW);
-        rig.until_rounds(2);
-        let failed = shown(&rig).hint();
-        rig.refresh(Duration::from_secs(10));
-        let soon = (rig.rounds(), there.count("flow-list"));
-        rig.refresh(Duration::from_secs(40));
-        rig.until_rounds(3);
-
-        assert!(failed.starts_with("vps: not synced: ") && failed.ends_with("the file is busy"), "{failed}");
-        assert_eq!(soon, (2, 2));
-        assert!(there.imported().iter().any(|text| text.contains("name = \"Duo\"")), "{:?}", there.imported());
     }
 }
 
@@ -569,10 +493,31 @@ mod file_modes {
         let elsewhere = rig.dir.path().join("other");
 
         let theirs = rig.app.save_flow_file(&store::project_dir(&project), &duo("Shared"), None).expect("save");
+        let ordinary = store::project_dir(&project).join("ordinary.txt");
+        std::fs::write(&ordinary, "plain").expect("an ordinary file");
         let unknown = rig.app.save_flow_file(&store::project_dir(&elsewhere), &duo("Odd"), None).expect("save");
         let yours = rig.save("Duo");
 
-        assert_ne!(mode(&theirs), 0o600);
+        assert_eq!(mode(&theirs), mode(&ordinary));
         assert_eq!((mode(&unknown), mode(&yours)), (0o600, 0o600));
+    }
+
+    #[test]
+    fn a_flow_whose_time_ahead_cannot_be_fixed_is_reported_and_not_sent() {
+        let there = There::default();
+        let mut rig = linked(&there);
+        let ahead = Flow { changed: Some("2099-01-01T00:00:00.000Z".into()), ..duo("Ahead") };
+        let path = store::save(&rig.yours(), &ahead, None).expect("save a flow by hand");
+        let folder = rig.yours();
+        let locked = |mode| std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(mode));
+        locked(0o500).expect("lock the folder");
+
+        let synced = rig.sync_now(&json!({}));
+        locked(0o700).expect("unlock the folder");
+
+        let failed = &synced.machines[0].failed;
+        assert_eq!(failed.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(), ["Ahead"]);
+        assert!(failed[0].error.contains("ahead"), "{failed:?}");
+        assert_eq!((there.count("flow-import"), store::read(&path).expect("unchanged").changed), (0, ahead.changed));
     }
 }

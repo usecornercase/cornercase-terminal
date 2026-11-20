@@ -24,33 +24,32 @@ fn has(session: &Session, key: &str, name: &str) -> bool {
 }
 
 #[test]
-fn a_flow_made_or_deleted_here_is_made_or_deleted_on_a_machine_that_syncs_flows() {
+fn flow_sync_sends_a_flow_of_yours_and_nothing_else_changes_there() {
     let (machine, here) = linked_to_one();
-    let edited = here.says(&["machines", "edit", VPS, "--sync-flows"]);
-    assert!(edited.contains("syncs flows"), "{edited}");
-
     import_mine(&here);
-    wait_until("the flow reaches the machine", || has(&machine, "flows", "Mine"));
     here.says(&["flow", "hide", "Arena"]);
-    wait_until("the built-in is deleted there", || has(&machine, "hidden", "Arena"));
+    assert!(!has(&machine, "flows", "Mine"), "nothing is sent on its own");
 
-    let synced = json(&here, &["flow", "sync", "--json"]);
-    assert_eq!((&synced["machines"][0]["machine"], &synced["machines"][0]["error"]), (&json!(VPS), &Value::Null));
-    assert_eq!(mine_in(&here)["synced"], json!([VPS]));
+    let synced = json(&here, &["flow", "sync", "Mine", "--json"]);
+
+    assert_eq!((&synced["machines"][0]["machine"], &synced["machines"][0]["sent"]), (&json!(VPS), &json!(["Mine"])));
     assert!(mine_in(&machine)["changed"].is_string());
+    assert!(!has(&machine, "hidden", "Arena"), "hiding a built-in stays on this computer");
 
     here.says(&["flow", "delete", "Mine"]);
-    wait_until("the flow is deleted there", || !has(&machine, "flows", "Mine"));
+    let again = json(&here, &["flow", "sync", "--json"]);
+    assert_eq!(again["machines"][0]["error"], Value::Null);
+    assert!(has(&machine, "flows", "Mine"), "nothing is deleted there");
 }
 
 #[test]
-fn a_machine_that_does_not_sync_flows_gets_none_and_flow_sync_says_how_to_turn_it_on() {
+fn flow_sync_of_a_flow_that_is_not_yours_is_refused_and_sends_nothing() {
     let (machine, here) = linked_to_one();
     import_mine(&here);
 
-    let refused = here.cli(&["flow", "sync", "--machine", VPS]);
+    let refused = here.cli(&["flow", "sync", "Nope"]);
 
     assert!(!refused.status.success());
-    assert!(String::from_utf8_lossy(&refused.stderr).contains("--sync-flows"), "{refused:?}");
+    assert!(String::from_utf8_lossy(&refused.stderr).contains("no flow of yours"), "{refused:?}");
     assert!(!has(&machine, "flows", "Mine"));
 }

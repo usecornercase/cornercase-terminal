@@ -1,6 +1,5 @@
 ---
 source: src/app/tests/machine_links/settings.rs
-assertion_line: 260
 expression: rig.shown(WIDE)
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                                                      "
@@ -26,8 +25,8 @@ expression: rig.shown(WIDE)
 "  │                [x] show its work here                                                                                                    │  "
 "  │                link it and show its workspaces and agents next to yours                                                                  │  "
 "  │                                                                                                                                          │  "
-"  │                [ ] sync your flows to it                                                                                                 │  "
-"  │                a flow made or changed here is saved there too, its env values included                                                   │  "
+"  │                                                                                                                                          │  "
+"  │                                                                                                                                          │  "
 "  │                                                                                                                                          │  "
 "  │                                                                                                                                          │  "
 "  │                                                                                                                                          │  "

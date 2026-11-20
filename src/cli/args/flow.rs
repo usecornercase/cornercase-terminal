@@ -84,7 +84,7 @@ pub(crate) enum FlowAction {
     )]
     Order(FlowOrderArgs),
     #[command(
-        about = "Send your flows to the machines that sync them now, and print what changed on each",
+        about = "Send your flows, or one of them, to your machines now, and print what each machine got",
         after_help = FLOW_SYNC_HELP
     )]
     Sync(FlowSyncArgs),
@@ -92,7 +92,9 @@ pub(crate) enum FlowAction {
 
 #[derive(Debug, Args)]
 pub(crate) struct FlowSyncArgs {
-    #[arg(long, value_name = "NAME", help = "Only this machine [default: every machine that syncs your flows]")]
+    #[arg(value_name = "FLOW", help = "Only this flow of yours [default: every flow of yours]")]
+    pub(crate) name: Option<String>,
+    #[arg(long, value_name = "NAME", help = "Only this machine [default: every machine shown here]")]
     pub(crate) machine: Option<String>,
     #[command(flatten)]
     pub(crate) print: Print,

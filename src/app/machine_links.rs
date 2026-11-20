@@ -68,7 +68,7 @@ pub(crate) enum MachineEvent {
     Relayed(relay::Relayed),
     Ignored { key: u64, result: std::result::Result<crate::git::ignored::Listing, String> },
     Packed(Box<Packed>),
-    FlowsSynced { destination: String, synced: Box<machines::flows::Synced> },
+    FlowsSynced { waiter: u64, destination: String, report: Box<control::MachineFlows> },
 }
 
 impl From<Report> for AppEvent {
@@ -202,10 +202,6 @@ impl Machines {
         self.update = update;
     }
 
-    pub(super) fn flows_rounds(&self, destination: &str) -> u64 {
-        self.flows.rounds(destination)
-    }
-
     #[cfg(unix)]
     pub(super) fn set_network(&mut self, network: Network) {
         self.network = network;
@@ -235,8 +231,6 @@ pub(super) enum Update {
 impl App {
     pub(super) fn sync_machines(&mut self, now: Instant, clock: i64) {
         self.follow_machines();
-        self.follow_flow_sync();
-        self.retry_flow_sync(now);
         self.follow_pairing();
         let woke = self.machines.sleep.woke(clock, now);
         let moved = if self.machines.held.is_empty() {
@@ -327,7 +321,9 @@ impl App {
             MachineEvent::Relayed(relayed) => self.relayed(relayed),
             MachineEvent::Ignored { key, result } => self.ignored_listed(key, result),
             MachineEvent::Packed(packed) => self.clone_packed(*packed),
-            MachineEvent::FlowsSynced { destination, synced } => self.flows_synced(&destination, *synced),
+            MachineEvent::FlowsSynced { waiter, destination, report } => {
+                self.flows_synced(waiter, &destination, *report);
+            }
         }
         if streamed {
             return;

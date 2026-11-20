@@ -257,21 +257,22 @@ cornercase flow import octocat/security-audit
 
 ## Sync your flows with your machines
 
-A flow you made or tuned on your laptop can be on every [machine](../machines/) too. Tick **sync your flows to it** in a machine's form in **settings → Machines**, or run `cornercase machines edit vps --sync-flows`, and cornercase keeps your flows there the same as here, so [starting one on that machine](../machines/#start-work-on-a-machine) runs the version you just saved.
+A flow you made or tuned on your laptop can be on your [machines](../machines/) too, so [starting one on a machine](../machines/#start-work-on-a-machine) runs the version you just saved. Nothing is sent on its own: you send it when you want, from **settings → Flows**, while at least one machine is linked and shown there.
 
-- **What goes there**: your flows (built-in flows you edited included) and the built-in flows you deleted. Your default flow and your order stay on each computer. A project's flows already travel with its repository.
-- **When**: each change is sent as soon as you save, rename, delete, hide or restore a flow. A machine that is off or out of reach gets what it missed when its link comes back, a sync that fails while the machine stays linked is tried again on its own (after 30 seconds, then less often, at most every 10 minutes), and a deletion it refused is sent again with every later sync. **`sync now`**, in **settings → Flows** while a machine syncs flows, sends everything at once and then says what each machine got, or why it failed (`vps: sent Duo`), and each flow of yours says which machines have it (`synced to vps`).
-- **The last saved wins**: saving a flow writes the time in its file (`changed`), by each computer's clock, so keep your machines' clocks right (a time more than 5 minutes ahead is replaced by the receiving computer's). A flow saved later on the machine is kept there, and if that machine syncs to this computer too, it comes back here, with a note that it was replaced. A flow only the machine has is never deleted, and the first sync with a machine deletes nothing there.
-- **Nothing asks**: both ends are your machines and you ticked the box, so a synced flow is saved there without the question an import asks, even when it sets `env` or `args`. Its `env` values go too, secrets included; each flow file of yours is written readable only by you, on both ends. A flow that arrives or replaces one of yours shows a note naming the machine it came from. Agents the flow uses that are not installed there are named on that machine's Flows list, as usual.
+- **`sync`** sends the selected flow, like **`export`** acts on it. It is offered for your flows (built-in flows you edited included), not for a built-in you did not change nor for a project's flow, which already travels with its repository.
+- **`sync all`** sends every flow of yours.
+- **Where**: every machine in **settings → Machines** that shows its work here. A hidden machine, or a computer you only open a window on, has no link to send them through, and a machine that is not linked right then gets nothing: sync again once it is back.
+- **What it says**: what each machine got, or why it failed, such as `vps: sent Duo · 2 already the same`, `vps: kept its newer Duo` or `vps: not synced: vps unreachable`. A flow that cannot go (too large to share, for instance) is named with why.
+- **The last saved wins**: saving a flow writes the time in its file (`changed`), by each computer's clock, so keep your machines' clocks right (a time more than 5 minutes ahead is replaced by the receiving computer's). A flow saved later on the machine is left alone there, even when it is saved while the sync runs.
+- **Nothing is deleted there**: deleting a flow here leaves the machine's copy, and deleting or restoring a built-in flow stays on this computer, as do your default flow and your order.
+- **Nothing asks**: both ends are your machines and you clicked, so a synced flow is saved there without the question an import asks, even when it sets `env` or `args`. Its `env` values go too, secrets included; each flow file of yours is written readable only by you, on both ends. A flow that arrives or replaces one of yours shows a note there naming the computer it came from. Agents the flow uses that are not installed there are named on that machine's Flows list, as usual.
 
-From a terminal, `cornercase flow sync` sends everything now and prints what changed on each machine (`--machine vps` for one, `--json` for programs):
+From a terminal, `cornercase flow sync` sends every flow of yours and prints what each machine got; name a flow to send only it (`--machine vps` for one machine, `--json` for programs):
 
 ```sh
 cornercase flow sync
-cornercase flow sync --machine vps --json
+cornercase flow sync Review --machine vps --json
 ```
-
-Only machines in **settings → Machines** that show their work here sync flows: a hidden machine, or a computer you only open a window on, has no link to send them through.
 
 ## Where flows are kept
 

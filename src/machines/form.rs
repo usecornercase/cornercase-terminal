@@ -22,12 +22,11 @@ pub(crate) enum Field {
     Folder,
     Command,
     Shown,
-    SyncFlows,
 }
 
 impl Field {
-    pub(crate) const ALL: [Self; 7] =
-        [Self::Name, Self::Icon, Self::Destination, Self::Folder, Self::Command, Self::Shown, Self::SyncFlows];
+    pub(crate) const ALL: [Self; 6] =
+        [Self::Name, Self::Icon, Self::Destination, Self::Folder, Self::Command, Self::Shown];
 
     pub(crate) fn label(self) -> &'static str {
         match self {
@@ -37,7 +36,6 @@ impl Field {
             Self::Folder => "folder",
             Self::Command => "command",
             Self::Shown => "shown",
-            Self::SyncFlows => "flows",
         }
     }
 
@@ -49,15 +47,6 @@ impl Field {
             Self::Folder => "where its clones go there: an absolute path or one starting with ~/",
             Self::Command => "optional: what runs cornercase there, for a window you open there",
             Self::Shown => "link it and show its workspaces and agents next to yours",
-            Self::SyncFlows => "a flow made or changed here is saved there too, its env values included",
-        }
-    }
-
-    pub(crate) fn check_text(self) -> Option<&'static str> {
-        match self {
-            Self::Shown => Some("show its work here"),
-            Self::SyncFlows => Some("sync your flows to it"),
-            Self::Name | Self::Icon | Self::Destination | Self::Folder | Self::Command => None,
         }
     }
 }
@@ -86,7 +75,6 @@ pub(crate) struct Form {
     pub(crate) folder: Editor,
     pub(crate) command: Editor,
     pub(crate) shown: bool,
-    pub(crate) sync_flows: bool,
     pub(crate) back_to_settings: bool,
     pub(crate) focus: Field,
     pub(crate) errors: Vec<(Field, String)>,
@@ -108,7 +96,6 @@ impl Form {
             folder: Editor::new(DEFAULT_FOLDER),
             command: Editor::default(),
             shown: true,
-            sync_flows: false,
             back_to_settings: true,
             focus: Field::Name,
             errors: Vec::new(),
@@ -125,7 +112,6 @@ impl Form {
             folder: Editor::new(&machine.folder),
             command: Editor::new(machine.command.as_deref().unwrap_or_default()),
             shown: machine.shown,
-            sync_flows: machine.sync_flows,
             ..Self::new()
         }
     }
@@ -165,7 +151,7 @@ impl Form {
             Field::Destination => Some(&self.destination),
             Field::Folder => Some(&self.folder),
             Field::Command => Some(&self.command),
-            Field::Icon | Field::Shown | Field::SyncFlows => None,
+            Field::Icon | Field::Shown => None,
         }
     }
 
@@ -175,7 +161,7 @@ impl Form {
             Field::Destination => Some(&mut self.destination),
             Field::Folder => Some(&mut self.folder),
             Field::Command => Some(&mut self.command),
-            Field::Icon | Field::Shown | Field::SyncFlows => None,
+            Field::Icon | Field::Shown => None,
         }
     }
 
@@ -216,30 +202,14 @@ impl Form {
                 editor.one_line_key(key, width);
                 editor.reveal(width, 1);
             }
-            (None, Field::Shown | Field::SyncFlows) => {
+            (None, Field::Shown) => {
                 if key.code == KeyCode::Char(' ') {
-                    self.toggle(focus);
+                    self.shown = !self.shown;
                 }
             }
             (None, _) => {
                 self.icon.key(key, rows);
             }
-        }
-    }
-
-    pub(crate) fn checked_box(&self, field: Field) -> Option<bool> {
-        match field {
-            Field::Shown => Some(self.shown),
-            Field::SyncFlows => Some(self.sync_flows),
-            Field::Name | Field::Icon | Field::Destination | Field::Folder | Field::Command => None,
-        }
-    }
-
-    fn toggle(&mut self, field: Field) {
-        match field {
-            Field::Shown => self.shown = !self.shown,
-            Field::SyncFlows => self.sync_flows = !self.sync_flows,
-            Field::Name | Field::Icon | Field::Destination | Field::Folder | Field::Command => {}
         }
     }
 
@@ -263,10 +233,10 @@ impl Form {
                 self.focus = Field::Icon;
                 if open { self.icon.close() } else { self.icon.open() }
             }
-            Hit::Field { field: field @ (Field::Shown | Field::SyncFlows), .. } => {
+            Hit::Field { field: Field::Shown, .. } => {
                 self.icon.close();
-                self.focus = field;
-                self.toggle(field);
+                self.focus = Field::Shown;
+                self.shown = !self.shown;
             }
             Hit::Field { field, line, col } => {
                 self.icon.close();
@@ -293,7 +263,6 @@ impl Form {
             command,
             shown: self.shown,
             unreached,
-            sync_flows: self.sync_flows,
         }
     }
 

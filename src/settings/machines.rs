@@ -114,8 +114,7 @@ impl Settings {
             return (String::new(), String::new(), String::new(), false);
         };
         let label = format!("{} {}", machines::known_icon(&machine.icon), machine.name);
-        let syncs = if machine.sync_flows && info.problem.is_none() { " · syncs flows" } else { "" };
-        (label, self.place(machine), format!("{}{syncs}", info.note(self.now)), info.problem.is_some())
+        (label, self.place(machine), info.note(self.now), info.problem.is_some())
     }
 
     fn longest(&self, text: fn(&Machine) -> &str, most: usize) -> usize {

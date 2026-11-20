@@ -5,8 +5,6 @@ use crate::cli::help::{MACHINES_ADD_HELP, MACHINES_UPDATE_HELP};
 
 const ICON: &str = "Its icon, by glyph or name: ☁ server, ▭ laptop, ▣ desktop, ◫ mini, ⌂ home server, ◆ other";
 const NAME: &str = "The machine's name, as `cornercase machines` lists it";
-const SYNC_FLOWS: &str =
-    "Keep your flows in sync there: a flow made, changed or deleted here is sent to it, its env values included";
 
 #[derive(Debug, Args)]
 #[command(args_conflicts_with_subcommands = true)]
@@ -58,8 +56,6 @@ pub(crate) struct AddArgs {
         help = "Add it without linking it: its work is not shown here, and the machine button still offers it"
     )]
     pub(crate) hidden: bool,
-    #[arg(long, help = SYNC_FLOWS)]
-    pub(crate) sync_flows: bool,
     #[command(flatten)]
     pub(crate) print: Print,
 }
@@ -78,10 +74,6 @@ pub(crate) struct EditArgs {
     pub(crate) folder: Option<String>,
     #[arg(long, value_name = "COMMAND", help = "Its new command there; \"\" clears it")]
     pub(crate) command: Option<String>,
-    #[arg(long, help = SYNC_FLOWS, conflicts_with = "no_sync_flows")]
-    pub(crate) sync_flows: bool,
-    #[arg(long, help = "Stop sending your flows there; the flows already there stay")]
-    pub(crate) no_sync_flows: bool,
     #[command(flatten)]
     pub(crate) print: Print,
 }

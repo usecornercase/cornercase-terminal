@@ -99,9 +99,11 @@ mod modes {
 
         let yours = save_in(&dir.path().join("flows"), &secret, None, Folder::Yours).expect("save it");
         let project = save_in(&project_dir(dir.path()), &named("Plain"), None, Folder::Project).expect("save it");
+        let ordinary = project_dir(dir.path()).join("ordinary.txt");
+        std::fs::write(&ordinary, "plain").expect("an ordinary file");
 
         assert_eq!(mode(&yours), 0o600);
-        assert_ne!(mode(&project), 0o600);
+        assert_eq!(mode(&project), mode(&ordinary));
     }
 
     #[test]

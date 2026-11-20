@@ -33,12 +33,7 @@ impl App {
             None => self.here(caller).project,
         };
         let listing = self.flow_listing(p.map(|p| self.projects[p].path.as_path()));
-        let (mut flows, hidden) = manage::info_listing(&listing);
-        for (info, saved) in flows.iter_mut().zip(&listing.flows) {
-            if matches!(saved.origin, Origin::User(_)) {
-                info.synced = self.flow_synced_to(&saved.flow);
-            }
-        }
+        let (flows, hidden) = manage::info_listing(&listing);
         let builtins = listing.builtins;
         let broken = listing.broken.into_iter().map(|(path, error)| BrokenFlow { path, error }).collect();
         Ok(Some(json(&Flows { flows, broken, hidden, builtins })))
@@ -380,7 +375,6 @@ fn flow_info(flow: &Flow, origin: &Origin) -> FlowInfo {
         edited: false,
         default: false,
         changed: flow.changed.clone().filter(|_| matches!(origin, Origin::User(_))),
-        synced: Vec::new(),
     }
 }
 

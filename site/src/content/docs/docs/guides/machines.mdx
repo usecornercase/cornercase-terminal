@@ -28,7 +28,6 @@ Click **`+ add machine`** at the end of the list. The form asks for:
 | **folder** | Where clones go on that machine, `~/code` unless you change it: an absolute path, `~`, or one starting with `~/`. Nothing is made there yet. |
 | **command** | Optional. What runs cornercase there, for a window you open there with the machine button, as `cornercase remote --command` does: a path such as `~/bin/cornercase`. Leave it empty when `cornercase` is on the `PATH`. |
 | **show its work here** | On by default. The link starts and the machine's workspaces and agents show next to yours. Off: the machine stays on the list and the machine button still offers it, but nothing is linked and its row reads `◌ hidden`. |
-| **sync your flows to it** | Off by default. On: [your flows](../flows/#sync-your-flows-with-your-machines) are kept the same there, so a flow you make, change or delete here is saved or deleted there too, its `env` values included, while it is shown. A click or `Space` ticks it. |
 
 ` add ` saves it, and the link starts at once, unless **show its work here** is off. A value the form refuses says why under its field, and nothing is saved. Click a machine, or select it and press `Enter`, to change it in the same form; its link carries on unless you change the destination.
 
@@ -330,7 +329,6 @@ Scripts and other apps send the same `machine` to the `stats` and `usage` reques
 cornercase machines
 cornercase machines add vps ana@vps.example.com --icon server
 cornercase machines edit vps --folder '~/src'
-cornercase machines edit vps --sync-flows
 cornercase machines retry vps
 cornercase machines update mini
 cornercase machines remove vps

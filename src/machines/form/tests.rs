@@ -181,16 +181,14 @@ mod keys {
     fn tab_goes_through_the_fields_and_around() {
         let mut form = Form::new();
         let mut seen = Vec::new();
-        for _ in 0..7 {
+        for _ in 0..6 {
             press(&mut form, KeyCode::Tab);
             seen.push(form.focus);
         }
         press(&mut form, KeyCode::BackTab);
 
-        let around = [Field::Command, Field::Shown, Field::SyncFlows, Field::Name];
-        assert_eq!(seen[..3], [Field::Icon, Field::Destination, Field::Folder]);
-        assert_eq!(seen[3..], around);
-        assert_eq!(form.focus, Field::SyncFlows);
+        assert_eq!(seen, [Field::Icon, Field::Destination, Field::Folder, Field::Command, Field::Shown, Field::Name]);
+        assert_eq!(form.focus, Field::Shown);
     }
 
     #[test]
@@ -374,32 +372,5 @@ mod the_command_and_the_box {
         let (_, built) = form.checked(&[marked]).expect("valid");
 
         assert_eq!(built.unreached, kept);
-    }
-}
-
-mod syncing_flows {
-    use super::*;
-
-    #[test]
-    fn is_off_for_a_new_machine_and_space_turns_it_on() {
-        let mut form = filled("vps", "me@vps.lan", "~/code");
-        form.focus = Field::SyncFlows;
-
-        press(&mut form, KeyCode::Char(' '));
-        press(&mut form, KeyCode::Char('x'));
-
-        let (_, machine) = form.checked(&listed()).expect("valid");
-        assert!(machine.sync_flows && machine.shown);
-    }
-
-    #[test]
-    fn a_click_toggles_it_and_an_edit_keeps_what_the_machine_had() {
-        let synced = Machine { sync_flows: true, ..machine("pi", "pi.lan") };
-        let mut form = Form::editing(&synced);
-
-        form.hit(Hit::Field { field: Field::SyncFlows, line: 0, col: 0 }, WIDTH);
-
-        assert_eq!((form.focus, form.sync_flows, form.shown), (Field::SyncFlows, false, true));
-        assert_eq!(press(&mut form, KeyCode::Enter), Step::Submit);
     }
 }

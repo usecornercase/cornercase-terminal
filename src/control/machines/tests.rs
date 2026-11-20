@@ -25,7 +25,6 @@ fn answer() -> MachineList {
                 error: None,
                 updating: false,
                 problem: None,
-                sync_flows: false,
             },
             Info {
                 name: "pi".into(),

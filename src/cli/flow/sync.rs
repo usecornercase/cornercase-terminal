@@ -9,7 +9,7 @@ use crate::flows::share;
 
 pub(super) fn run(args: &FlowSyncArgs) -> Result<()> {
     client::use_flow_sync()?;
-    let request = control::FlowSync { machine: args.machine.clone() };
+    let request = control::FlowSync { machine: args.machine.clone(), name: args.name.clone() };
     let value = ask("flow sync", control::Command::FlowSync(request))?;
     let synced: FlowsSynced = answer(value.clone())?;
     if args.print.json {

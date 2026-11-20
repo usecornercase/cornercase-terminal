@@ -54,7 +54,6 @@ fn edited(old: &Machine, set: &MachineSet) -> Result<Machine, Refusal> {
         folder: given(&set.folder, &old.folder),
         command: if set.command.is_some() { command_of(set) } else { old.command.clone() },
         shown: set.shown.unwrap_or(old.shown),
-        sync_flows: set.sync_flows.unwrap_or(old.sync_flows),
         unreached: old.unreached || destination != old.destination,
         destination,
     })
@@ -71,7 +70,6 @@ fn added(set: &MachineSet) -> Result<Machine, Refusal> {
         folder: set.folder.as_deref().map_or(DEFAULT_FOLDER, str::trim).into(),
         command: command_of(set),
         shown: set.shown.unwrap_or(true),
-        sync_flows: set.sync_flows.unwrap_or_default(),
         unreached: true,
     })
 }

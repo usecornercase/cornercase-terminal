@@ -66,8 +66,6 @@ pub(crate) struct FlowInfo {
     pub(crate) default: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) changed: Option<String>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub(crate) synced: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -288,6 +286,7 @@ pub(crate) struct FlowImport {
 #[serde(default)]
 pub(crate) struct FlowSync {
     pub(crate) machine: Option<String>,
+    pub(crate) name: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -301,9 +300,6 @@ pub(crate) struct FlowsSynced {
 pub(crate) struct MachineFlows {
     pub(crate) machine: String,
     pub(crate) sent: Vec<String>,
-    pub(crate) deleted: Vec<String>,
-    pub(crate) hidden: Vec<String>,
-    pub(crate) restored: Vec<String>,
     pub(crate) kept: Vec<String>,
     pub(crate) same: usize,
     pub(crate) failed: Vec<FlowSyncFailure>,
@@ -318,13 +314,7 @@ impl MachineFlows {
         let names = |names: &[String]| {
             names.iter().map(|name| flows::share::visible(name.trim())).collect::<Vec<_>>().join(", ")
         };
-        let changes = [
-            ("sent", &self.sent),
-            ("deleted", &self.deleted),
-            ("deleted the built-in", &self.hidden),
-            ("restored", &self.restored),
-            ("kept its newer", &self.kept),
-        ];
+        let changes = [("sent", &self.sent), ("kept its newer", &self.kept)];
         let mut parts: Vec<String> = changes
             .iter()
             .filter(|(_, list)| !list.is_empty())
@@ -553,7 +543,7 @@ impl FlowImport {
 
 impl FlowSync {
     pub(super) fn fields(&self, fields: &mut Fields) {
-        fields.maybe("machine", self.machine.as_ref());
+        fields.maybe("machine", self.machine.as_ref()).add("one", self.name.is_some());
     }
 }
 

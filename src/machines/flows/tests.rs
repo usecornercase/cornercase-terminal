@@ -15,7 +15,7 @@ use crate::remote::Killer;
 #[derive(Clone)]
 struct Machine {
     listed: Value,
-    refuses: Option<&'static str>,
+    refuses: Option<(&'static str, &'static str)>,
     asked: Arc<Mutex<Vec<Value>>>,
 }
 
@@ -39,8 +39,8 @@ impl Connect for Machine {
             machine.asked.lock().push(asked);
             if command == "flow-list" {
                 respond(&mut theirs, &Response::Ok(machine.listed.clone()));
-            } else if machine.refuses == Some(command.as_str()) {
-                let refusal = Structured::Error(Refusal::new(Code::Malformed, "the flow cannot run: no roles"));
+            } else if let Some((_, why)) = machine.refuses.filter(|(refused, _)| *refused == command) {
+                let refusal = Structured::Error(Refusal::new(Code::Malformed, why));
                 let text = serde_json::to_string(&refusal).expect("a refusal");
                 protocol::send(&mut theirs, &ServerMessage::Response(text)).expect("refuse");
             } else {
@@ -55,7 +55,7 @@ fn spec(name: &str) -> FlowSpec {
     FlowSpec { name: name.into(), description: "theirs".into(), ..FlowSpec::default() }
 }
 
-fn listed(flows: &[(&str, &str, Option<&str>)], hidden: &[&str]) -> Value {
+fn listed(flows: &[(&str, &str, Option<&str>)]) -> Value {
     let info = |(name, origin, changed): &(&str, &str, Option<&str>)| FlowInfo {
         name: (*name).into(),
         origin: (*origin).into(),
@@ -63,29 +63,17 @@ fn listed(flows: &[(&str, &str, Option<&str>)], hidden: &[&str]) -> Value {
         flow: spec(name),
         ..FlowInfo::default()
     };
-    let hidden = hidden.iter().map(|name| FlowInfo { name: (*name).into(), ..FlowInfo::default() }).collect();
-    let flows = Flows {
-        flows: flows.iter().map(info).collect(),
-        hidden,
-        builtins: vec!["Quick".into(), "Arena".into()],
-        ..Flows::default()
-    };
+    let flows = Flows { flows: flows.iter().map(info).collect(), builtins: vec!["Quick".into()], ..Flows::default() };
     serde_json::to_value(flows).expect("a listing")
 }
 
 fn sending(names: &[&str]) -> Sending {
     let flows = names.iter().map(|name| Held { name: (*name).into(), changed: None, spec: FlowSpec::default() });
     Sending {
-        ours: Ours {
-            flows: flows.collect(),
-            hidden: vec!["Arena".into()],
-            events: Vec::new(),
-            synced: None,
-            retry: Vec::new(),
-        },
+        flows: flows.collect(),
         texts: names.iter().map(|name| ((*name).to_string(), format!("name = \"{name}\""))).collect(),
+        left_out: Vec::new(),
         from: Some("laptop".into()),
-        started: SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(7),
     }
 }
 
@@ -93,34 +81,31 @@ mod a_sync {
     use super::*;
 
     #[test]
-    fn imports_each_flow_the_machine_lacks_and_deletes_a_built_in_deleted_here() {
-        let machine = Machine::new(listed(&[("Theirs", "user", None), ("Quick", "built-in", None)], &[]));
+    fn imports_each_flow_the_machine_lacks_and_touches_nothing_else() {
+        let machine = Machine::new(listed(&[("Theirs", "user", None), ("Quick", "built-in", None)]));
 
         let synced = sync(&machine, "vps", &sending(&["Duo"]));
 
         let asked = machine.asked();
         assert_eq!(
             asked.iter().map(|asked| asked["command"].clone()).collect::<Vec<_>>(),
-            ["flow-list", "flow-import", "flow-hide"]
+            ["flow-list", "flow-import"]
         );
         assert_eq!(asked[1]["args"]["text"], "name = \"Duo\"");
         assert_eq!(asked[1]["args"]["place"], "yours");
         assert_eq!(asked[1]["args"]["replace"], true);
         assert_eq!(asked[1]["args"]["synced_from"], "laptop");
-        assert_eq!(asked[2]["args"]["name"], "Arena");
-        assert_eq!((synced.report.sent, synced.report.hidden), (vec!["Duo".to_string()], vec!["Arena".to_string()]));
-        assert!(synced.started.is_some());
+        assert_eq!(synced.sent, ["Duo"]);
     }
 
     #[test]
     fn lists_a_refused_flow_with_why_and_goes_on() {
-        let mut machine = Machine::new(listed(&[], &["Arena"]));
-        machine.refuses = Some("flow-import");
+        let mut machine = Machine::new(listed(&[]));
+        machine.refuses = Some(("flow-import", "the flow cannot run: no roles"));
 
         let synced = sync(&machine, "vps", &sending(&["Duo", "Pair"]));
 
-        let failed: Vec<(&str, &str)> =
-            synced.report.failed.iter().map(|f| (f.name.as_str(), f.error.as_str())).collect();
+        let failed: Vec<(&str, &str)> = synced.failed.iter().map(|f| (f.name.as_str(), f.error.as_str())).collect();
         assert_eq!(failed, [("Duo", "the flow cannot run: no roles"), ("Pair", "the flow cannot run: no roles")]);
         assert_eq!(machine.asked().len(), 3);
     }
@@ -129,45 +114,43 @@ mod a_sync {
     fn of_a_machine_out_of_reach_says_why_and_sends_nothing() {
         let synced = sync(&Once(Mutex::new(None)), "vps", &sending(&["Duo"]));
 
-        assert!(synced.report.error.is_some_and(|error| error.contains("Connection refused")));
-        assert_eq!((synced.report.sent.len(), synced.started), (0, None));
+        assert!(synced.error.is_some_and(|error| error.contains("Connection refused")));
+        assert_eq!(synced.sent.len(), 0);
     }
 
     #[test]
     fn leaves_a_flow_saved_there_later_and_counts_the_same_ones() {
-        let machine = Machine::new(listed(
-            &[("Duo", "user", Some("2026-11-20T10:00:00.000Z")), ("Pair", "user", None)],
-            &["Arena"],
-        ));
+        let machine =
+            Machine::new(listed(&[("Duo", "user", Some("2026-11-20T10:00:00.000Z")), ("Pair", "user", None)]));
         let mut sending = sending(&["Duo", "Pair"]);
-        sending.ours.flows[1].spec = spec("Pair");
+        sending.flows[1].spec = spec("Pair");
 
         let synced = sync(&machine, "vps", &sending);
 
-        assert_eq!((synced.report.kept, synced.report.same), (vec!["Duo".to_string()], 1));
-        assert_eq!(synced.same, [("Pair".to_string(), None)]);
+        assert_eq!((synced.kept, synced.same), (vec!["Duo".to_string()], 1));
         assert_eq!(machine.asked().len(), 1);
     }
-}
-
-mod a_refused_deletion {
-    use super::*;
 
     #[test]
-    fn is_kept_to_be_sent_again_and_the_round_still_counts() {
-        let mut machine = Machine::new(listed(&[("Old", "user", None)], &["Arena"]));
-        machine.refuses = Some("flow-delete");
-        let mut sending = sending(&[]);
-        let deleted =
-            Event { name: "Old".into(), change: sync::Change::Deleted, at: "2026-11-20T10:00:00.000Z".into() };
-        sending.ours.events = vec![deleted.clone()];
-        sending.ours.synced = Some(SystemTime::UNIX_EPOCH);
+    fn counts_a_flow_saved_there_while_it_ran_as_kept() {
+        let mut machine = Machine::new(listed(&[]));
+        machine.refuses = Some(("flow-import", sync::NEWER_HERE));
+
+        let synced = sync(&machine, "vps", &sending(&["Duo"]));
+
+        assert_eq!((synced.kept, synced.failed.len()), (vec!["Duo".to_string()], 0));
+    }
+
+    #[test]
+    fn reports_the_flows_left_out_here_as_failed() {
+        let machine = Machine::new(listed(&[]));
+        let mut sending = sending(&["Duo"]);
+        sending.left_out = vec![FlowSyncFailure { name: "Huge".into(), error: "it is too large".into() }];
 
         let synced = sync(&machine, "vps", &sending);
 
-        assert_eq!(synced.retry, [deleted]);
-        assert_eq!(synced.started, Some(sending.started));
-        assert_eq!(synced.report.failed.len(), 1);
+        assert_eq!(synced.sent, ["Duo"]);
+        assert_eq!(synced.failed, sending.left_out);
     }
 }
 

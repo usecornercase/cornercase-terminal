@@ -1,5 +1,5 @@
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant, SystemTime};
+use std::time::SystemTime;
 
 use super::App;
 use super::control::machines::unknown;
@@ -8,42 +8,25 @@ use super::event::AppEvent;
 use super::machine_links::MachineEvent;
 use super::toast::Toast;
 use crate::control::contract::{Code, Refusal};
-use crate::control::{FlowSpec, FlowSync, FlowsSynced, MachineFlows};
-use crate::flows::dialog::SyncShown;
-use crate::flows::store::{self, Folder, Origin};
-use crate::flows::sync::{self, Change, Journal, Ours};
+use crate::control::{FlowSpec, FlowSync, FlowSyncFailure, FlowsSynced, MachineFlows};
+use crate::flows::store::{self, Folder, Listing, Origin, Saved};
+use crate::flows::sync::{self, Held};
 use crate::flows::{Flow, share};
 use crate::host;
 use crate::log::{self, Job, Level};
-use crate::machines::flows::{self as sending, Sending, Synced};
+use crate::machines::flows::{self as sending, Sending};
 use crate::machines::{self, State};
 use crate::paths;
 use crate::time::Stamp;
 use crate::ui;
 
-const RETRY_FIRST: Duration = Duration::from_secs(30);
-const RETRY_MOST: Duration = Duration::from_secs(600);
-const NONE_LINKED: &str = "no machine that syncs your flows is linked now: they get them when their link comes back";
-
-pub(super) const NONE_SYNC: &str = "no machine syncs your flows: tick `sync your flows to it` in Settings › Machines, or `cornercase machines edit NAME --sync-flows`";
+const NONE_LINKED: &str =
+    "no machine to sync your flows to: add one in Settings › Machines, or `cornercase machines add`";
 
 #[derive(Default)]
 pub(super) struct Syncing {
-    peers: Vec<Peer>,
     waiters: Vec<Waiter>,
-    journal: Option<PathBuf>,
-}
-
-struct Peer {
-    destination: String,
-    linked: bool,
-    running: bool,
-    again: bool,
-    rounds: u64,
-    same: Vec<(String, Option<SystemTime>)>,
-    last: Option<MachineFlows>,
-    failures: u32,
-    retry_at: Option<Instant>,
+    next: u64,
 }
 
 enum Answer {
@@ -52,36 +35,33 @@ enum Answer {
 }
 
 struct Waiter {
+    id: u64,
     answer: Answer,
-    wanted: Vec<(String, String, u64)>,
+    pending: usize,
+    reports: Vec<MachineFlows>,
+}
+
+struct Started {
+    id: u64,
+    machines: Vec<String>,
     reports: Vec<MachineFlows>,
 }
 
 impl Syncing {
-    #[cfg(test)]
-    pub(super) fn rounds(&self, destination: &str) -> u64 {
-        self.peer(destination).map_or(0, |peer| peer.rounds)
+    fn wait(&mut self, started: Started, answer: Answer) {
+        if matches!(answer, Answer::Window(_)) {
+            self.waiters.retain(|waiter| !matches!(waiter.answer, Answer::Window(_)));
+        }
+        let Started { id, machines, reports } = started;
+        self.waiters.push(Waiter { id, answer, pending: machines.len(), reports });
     }
 
-    fn peer(&self, destination: &str) -> Option<&Peer> {
-        self.peers.iter().find(|peer| peer.destination == destination)
-    }
-
-    fn peer_mut(&mut self, destination: &str) -> Option<&mut Peer> {
-        self.peers.iter_mut().find(|peer| peer.destination == destination)
-    }
-
-    fn done(&self, destination: &str, round: u64) -> bool {
-        self.peer(destination).is_none_or(|peer| peer.rounds >= round)
-    }
-
-    fn report(&self, destination: &str, name: &str) -> MachineFlows {
-        let gone = || MachineFlows {
-            machine: name.into(),
-            error: Some(format!("{name} no longer syncs your flows")),
-            ..MachineFlows::default()
-        };
-        self.peer(destination).and_then(|peer| peer.last.clone()).unwrap_or_else(gone)
+    fn settled(&mut self, id: u64, report: MachineFlows) -> Option<Waiter> {
+        let at = self.waiters.iter().position(|waiter| waiter.id == id)?;
+        let waiter = &mut self.waiters[at];
+        waiter.reports.push(report);
+        waiter.pending = waiter.pending.saturating_sub(1);
+        (waiter.pending == 0).then(|| self.waiters.remove(at))
     }
 }
 
@@ -89,22 +69,9 @@ pub(super) fn stamp_now() -> String {
     Stamp(SystemTime::now()).to_string()
 }
 
-fn syncing_machines(machines: &[machines::Machine]) -> impl Iterator<Item = &machines::Machine> {
-    machines::linked(machines).filter(|machine| machine.sync_flows)
-}
-
 impl App {
     pub(super) fn yours_flows(&self) -> PathBuf {
         paths::flows(self.config_file.path())
-    }
-
-    pub(crate) fn set_flow_journal(&mut self, path: PathBuf) {
-        self.machines.flows.journal = Some(path);
-    }
-
-    fn flow_journal(&self) -> PathBuf {
-        let beside_config = || self.config_file.path().with_file_name("flow-sync.json");
-        self.machines.flows.journal.clone().unwrap_or_else(beside_config)
     }
 
     pub(super) fn folder_of(&self, dir: &Path) -> Folder {
@@ -117,35 +84,8 @@ impl App {
         Flow { changed, ..flow.clone() }
     }
 
-    pub(super) fn journal_flow(&self, name: &str, change: Option<Change>) {
-        let path = self.flow_journal();
-        let mut journal = Journal::read(&path);
-        let changed = match change {
-            Some(change) => {
-                journal.record(name, change, &stamp_now());
-                true
-            }
-            None => journal.forget(name),
-        };
-        if changed && let Err(e) = journal.write(&path) {
-            log::warning!("flows", "the flows' sync journal could not be saved", why = e);
-        }
-    }
-
-    pub(super) fn journal_saved(&mut self, dir: &Path, flow: &Flow, previous: Option<(&Path, &str)>) {
-        let yours = self.yours_flows();
-        let left = previous.filter(|(path, old)| {
-            path.parent() == Some(&yours) && (dir != yours || !store::same_name(old, &flow.name))
-        });
-        if let Some((_, old)) = left {
-            self.journal_flow(old, Some(Change::Deleted));
-        }
-        if dir == yours {
-            self.journal_flow(&flow.name, None);
-        }
-        if left.is_some() || dir == yours {
-            self.flows_changed_here();
-        }
+    pub(super) fn flow_sync_machines(&self) -> Vec<String> {
+        machines::linked(&self.config.machines).map(|machine| machine.name.clone()).collect()
     }
 
     pub(super) fn save_imported(
@@ -157,22 +97,19 @@ impl App {
     ) -> Result<PathBuf, String> {
         let yours = dir == self.yours_flows();
         let before = replaced.and_then(|path| store::read(path).ok());
-        let flow = match from {
-            Some(_) if yours => kept_time(flow),
-            _ => self.stamped(dir, flow),
-        };
+        let synced = from.filter(|_| yours);
+        let flow = if synced.is_some() { kept_time(flow) } else { self.stamped(dir, flow) };
+        if synced.is_some() && before.as_ref().is_some_and(|before| newer_than(before, &flow)) {
+            return Err(sync::NEWER_HERE.into());
+        }
         let saved = store::save_in(dir, &flow, replaced, self.folder_of(dir))
             .map_err(|e| format!("could not save the flow: {e}"))?;
-        if yours {
-            self.journal_flow(&flow.name, None);
-            let arrived = match &before {
-                Some(before) => (FlowSpec::from(before) != FlowSpec::from(&flow)).then_some(Arrival::Replaced),
-                None => Some(Arrival::New),
-            };
-            if let (Some(from), Some(arrived)) = (from, arrived) {
-                self.arrived_from(&flow.name, from, arrived);
-            }
-            self.flows_changed_here();
+        let arrived = match &before {
+            Some(before) => (FlowSpec::from(before) != FlowSpec::from(&flow)).then_some(Arrival::Replaced),
+            None => Some(Arrival::New),
+        };
+        if let (Some(from), Some(arrived)) = (synced, arrived) {
+            self.arrived_from(&flow.name, from, arrived);
         }
         Ok(saved)
     }
@@ -184,11 +121,11 @@ impl App {
         let message = match arrived {
             Arrival::Replaced => {
                 log::info!("flows", "flow replaced by a sync", name = name, from = from);
-                format!("{name} was replaced by {whose} copy: your flows sync from there")
+                format!("{name} was replaced by {whose} copy: it synced its flows here")
             }
             Arrival::New => {
                 log::info!("flows", "flow added by a sync", name = name, from = from);
-                format!("{name} arrived from {whose} flows: your flows sync from there")
+                format!("{name} arrived from {whose} flows: it synced them here")
             }
         };
         let mut toast = Toast::new(message, ui::ToastIcon::Check);
@@ -196,287 +133,117 @@ impl App {
         self.messages.toast = Some(toast);
     }
 
-    pub(super) fn journal_deleted(&mut self, path: &Path, name: Option<&str>) {
-        if path.parent() != Some(&self.yours_flows()) {
-            return;
-        }
-        if let Some(name) = name {
-            self.journal_flow(name, Some(Change::Deleted));
-        }
-        self.flows_changed_here();
-    }
-
-    pub(super) fn sync_shown(&self, listing: &store::Listing) -> SyncShown {
-        let synced = listing
-            .flows
-            .iter()
-            .filter(|saved| matches!(saved.origin, Origin::User(_)))
-            .map(|saved| (saved.flow.name.clone(), self.flow_synced_to(&saved.flow)))
-            .filter(|(_, machines)| !machines.is_empty())
-            .collect();
-        SyncShown { machines: self.flow_sync_machines(), synced }
-    }
-
-    pub(super) fn flows_sync_now(&mut self) {
-        self.follow_machines();
-        self.follow_flow_sync();
-        let Ok(targets) = self.flow_sync_targets(None) else { return self.flows_notice(NONE_SYNC.into()) };
-        let mut waiter = self.flow_sync_waiter(targets, Answer::Window(String::new()));
-        if waiter.wanted.is_empty() {
-            return self.flows_notice(NONE_LINKED.into());
-        }
-        let names: Vec<&str> = waiter.wanted.iter().map(|(_, name, _)| name.as_str()).collect();
-        let sending = format!("sending your flows to {}…", names.join(", "));
-        waiter.answer = Answer::Window(sending.clone());
-        let waiters = &mut self.machines.flows.waiters;
-        waiters.retain(|waiter| !matches!(waiter.answer, Answer::Window(_)));
-        waiters.push(waiter);
-        self.flows_notice(sending);
-    }
-
-    fn flows_sync_shown(&mut self, sending: &str, machines: &[MachineFlows]) {
-        let outcome: Vec<String> = machines.iter().map(MachineFlows::line).collect();
-        if let Some(dialog) = self.flows_dialog()
-            && dialog.notice.as_deref() == Some(sending)
-        {
-            dialog.notice = Some(outcome.join("; "));
-        }
-    }
-
-    pub(super) fn retry_flow_sync(&mut self, now: Instant) {
-        let mut due = Vec::new();
-        let waiting =
-            self.machines.flows.peers.iter_mut().filter(|peer| peer.failures > 0 && peer.linked && !peer.running);
-        for peer in waiting {
-            let at = *peer.retry_at.get_or_insert_with(|| now + retry_delay(peer.failures));
-            if at <= now {
-                peer.retry_at = None;
-                due.push(peer.destination.clone());
-            }
-        }
-        for destination in due {
-            self.start_flow_sync(&destination);
-        }
-    }
-
-    pub(super) fn flows_changed_here(&mut self) {
-        let linked: Vec<String> =
-            self.machines.flows.peers.iter().filter(|peer| peer.linked).map(|peer| peer.destination.clone()).collect();
-        for destination in linked {
-            self.start_flow_sync(&destination);
-        }
-    }
-
-    pub(super) fn follow_flow_sync(&mut self) {
-        let wanted: Vec<(String, bool)> = syncing_machines(&self.config.machines)
-            .map(|machine| (machine.destination.clone(), self.linked_destination(&machine.destination)))
-            .collect();
-        let syncing = &mut self.machines.flows;
-        syncing.peers.retain(|peer| wanted.iter().any(|(destination, _)| *destination == peer.destination));
-        let mut rose = Vec::new();
-        for (destination, linked) in wanted {
-            if syncing.peer(&destination).is_none() {
-                syncing.peers.push(Peer {
-                    destination: destination.clone(),
-                    linked: false,
-                    running: false,
-                    again: false,
-                    rounds: 0,
-                    same: Vec::new(),
-                    last: None,
-                    failures: 0,
-                    retry_at: None,
-                });
-            }
-            let Some(peer) = syncing.peer_mut(&destination) else { continue };
-            if linked && !peer.linked {
-                rose.push(destination);
-            }
-            peer.linked = linked;
-        }
-        for destination in rose {
-            self.start_flow_sync(&destination);
-        }
-        self.answer_flow_waiters();
-    }
-
-    fn linked_destination(&self, destination: &str) -> bool {
-        self.machines.held().iter().any(|held| held.destination == destination && held.status.state == State::Linked)
-    }
-
-    fn start_flow_sync(&mut self, destination: &str) -> Option<u64> {
-        if !syncing_machines(&self.config.machines).any(|machine| machine.destination == destination) {
-            return None;
-        }
-        let held = self.machines.held().iter().find(|held| held.destination == destination)?;
-        if held.status.state != State::Linked {
-            return None;
-        }
-        let name = held.name.clone();
-        let peer = self.machines.flows.peer_mut(destination)?;
-        if peer.running {
-            peer.again = true;
-            return Some(peer.rounds + 2);
-        }
-        peer.running = true;
-        let round = peer.rounds + 1;
-        let started = SystemTime::now();
-        let (ours, texts) = self.flows_to_send(destination, started);
-        let connect = self.machines.connector(destination);
-        let there = destination.to_string();
-        let job = Job::new(Level::Info, "flows", "sync").with("machine", &name);
-        let asked = name.clone();
-        let work = move || {
-            let sending = Sending { ours, texts, from: host::name::computer(), started };
-            Ok(sending::sync(connect.as_ref(), &asked, &sending))
+    pub(super) fn flows_sync_now(&mut self, name: Option<String>) {
+        let request = FlowSync { machine: None, name };
+        let started = match self.start_flow_sync(&request) {
+            Ok(started) => started,
+            Err(refusal) => return self.flows_notice(refusal.message),
         };
-        self.spawn_job(job, work, move |result, _| {
-            let synced = result.unwrap_or_else(|error| Synced {
-                report: MachineFlows { machine: name, error: Some(error.to_string()), ..MachineFlows::default() },
-                ..Synced::default()
-            });
-            Some(AppEvent::Machine(MachineEvent::FlowsSynced { destination: there, synced: Box::new(synced) }))
-        });
-        Some(round)
-    }
-
-    fn flows_to_send(&self, destination: &str, now: SystemTime) -> (Ours<FlowSpec>, Vec<(String, String)>) {
-        let listing = self.flow_listing(None);
-        let journal = Journal::read(&self.flow_journal());
-        let mut flows = Vec::new();
-        let mut texts = Vec::new();
-        for saved in listing.flows.iter().filter(|saved| matches!(saved.origin, Origin::User(_))) {
-            let flow = in_the_present(saved, now);
-            let Ok(text) = share::to_share(&flow) else { continue };
-            let changed = flow.changed.as_deref().and_then(Stamp::parse);
-            flows.push(sync::Held { name: flow.name.clone(), changed, spec: FlowSpec::from(&flow) });
-            texts.push((flow.name.clone(), text));
+        if started.machines.is_empty() {
+            return self.flows_notice(outcome(&started.reports));
         }
-        let synced = journal.synced(destination);
-        let retry = journal.retry.get(destination).cloned().unwrap_or_default();
-        let hidden = self.config.hidden_flows.clone();
-        let ours = Ours { flows, hidden, events: journal.events, synced, retry };
-        (ours, texts)
-    }
-
-    pub(super) fn flows_synced(&mut self, destination: &str, synced: Synced) {
-        let report = hidden_report(synced.report, destination);
-        log_report(&report);
-        let failed = report.error.is_some() || !report.failed.is_empty();
-        if let Some(started) = synced.started {
-            let path = self.flow_journal();
-            let mut journal = Journal::read(&path);
-            journal.round_ended(destination, started, synced.retry);
-            if let Err(e) = journal.write(&path) {
-                log::warning!("flows", "the flows' sync journal could not be saved", why = e);
-            }
-        }
-        let Some(peer) = self.machines.flows.peer_mut(destination) else { return self.answer_flow_waiters() };
-        peer.running = false;
-        peer.rounds += 1;
-        peer.failures = if failed { peer.failures.saturating_add(1) } else { 0 };
-        peer.retry_at = None;
-        if synced.started.is_some() {
-            peer.same = synced.same;
-        }
-        peer.last = Some(report);
-        let again = std::mem::take(&mut peer.again);
-        if again {
-            self.start_flow_sync(destination);
-        }
-        self.answer_flow_waiters();
-        self.refresh_flows();
-    }
-
-    fn answer_flow_waiters(&mut self) {
-        let waiters = std::mem::take(&mut self.machines.flows.waiters);
-        for waiter in waiters {
-            if !waiter.wanted.iter().all(|(destination, _, round)| self.flow_round_settled(destination, *round)) {
-                self.machines.flows.waiters.push(waiter);
-                continue;
-            }
-            let mut machines = waiter.reports;
-            machines.extend(
-                waiter.wanted.iter().map(|(destination, name, round)| self.round_report(destination, name, *round)),
-            );
-            match waiter.answer {
-                Answer::Request(key) => self.answer_read(key, move |_| Ok(json(&FlowsSynced { machines }))),
-                Answer::Window(sending) => self.flows_sync_shown(&sending, &machines),
-            }
-        }
-    }
-
-    fn flow_round_settled(&self, destination: &str, round: u64) -> bool {
-        let syncing = &self.machines.flows;
-        let idle = syncing.peer(destination).is_some_and(|peer| !peer.running);
-        syncing.done(destination, round) || (idle && !self.linked_destination(destination))
-    }
-
-    fn round_report(&self, destination: &str, name: &str, round: u64) -> MachineFlows {
-        if self.machines.flows.done(destination, round) {
-            return self.machines.flows.report(destination, name);
-        }
-        let why = self.not_linked(name, destination);
-        let error = Some(format!("{why}: your flows go there when its link comes back"));
-        MachineFlows { machine: name.into(), error, ..MachineFlows::default() }
-    }
-
-    pub(super) fn flow_synced_to(&self, flow: &Flow) -> Vec<String> {
-        let changed = flow.changed.as_deref().and_then(Stamp::parse);
-        let held =
-            |peer: &Peer| peer.same.iter().any(|(name, at)| store::same_name(name, &flow.name) && *at == changed);
-        syncing_machines(&self.config.machines)
-            .filter(|machine| self.machines.flows.peer(&machine.destination).is_some_and(held))
-            .map(|machine| machine.name.clone())
-            .collect()
-    }
-
-    pub(super) fn flow_sync_machines(&self) -> Vec<String> {
-        syncing_machines(&self.config.machines).map(|machine| machine.name.clone()).collect()
+        let what = request.name.as_deref().map_or_else(|| "your flows".into(), |name| share::visible(name.trim()));
+        let notice = format!("sending {what} to {}…", started.machines.join(", "));
+        self.machines.flows.wait(started, Answer::Window(notice.clone()));
+        self.flows_notice(notice);
     }
 
     pub(super) fn flow_sync_request(&mut self, client: u64, request: &FlowSync) -> Handled {
-        self.follow_machines();
-        self.follow_flow_sync();
-        let targets = self.flow_sync_targets(request.machine.as_deref())?;
-        let key = self.clients.requests.key();
-        let waiter = self.flow_sync_waiter(targets, Answer::Request(key));
-        if waiter.wanted.is_empty() {
-            return Ok(Some(json(&FlowsSynced { machines: waiter.reports })));
+        let started = self.start_flow_sync(request)?;
+        if started.machines.is_empty() {
+            return Ok(Some(json(&FlowsSynced { machines: started.reports })));
         }
-        self.machines.flows.waiters.push(waiter);
+        let key = self.clients.requests.key();
+        self.machines.flows.wait(started, Answer::Request(key));
         self.pend_reading(client, key);
         Ok(None)
     }
 
-    fn flow_sync_waiter(&mut self, targets: Vec<(String, String)>, answer: Answer) -> Waiter {
-        let mut waiter = Waiter { answer, wanted: Vec::new(), reports: Vec::new() };
+    fn start_flow_sync(&mut self, request: &FlowSync) -> Result<Started, Refusal> {
+        self.follow_machines();
+        let targets = self.flow_sync_targets(request.machine.as_deref())?;
+        let outgoing = self.flows_to_send(request.name.as_deref())?;
+        self.machines.flows.next += 1;
+        let mut started = Started { id: self.machines.flows.next, machines: Vec::new(), reports: Vec::new() };
         for (name, destination) in targets {
-            if let Some(round) = self.start_flow_sync(&destination) {
-                waiter.wanted.push((destination, name, round));
+            if self.linked_destination(&destination) {
+                self.send_flows(started.id, &name, &destination, outgoing.clone());
+                started.machines.push(name);
             } else {
                 let error = Some(self.not_linked(&name, &destination));
-                waiter.reports.push(MachineFlows { machine: name, error, ..MachineFlows::default() });
+                let failed = outgoing.left_out.clone();
+                started.reports.push(MachineFlows { machine: name, error, failed, ..MachineFlows::default() });
             }
         }
-        waiter
+        Ok(started)
+    }
+
+    fn send_flows(&self, waiter: u64, name: &str, destination: &str, outgoing: Sending) {
+        let connect = self.machines.connector(destination);
+        let job = Job::new(Level::Info, "flows", "sync").with("machine", name);
+        let (asked, machine, there) = (name.to_string(), name.to_string(), destination.to_string());
+        let work = move || {
+            let outgoing = Sending { from: host::name::computer(), ..outgoing };
+            Ok(sending::sync(connect.as_ref(), &asked, &outgoing))
+        };
+        self.spawn_job(job, work, move |result, _| {
+            let report = result.unwrap_or_else(|error| MachineFlows {
+                machine,
+                error: Some(error.to_string()),
+                ..MachineFlows::default()
+            });
+            Some(AppEvent::Machine(MachineEvent::FlowsSynced { waiter, destination: there, report: Box::new(report) }))
+        });
+    }
+
+    pub(super) fn flows_synced(&mut self, waiter: u64, destination: &str, report: MachineFlows) {
+        let report = hidden_report(report, destination);
+        log_report(&report);
+        let Some(mut waiter) = self.machines.flows.settled(waiter, report) else { return };
+        let order = |report: &MachineFlows| self.config.machines.iter().position(|m| m.name == report.machine);
+        waiter.reports.sort_by_key(order);
+        let machines = waiter.reports;
+        match waiter.answer {
+            Answer::Request(key) => self.answer_read(key, move |_| Ok(json(&FlowsSynced { machines }))),
+            Answer::Window(sending) => self.flows_sync_shown(&sending, &machines),
+        }
+    }
+
+    fn flows_sync_shown(&mut self, sending: &str, machines: &[MachineFlows]) {
+        if let Some(dialog) = self.flows_dialog()
+            && dialog.notice.as_deref() == Some(sending)
+        {
+            dialog.notice = Some(outcome(machines));
+        }
+    }
+
+    fn flows_to_send(&self, name: Option<&str>) -> Result<Sending, Refusal> {
+        let listing = self.flow_listing(None);
+        let wanted = |saved: &&Saved| name.is_none_or(|name| store::same_name(&saved.flow.name, name));
+        let yours: Vec<&Saved> =
+            listing.flows.iter().filter(|saved| matches!(saved.origin, Origin::User(_))).filter(wanted).collect();
+        if let Some(name) = name
+            && yours.is_empty()
+        {
+            return Err(not_yours(&listing, name));
+        }
+        let now = SystemTime::now();
+        let mut outgoing = Sending::default();
+        for saved in yours {
+            add_flow(&mut outgoing, saved, now);
+        }
+        Ok(outgoing)
     }
 
     fn flow_sync_targets(&self, machine: Option<&str>) -> Result<Vec<(String, String)>, Refusal> {
-        let all: Vec<(String, String)> = syncing_machines(&self.config.machines)
+        let all: Vec<(String, String)> = machines::linked(&self.config.machines)
             .map(|machine| (machine.name.clone(), machine.destination.clone()))
             .collect();
         let Some(asked) = machine.map(str::trim) else {
-            return if all.is_empty() { Err(conflict(NONE_SYNC)) } else { Ok(all) };
+            return if all.is_empty() { Err(conflict(NONE_LINKED)) } else { Ok(all) };
         };
         let listed = self.config.machines.iter().find(|listed| listed.name.eq_ignore_ascii_case(asked));
         let Some(listed) = listed else { return Err(unknown(asked)) };
-        if !listed.sync_flows {
-            let name = &listed.name;
-            return Err(conflict(format!(
-                "{name} does not sync your flows: tick `sync your flows to it` in its form in Settings › Machines, or `cornercase machines edit {name} --sync-flows`"
-            )));
-        }
         let found = all.into_iter().find(|(name, _)| name.eq_ignore_ascii_case(asked));
         let name = &listed.name;
         let why = || {
@@ -487,6 +254,10 @@ impl App {
             }
         };
         found.map(|found| vec![found]).ok_or_else(|| Refusal::new(Code::NotFound, why()))
+    }
+
+    fn linked_destination(&self, destination: &str) -> bool {
+        self.machines.held().iter().any(|held| held.destination == destination && held.status.state == State::Linked)
     }
 
     fn not_linked(&self, name: &str, destination: &str) -> String {
@@ -504,9 +275,35 @@ enum Arrival {
     Replaced,
 }
 
-fn retry_delay(failures: u32) -> Duration {
-    let doubled = 2u32.saturating_pow(failures.saturating_sub(1).min(16));
-    RETRY_FIRST.saturating_mul(doubled).min(RETRY_MOST)
+fn changed_at(flow: &Flow) -> Option<SystemTime> {
+    flow.changed.as_deref().and_then(Stamp::parse)
+}
+
+fn newer_than(here: &Flow, arriving: &Flow) -> bool {
+    sync::newer(changed_at(here), changed_at(arriving))
+}
+
+fn not_yours(listing: &Listing, name: &str) -> Refusal {
+    let shown = share::visible(name.trim());
+    let built_in = listing.flows.iter().any(|saved| store::same_name(&saved.flow.name, name));
+    if built_in {
+        return conflict(format!(
+            "{shown} is a built-in flow you did not change: only your own flows sync, edited built-ins included"
+        ));
+    }
+    Refusal::new(Code::NotFound, format!("no flow of yours is named {shown}: `cornercase flow list` lists them"))
+}
+
+fn add_flow(outgoing: &mut Sending, saved: &Saved, now: SystemTime) {
+    let name = saved.flow.name.clone();
+    let text = in_the_present(saved, now).and_then(|flow| share::to_share(&flow).map(|text| (flow, text)));
+    match text {
+        Ok((flow, text)) => {
+            outgoing.flows.push(Held { name: name.clone(), changed: changed_at(&flow), spec: FlowSpec::from(&flow) });
+            outgoing.texts.push((name, text));
+        }
+        Err(error) => outgoing.left_out.push(FlowSyncFailure { name, error }),
+    }
 }
 
 fn present(flow: &Flow, now: SystemTime) -> Option<Flow> {
@@ -520,16 +317,18 @@ fn kept_time(flow: &Flow) -> Flow {
     fixed
 }
 
-fn in_the_present(saved: &store::Saved, now: SystemTime) -> Flow {
-    let (Some(fixed), Some(path)) = (present(&saved.flow, now), saved.origin.path()) else {
-        return saved.flow.clone();
-    };
+fn in_the_present(saved: &Saved, now: SystemTime) -> Result<Flow, String> {
+    let Some(fixed) = present(&saved.flow, now) else { return Ok(saved.flow.clone()) };
+    let ahead = "its time is ahead of this computer's clock and could not be fixed";
+    let path = saved.origin.path().ok_or_else(|| ahead.to_string())?;
     let dir = path.parent().unwrap_or(path);
-    match store::save_in(dir, &fixed, Some(path), Folder::Yours) {
-        Ok(_) => log::warning!("flows", "a flow's time is in the future: it is saved with this computer's time"),
-        Err(e) => log::warning!("flows", "a flow's time in the future could not be fixed", why = e),
-    }
-    fixed
+    store::save_in(dir, &fixed, Some(path), Folder::Yours).map_err(|e| format!("{ahead}: {e}"))?;
+    log::warning!("flows", "a flow's time is in the future: it is saved with this computer's time");
+    Ok(fixed)
+}
+
+fn outcome(machines: &[MachineFlows]) -> String {
+    machines.iter().map(MachineFlows::line).collect::<Vec<_>>().join("; ")
 }
 
 fn hidden_report(mut report: MachineFlows, destination: &str) -> MachineFlows {
@@ -544,16 +343,11 @@ fn hidden_report(mut report: MachineFlows, destination: &str) -> MachineFlows {
 
 fn log_report(report: &MachineFlows) {
     let machine = &report.machine;
-    let changes = [
-        ("sent", &report.sent),
-        ("deleted", &report.deleted),
-        ("hidden", &report.hidden),
-        ("restored", &report.restored),
-    ];
-    for (change, names) in changes {
-        for name in names {
-            log::info!("flows", "flow synced", machine = machine, name = name, change = change);
-        }
+    for name in &report.sent {
+        log::info!("flows", "flow synced", machine = machine, name = name);
+    }
+    for name in &report.kept {
+        log::info!("flows", "flow kept newer there", machine = machine, name = name);
     }
     for failed in &report.failed {
         log::warning!("flows", "flow not synced", machine = machine, name = failed.name, why = failed.error);

@@ -815,17 +815,6 @@ mod machines {
     }
 
     #[test]
-    fn keep_sync_flows_in_the_file_only_while_it_is_on() {
-        let synced = Machine { sync_flows: true, ..vps() };
-        let config = Config { machines: vec![synced], ..Config::default() };
-
-        let (_dir, path, text) = saved(&config);
-
-        assert!(text.contains("\"sync_flows\": true"), "{text}");
-        assert_eq!(load(&path), config);
-    }
-
-    #[test]
     fn an_invalid_entry_keeps_the_file_readable_and_is_written_back() {
         let dir = TempDir::new();
         let path = dir.path().join("config.json");

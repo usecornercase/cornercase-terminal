@@ -250,10 +250,6 @@ pub(crate) fn tunnels(session: &Path) -> PathBuf {
     session.with_file_name("tunnels.json")
 }
 
-pub(crate) fn flow_sync(session: &Path) -> PathBuf {
-    session.with_file_name("flow-sync.json")
-}
-
 pub(crate) fn star(session: &Path) -> PathBuf {
     session.with_file_name("star.json")
 }
