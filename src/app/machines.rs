@@ -8,11 +8,20 @@ use crate::log;
 use crate::machines::{self, form::Form};
 use crate::protocol::{MachineOrder, Machines, Tunnel, TunnelOrder, TunnelState};
 use crate::settings;
+use crate::text;
+
+mod shown;
+
+pub(super) use shown::change_shown;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum MachineItem {
     Here,
     To(u16),
+    Menu(u16),
+    Show(u16, bool),
+    OnlyHere,
+    ShowAll,
     Add,
     Manage,
     Tunnel(u16),
@@ -87,10 +96,17 @@ impl App {
         }
         let count = u16::try_from(menu.len()).unwrap_or(u16::MAX);
         self.opening.machines.menu = menu;
-        let own = here.is_none().then_some([MachineItem::Add, MachineItem::Manage]).into_iter().flatten();
+        let (machine, all): (fn(u16) -> MachineItem, &[MachineItem]) = match (&here, count) {
+            (Some(_), _) => (MachineItem::To, &[]),
+            (None, 0) => (MachineItem::Menu, &[MachineItem::Add, MachineItem::Manage]),
+            (None, _) => (
+                MachineItem::Menu,
+                &[MachineItem::OnlyHere, MachineItem::ShowAll, MachineItem::Add, MachineItem::Manage],
+            ),
+        };
         let actions = std::iter::once(MachineItem::Here)
-            .chain((0..count).map(MachineItem::To))
-            .chain(own)
+            .chain((0..count).map(machine))
+            .chain(all.iter().copied())
             .chain(self.shown_tunnels().iter().map(|tunnel| MachineItem::Tunnel(tunnel.port)))
             .map(MenuAction::Machine)
             .collect();
@@ -103,15 +119,46 @@ impl App {
         let mark = |name: Option<&str>| if name == here { "✓" } else { " " };
         Some(match item {
             MachineItem::Here => format!("{} {}", mark(None), machines::HERE),
+            MachineItem::To(_) if here.is_none() => "open the window there".into(),
             MachineItem::To(index) => {
                 let name = self.menu_machine(index).unwrap_or_default();
                 format!("{} {name}", mark(Some(name)))
             }
+            MachineItem::Menu(index) => self.machine_row_label(index),
+            MachineItem::Show(_, true) => "show its work here ·".into(),
+            MachineItem::Show(_, false) => "show its work here ✓".into(),
+            MachineItem::OnlyHere => "only this computer".into(),
+            MachineItem::ShowAll => "show all".into(),
             MachineItem::Add => "add machine…".into(),
             MachineItem::Manage => "manage machines…".into(),
             MachineItem::Tunnel(port) => self.tunnel_row(port),
             MachineItem::TunnelDo(_, verb) => verb.label().into(),
         })
+    }
+
+    fn machine_row_label(&self, index: u16) -> String {
+        let longest = self.opening.machines.menu.iter().map(|name| text::cells(name)).max().unwrap_or_default();
+        format!("  {} ▸", text::pad_cells(self.menu_machine(index).unwrap_or_default(), longest))
+    }
+
+    fn shown_now(&self, index: u16) -> Option<bool> {
+        let name = self.menu_machine(index)?;
+        machines::accepted(&self.config.machines).find(|machine| machine.name == name).map(|machine| machine.shown)
+    }
+
+    fn open_machine_menu(&mut self, index: u16, at: Position) {
+        let Some(shown) = self.shown_now(index) else { return };
+        let actions = [MachineItem::Show(index, !shown), MachineItem::To(index)].map(MenuAction::Machine).to_vec();
+        self.overlay = Some(Overlay::Menu { at, actions });
+    }
+
+    pub(super) fn machine_disabled(&self, action: MenuAction) -> bool {
+        let wanted = match action {
+            MenuAction::Machine(MachineItem::OnlyHere) => false,
+            MenuAction::Machine(MachineItem::ShowAll) => true,
+            _ => return false,
+        };
+        machines::accepted(&self.config.machines).all(|machine| machine.shown == wanted)
     }
 
     fn tunnel_row(&self, port: u16) -> String {
@@ -165,6 +212,15 @@ impl App {
                     self.switch_machine(to);
                 }
             }
+            MachineItem::Menu(index) => self.open_machine_menu(index, at),
+            MachineItem::Show(index, shown) => {
+                if let Some(name) = self.menu_machine(index).map(str::to_string) {
+                    self.show_from_menu(Some(&name), shown);
+                }
+            }
+            MachineItem::OnlyHere | MachineItem::ShowAll if self.machine_disabled(MenuAction::Machine(item)) => {}
+            MachineItem::OnlyHere => self.show_from_menu(None, false),
+            MachineItem::ShowAll => self.show_from_menu(None, true),
             MachineItem::Add => {
                 self.screen.nav = None;
                 self.overlay = Some(Overlay::Machine(Box::new(Form::from_button())));

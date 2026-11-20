@@ -148,6 +148,11 @@ mod describing {
     }
 
     #[test]
+    fn hiding_and_showing_a_machine_is_a_feature() {
+        assert!(FEATURES.contains(&"machine-hide"));
+    }
+
+    #[test]
     fn merged_builds_is_a_feature() {
         assert!(FEATURES.contains(&"merged-builds"));
     }

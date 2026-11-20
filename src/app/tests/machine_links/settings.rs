@@ -78,6 +78,7 @@ fn every_state() -> Rig {
         Machine { icon: "◫".into(), ..machine("pi", "pi.lan") },
         machine("new", "new.lan"),
         machine("my vps", "box.lan"),
+        Machine { shown: false, ..machine("devbox", "devbox.lan") },
     ];
     let mut rig = Rig::new(machines, There::Missing);
     let states = [State::Linked, State::Unreachable, State::Older, State::Connecting];
@@ -220,7 +221,7 @@ mod the_page {
         let shown = rig.shown(NARROW);
 
         let row = shown.lines().find(|line| line.contains("vps")).expect("the machine's row");
-        assert!(row.contains("linked · 0.12.200  │"), "{row}");
+        assert!(row.contains("linked · 0.12.200  ✓"), "{row}");
     }
 
     #[test]
@@ -476,6 +477,62 @@ mod removing {
 
         let read = config::load(&rig.dir.path().join("config.json"));
         assert_eq!((read.machines, read.sidebar.as_str()), (Vec::new(), "tree"));
+    }
+}
+
+mod hiding {
+    use super::*;
+
+    fn toggle(rig: &mut Rig, row: &Row) {
+        let at = ui::settings_toggle(rig.row_at(row)).as_position();
+        click(&mut rig.app, at);
+    }
+
+    #[test]
+    fn a_shown_machine_s_toggle_hides_it_ends_its_link_and_opens_no_form() {
+        let mut rig = on_the_page(vec![machine("vps", "vps.lan")]);
+        assert_eq!(rig.links().len(), 1);
+
+        toggle(&mut rig, &Row::Machine(0));
+
+        assert_eq!(rig.saved(), [Machine { shown: false, ..machine("vps", "vps.lan") }]);
+        assert_eq!(rig.page().notice.as_deref(), Some("vps hidden: its server keeps running there"));
+        assert_eq!((rig.links(), rig.selected()), (Vec::<u64>::new(), Row::Machine(0)));
+        wait_until("its link ends", || rig.seen("end vps.lan") == 1);
+    }
+
+    #[test]
+    fn a_second_click_shows_it_and_links_it_again() {
+        let mut rig = on_the_page(vec![machine("vps", "vps.lan")]);
+        toggle(&mut rig, &Row::Machine(0));
+
+        toggle(&mut rig, &Row::Machine(0));
+
+        assert_eq!(rig.saved(), [machine("vps", "vps.lan")]);
+        assert_eq!(rig.page().notice.as_deref(), Some("vps shown here"));
+        assert_eq!((rig.links().len(), rig.seen("start vps.lan")), (1, 2));
+    }
+
+    #[test]
+    fn of_a_machine_removed_outside_writes_nothing_and_says_so() {
+        let mut rig = on_the_page(vec![machine("vps", "vps.lan")]);
+        let at = ui::settings_toggle(rig.row_at(&Row::Machine(0))).as_position();
+        write_config(rig.dir.path(), &Config { machines: vec![machine("pi", "pi.lan")], ..Config::default() });
+
+        click(&mut rig.app, at);
+
+        assert_eq!(rig.saved(), [machine("pi", "pi.lan")]);
+        assert_eq!(rig.page().notice.as_deref(), Some("vps is no longer on the list"));
+    }
+
+    #[test]
+    fn a_click_there_on_a_row_with_a_problem_opens_the_form() {
+        let mut rig = on_the_page(vec![machine("my vps", "vps.lan")]);
+
+        toggle(&mut rig, &Row::Machine(0));
+
+        assert!(matches!(rig.app.overlay, Some(Overlay::Machine(_))));
+        assert_eq!(rig.saved(), [machine("my vps", "vps.lan")]);
     }
 }
 

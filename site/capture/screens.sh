@@ -895,7 +895,7 @@ screen_settings_machines() {
   settings_open
   cc_click 'Machines'
   cc_wait 'this computer'
-  cc_wait 'not shown'
+  cc_wait 'show here ·'
   cc_wait 'linked ·' 30
   cc_wait 'older · 0.0.1'
   cc_wait 'not seen yet'

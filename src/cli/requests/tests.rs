@@ -315,6 +315,18 @@ mod streams {
         assert!(!seen.iter().any(|text| text.contains("\"set\"")), "{seen:?}");
     }
 
+    const HIDE: &str = r#"{"args": ["machines", "hide", "vps", "--json"]}"#;
+
+    #[test]
+    fn hiding_a_machine_is_refused_up_front_by_a_server_without_machine_hide() {
+        let (answer, seen) = in_a_view_on(HIDE, lacking("machine-hide"));
+
+        assert_eq!(answer.status, 1, "{answer:?}");
+        let error = answer.error.expect("an error");
+        assert!(error.contains("machine-hide") || error.contains("update cornercase"), "{error}");
+        assert!(!seen.iter().any(|text| text.contains("\"hide\"")), "{seen:?}");
+    }
+
     #[test]
     fn a_plain_machine_needs_no_feature() {
         let (answer, _) = in_a_view_on(PLAIN_ADD, lacking("machine-shown"));

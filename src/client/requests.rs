@@ -203,6 +203,10 @@ pub(crate) fn use_machine_shown() -> Result<()> {
     require("machine-shown", "cannot give a machine a command or add one that is not shown")
 }
 
+pub(crate) fn use_machine_hide() -> Result<()> {
+    require("machine-hide", "cannot hide or show a machine")
+}
+
 pub(crate) fn use_build_folders() -> Result<()> {
     require("build-folders", "cannot set a project's build folders")
 }

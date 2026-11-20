@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.106
+
+- **Hide a machine without removing it.** Each machine in Settings › Machines has a toggle, `show here ✓` or `show here ·`: one click hides it, so its link ends and nothing of it shows in your sidebar, the agents section or your notifications, and another click shows it again. Its entry stays on the list, and nothing stops on the machine: its server, shells and agents keep running there.
+- In the machine button, a machine opens a submenu: **show its work here** hides or shows it, and **open the window there** moves the window to it. **only this computer** hides every machine and **show all** shows them all.
+- `cornercase machines hide NAME|all` and `cornercase machines show NAME|all` do the same from a terminal or a script.
+- A hidden machine reads `hidden` (it read `not shown`).
+
 ## 0.13.105
 
 - **A link in a bot's answer now opens in your browser, after you confirm it.** A click on an `http://` or `https://` address shows **Open link**: who wrote it, the address (found whole in the answer you clicked even when the chat cut it across rows, and shown on up to three rows, ending in `…` past them) and where it goes, such as `goes to example.com`, with **copy**, **open** and **cancel**. **open** (or `Enter`) opens it in the browser of the window you clicked in. A bot's answer is text an agent wrote, so a click alone never opens it.

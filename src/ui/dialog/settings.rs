@@ -20,6 +20,8 @@ const LABEL_WIDTH: usize = 26;
 const TAIL_GAP: usize = 3;
 const STATE_ROOM: usize = 18;
 const HIT_WIDTH: usize = 44;
+const WIDE_TOGGLE_ROW: u16 = 96;
+const TOGGLE_TEXT: &str = "show here";
 const FIND_GLYPH: &str = " ⌕ ";
 const FIND_PROMPT: &str = "search settings";
 
@@ -128,6 +130,21 @@ pub(crate) fn settings_remove(row: Rect) -> Rect {
     row_close_button(row, 1)
 }
 
+fn toggle_width(row: u16) -> u16 {
+    if row >= WIDE_TOGGLE_ROW { 12 } else { 3 }
+}
+
+pub(crate) fn settings_toggle(row: Rect) -> Rect {
+    let close = settings_remove(row);
+    let width = toggle_width(row.width);
+    Rect::new(close.x.saturating_sub(width), row.y, width, 1).intersection(row)
+}
+
+fn toggle_text(shown: bool, row: u16) -> String {
+    let mark = if shown { '✓' } else { '·' };
+    if row >= WIDE_TOGGLE_ROW { format!(" {TOGGLE_TEXT} {mark}") } else { format!(" {mark} ") }
+}
+
 fn moves_beside(row: Rect, removable: bool) -> [Rect; 2] {
     let close = if removable { settings_remove(row).width } else { 0 };
     settings_moves(Rect { width: row.width.saturating_sub(close), ..row })
@@ -161,6 +178,7 @@ pub(crate) enum SettingsHit {
     Find,
     Row(usize),
     Remove(usize),
+    Toggle(usize),
     MoveUp(usize),
     MoveDown(usize),
     Pick(usize),
@@ -173,6 +191,7 @@ pub(crate) struct SettingsLayout<'a> {
     pub(crate) tabs: &'a [&'a str],
     pub(crate) sections: &'a [&'a str],
     pub(crate) removable: &'a [bool],
+    pub(crate) toggles: &'a [bool],
     pub(crate) movable: &'a [bool],
     pub(crate) cursor: usize,
     pub(crate) pick: Option<(usize, usize)>,
@@ -209,9 +228,17 @@ pub(in crate::ui) fn hit_in_rows(
 ) -> Option<SettingsHit> {
     let sections: Vec<&str> = rows.iter().map(|r| r.section).collect();
     let removable: Vec<bool> = rows.iter().map(|r| r.removable).collect();
+    let toggles: Vec<bool> = rows.iter().map(|r| r.toggle.is_some()).collect();
     let movable: Vec<bool> = rows.iter().map(|r| r.movable).collect();
-    let layout =
-        SettingsLayout { tabs: &[], sections: &sections, removable: &removable, movable: &movable, cursor, pick: None };
+    let layout = SettingsLayout {
+        tabs: &[],
+        sections: &sections,
+        removable: &removable,
+        toggles: &toggles,
+        movable: &movable,
+        cursor,
+        pick: None,
+    };
     rows_hit(body, &layout, pos)
 }
 
@@ -220,6 +247,9 @@ fn rows_hit(body: Rect, layout: &SettingsLayout, pos: Position) -> Option<Settin
     let row = line_rect(body, layout.sections, layout.cursor, i);
     if layout.removable.get(i).copied().unwrap_or(false) && settings_remove(row).contains(pos) {
         return Some(SettingsHit::Remove(i));
+    }
+    if layout.toggles.get(i).copied().unwrap_or(false) && settings_toggle(row).contains(pos) {
+        return Some(SettingsHit::Toggle(i));
     }
     if layout.movable.get(i).copied().unwrap_or(false) {
         let [up, down] = moves_beside(row, layout.removable.get(i).copied().unwrap_or(false));
@@ -245,6 +275,7 @@ pub(crate) struct SettingsRow {
     pub(crate) movable: bool,
     pub(crate) mark: Option<State>,
     pub(crate) tail: String,
+    pub(crate) toggle: Option<bool>,
 }
 
 pub(crate) struct SettingsEdit {
@@ -448,10 +479,28 @@ fn draw_settings_row(f: &mut Frame, view: &View, row: &SettingsRow, at: Placed, 
     let Placed { r, selected } = at;
     let bg = if selected { Style::default().bg(view.surface()) } else { Style::default() };
     let spans = settings_row_spans(view, row, selected, r.width, columns);
-    f.render_widget(Paragraph::new(Line::from(spans)).style(bg), r);
+    let text = match row.toggle {
+        Some(_) => Rect { width: settings_toggle(r).x.saturating_sub(r.x), ..r },
+        None => r,
+    };
+    f.render_widget(Paragraph::new("").style(bg), r);
+    f.render_widget(Paragraph::new(Line::from(spans)).style(bg), text);
     if hovered(view, r) {
         draw_row_buttons(f, view, row, r, bg);
     }
+    if let Some(shown) = row.toggle {
+        draw_toggle(f, view, shown, r, bg);
+    }
+}
+
+fn draw_toggle(f: &mut Frame, view: &View, shown: bool, r: Rect, bg: Style) {
+    let rect = settings_toggle(r);
+    let style = match (hovered(view, rect), shown) {
+        (true, _) => bg.fg(Color::Cyan).add_modifier(Modifier::BOLD),
+        (false, true) => bg,
+        (false, false) => bg.fg(view.muted),
+    };
+    f.render_widget(Paragraph::new(Span::styled(toggle_text(shown, r.width), style)), rect);
 }
 
 fn settings_row_spans(
@@ -479,7 +528,9 @@ fn settings_row_spans(
     } else {
         width.saturating_sub(30) / 2 + 10
     };
-    let room = if row.mark.is_some() { room.min(width.saturating_sub(4 + label + STATE_ROOM)) } else { room };
+    let line = Rect::new(0, 0, u16::try_from(width).unwrap_or(u16::MAX), 1);
+    let toggle = usize::from(settings_toggle(line).width + settings_remove(line).width);
+    let room = if row.mark.is_some() { room.min(width.saturating_sub(4 + label + STATE_ROOM + toggle)) } else { room };
     let value = value_text(row, room);
     let [mark, padded] = label_spans(view, row, label, bg, label_style);
     vec![

@@ -17,13 +17,17 @@ its server runs, seen when the link was last up (UTC), retry_at when a link that
 (UTC; a time that has passed means that try is under way; left out while the link is up or
 connecting, and while a person has to act there), error why it is down, and problem what is wrong
 with an entry of config.json, which then gets no link (shown is written only when false: such an
-entry gets no link either, and command only when set). Every subcommand prints the list the same way.
+entry gets no link either, and command only when set). `hide` keeps a machine on the list and ends
+its link, so nothing of it shows here and its server keeps running there; `show` links it again, and
+`all` hides or shows every machine at once. Every subcommand prints the list the same way.
 
 Examples:
   cornercase machines
   cornercase machines add vps miguel@vps.example.com --icon server
   cornercase machines edit vps --folder '~/src'
   cornercase machines retry vps
+  cornercase machines hide vps
+  cornercase machines show all
   cornercase machines remove vps";
 
 pub(in crate::cli) const MACHINES_ADD_HELP: &str =

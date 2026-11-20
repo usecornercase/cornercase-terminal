@@ -43,6 +43,8 @@ fn refused(args: &[&str]) -> Option<String> {
 #[case::machines_add(&["machines", "add", "vps", "me@vps"], crate::bots::NO_MACHINES)]
 #[case::machines_update(&["machines", "update", "vps"], crate::bots::NO_MACHINES)]
 #[case::machines_remove(&["machines", "remove", "vps"], crate::bots::NO_MACHINES)]
+#[case::machines_hide(&["machines", "hide", "vps"], crate::bots::NO_MACHINES)]
+#[case::machines_show(&["machines", "show", "all"], crate::bots::NO_MACHINES)]
 #[case::remember(&["remote", "--remember", "vps"], crate::bots::NO_MACHINES)]
 #[case::remember_with_a_command(&["remote", "--remember", "vps", "--command", "cc"], crate::bots::NO_MACHINES)]
 #[case::forget(&["remote", "--forget", "vps"], crate::bots::NO_MACHINES)]

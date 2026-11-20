@@ -33,7 +33,7 @@ pub(crate) const EVERY: &str = "all";
 const UPDATING: &str = "updating…";
 pub(crate) const CONNECTING: &str = "connecting…";
 pub(crate) const NOT_SEEN: &str = "not seen yet";
-pub(crate) const NOT_SHOWN: &str = "not shown";
+pub(crate) const HIDDEN: &str = "hidden";
 const DESTINATION_MAX: usize = 255;
 const COMMAND_OPTION: &str = "--command";
 
@@ -119,6 +119,23 @@ pub(crate) fn accepted(machines: &[Machine]) -> impl Iterator<Item = &Machine> {
 
 pub(crate) fn linked(machines: &[Machine]) -> impl Iterator<Item = &Machine> {
     accepted(machines).filter(|machine| machine.shown)
+}
+
+pub(crate) fn set_shown(machines: &mut [Machine], name: Option<&str>, shown: bool) -> Option<Vec<String>> {
+    let name = name.map(str::trim);
+    let named = |machine: &Machine| name.is_none_or(|name| machine.name.eq_ignore_ascii_case(name));
+    if name.is_some() && !machines.iter().any(named) {
+        return None;
+    }
+    let changed = machines.iter_mut().filter(|machine| named(machine) && machine.shown != shown);
+    Some(
+        changed
+            .map(|machine| {
+                machine.shown = shown;
+                machine.name.clone()
+            })
+            .collect(),
+    )
 }
 
 pub(crate) fn known_icon(icon: &str) -> char {
@@ -364,7 +381,7 @@ impl Info {
             return problem.clone();
         }
         if !self.shown {
-            return NOT_SHOWN.into();
+            return HIDDEN.into();
         }
         if self.updating {
             return UPDATING.into();
