@@ -528,10 +528,8 @@ fn settings_row_spans(
     } else {
         width.saturating_sub(30) / 2 + 10
     };
-    let toggle = row.toggle.map_or(0, |_| {
-        let line = Rect::new(0, 0, u16::try_from(width).unwrap_or(u16::MAX), 1);
-        usize::from(settings_toggle(line).width + settings_remove(line).width)
-    });
+    let line = Rect::new(0, 0, u16::try_from(width).unwrap_or(u16::MAX), 1);
+    let toggle = usize::from(settings_toggle(line).width + settings_remove(line).width);
     let room = if row.mark.is_some() { room.min(width.saturating_sub(4 + label + STATE_ROOM + toggle)) } else { room };
     let value = value_text(row, room);
     let [mark, padded] = label_spans(view, row, label, bg, label_style);

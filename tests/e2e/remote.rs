@@ -775,6 +775,11 @@ fn click_on(app: &mut Harness, text: &str) {
     app.click(at);
 }
 
+fn open_there(app: &mut Harness, machine: &str) {
+    click_on(app, machine);
+    click_on(app, "open the window there");
+}
+
 fn config_machines(session: &Session) -> Vec<serde_json::Value> {
     let bytes = std::fs::read(session.dir.join("config.json")).expect("config.json");
     let config: serde_json::Value = serde_json::from_slice(&bytes).expect("json");
@@ -796,7 +801,7 @@ fn a_window_switches_between_this_computer_and_the_one_it_reached() {
     to_this_computer(&mut app);
     let local_runs = ssh_runs(&session);
     click_on(&mut app, "this computer ▴");
-    click_on(&mut app, "  devbox");
+    open_there(&mut app, "  devbox");
     app.wait_for("the window is on devbox again", |s| s.contains("on devbox ▴") && !s.contains("this computer ▴"));
 
     assert_eq!((local_runs, ssh_runs(&session)), (runs, runs + 1), "only devbox goes through ssh");
@@ -830,7 +835,7 @@ fn a_machine_added_in_the_form_is_reached_without_asking() {
     let runs = ssh_runs(&session);
 
     click_on(&mut app, "this computer ▴");
-    click_on(&mut app, "  newbox");
+    open_there(&mut app, "  newbox");
 
     app.wait_for("the window is on newbox", |s| s.contains("on newbox ▴"));
     assert_eq!(ssh_runs(&session), runs + 1);
@@ -925,7 +930,7 @@ fn a_machine_a_program_remembered_is_asked_once() {
     wait_until_the_server_lists_newbox(&session);
     to_this_computer(&mut app);
     click_on(&mut app, "this computer ▴");
-    click_on(&mut app, "  newbox");
+    open_there(&mut app, "  newbox");
     app.wait_for_raw("the window asks before reaching it", |raw| raw.contains("connect to newbox?"));
     let runs = ssh_runs(&session);
 
@@ -945,6 +950,6 @@ fn a_machine_a_program_remembered_is_asked_once() {
     click_on(&mut app, "  this computer");
     app.wait_for("the window is on this computer", |s| s.contains("this computer ▴"));
     click_on(&mut app, "this computer ▴");
-    click_on(&mut app, "  newbox");
+    open_there(&mut app, "  newbox");
     app.wait_for("the window is on newbox without asking", |s| s.contains("on newbox ▴"));
 }

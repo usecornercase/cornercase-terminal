@@ -255,9 +255,17 @@ mod the_hint {
     }
 
     #[test]
-    fn otherwise_says_what_enter_and_the_cross_do() {
+    fn otherwise_says_what_enter_the_toggle_and_the_cross_do() {
         let mut s = with(&[(machine("vps", "vps.lan"), State::Linked)]);
         go_to(&mut s, &Row::Machine(0));
+
+        assert_eq!(s.hint(), "enter edits a machine · ✓ hides it here · × removes it; its server keeps running there");
+    }
+
+    #[test]
+    fn leaves_the_toggle_out_on_an_update_row_which_has_none() {
+        let mut s = with(&[(machine("pi", "pi.lan"), State::Older)]);
+        go_to(&mut s, &Row::UpdateMachine(0));
 
         assert_eq!(s.hint(), "enter edits a machine · × removes it, and its server keeps running there");
     }

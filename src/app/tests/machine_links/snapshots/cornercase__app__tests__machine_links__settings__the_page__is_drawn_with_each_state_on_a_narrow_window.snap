@@ -13,7 +13,7 @@ expression: every_state().shown(NARROW)
 "  │   ◐ ◫ pi                    pi.lan      ~/code  older · 0.12.200   ✓     │  "
 "  │       update…               installs this version there with cornercase  │  "
 "  │   ◌ ☁ new                   new.lan     ~/code  connecting…        ✓     │  "
-"  │   ○ ☁ my vps                box.lan         ~/code    use letters, digit │  "
+"  │   ○ ☁ my vps                box.lan     ~/code  use letters, digits, `.` │  "
 "  │   ◌ ☁ devbox                devbox.l…   ~/code  hidden             ·     │  "
 "  │   + add machine             another computer you reach with ssh          │  "
 "  │                                                                          │  "

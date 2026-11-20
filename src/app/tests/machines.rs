@@ -215,8 +215,8 @@ mod hiding {
         menu_disabled(app)[at]
     }
 
-    fn own() -> (App, Receiver<AppEvent>, crate::test_util::TempDir) {
-        let dir = crate::test_util::TempDir::new();
+    fn own() -> (App, Receiver<AppEvent>, TempDir) {
+        let dir = TempDir::new();
         let (mut app, rx) = new_app(dir.path().join("config.json"));
         app.open_here(AREA).expect("open the first project");
         (app, rx, dir)

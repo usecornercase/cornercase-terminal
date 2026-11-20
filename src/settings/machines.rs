@@ -6,6 +6,7 @@ use super::{Action, Row, Settings};
 
 const FOLDER_WIDTH: usize = 24;
 const HINT: &str = "enter edits a machine · × removes it, and its server keeps running there";
+const SHOWN_HINT: &str = "enter edits a machine · ✓ hides it here · × removes it; its server keeps running there";
 const HERE_HINT: &str = "this computer runs the server you are using; it links to each machine below";
 const HIDDEN_HINT: &str =
     "hidden: nothing is linked and its server keeps running there; its toggle shows it here again";
@@ -176,12 +177,13 @@ impl Settings {
 
     pub(super) fn machine_hint(&self) -> String {
         match self.row() {
-            Some(Row::Machine(at) | Row::UpdateMachine(at)) => {
+            Some(row @ (Row::Machine(at) | Row::UpdateMachine(at))) => {
                 let Some(info) = self.machine_info(at) else { return HINT.into() };
                 if !info.shown && info.problem.is_none() {
                     return HIDDEN_HINT.into();
                 }
-                info.error.unwrap_or_else(|| HINT.into())
+                let hint = if self.machine_toggle(&row) == Some(true) { SHOWN_HINT } else { HINT };
+                info.error.unwrap_or_else(|| hint.into())
             }
             Some(Row::Here) => match &self.on {
                 Some(on) => format!(
