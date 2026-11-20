@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -13,12 +14,16 @@ pub(crate) mod markup;
 
 pub(crate) use markup::Markup;
 
-pub(crate) const COMMANDS: [(&str, &str); 4] = [
+pub(crate) const COMMANDS: [(&str, &str); 6] = [
     ("status", "every agent and what it is doing"),
     ("new", "start an agent"),
     ("away", "message me here when an agent needs me"),
     ("back", "stop messaging me here"),
+    ("bots", "every bot and what it is doing"),
+    ("bot", "write to a bot"),
 ];
+pub(crate) const ARGUMENTS: [(&str, &str, &str); 2] =
+    [("bot", "name", "the bot's name or id"), ("bot", "text", "what to tell it")];
 const VERSION: u32 = 1;
 const MOST_CHOICES: usize = 9;
 pub(crate) const MARKS: &str = "│┃|❯›>▶●○◯";
@@ -345,6 +350,8 @@ pub(crate) struct Saved {
     pub(crate) chat: Option<Chat>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) forum: Option<Forum>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub(crate) bot_posts: BTreeMap<String, i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -365,7 +372,7 @@ pub(crate) struct Tags {
 impl Saved {
     #[cfg(test)]
     pub(crate) fn new(bot: String, chat: Option<Chat>) -> Self {
-        Self { version: VERSION, bot, chat, forum: None }
+        Self { version: VERSION, bot, chat, forum: None, bot_posts: BTreeMap::new() }
     }
 
     pub(crate) fn load(path: &Path) -> Self {
@@ -394,6 +401,7 @@ pub(crate) enum Tap {
     Deliver(u64, u32),
     New,
     Draft(u32, Choice),
+    Bot(u64),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -414,6 +422,7 @@ impl Tap {
             Self::Draft(draft, Choice::Workspace(id)) => format!("{run}:nw:{draft}:{id}"),
             Self::Draft(draft, Choice::Worktree) => format!("{run}:nt:{draft}"),
             Self::Draft(draft, Choice::Agent(kind)) => format!("{run}:na:{draft}:{kind}"),
+            Self::Bot(key) => format!("{run}:bot:{key}"),
         }
     }
 
@@ -436,6 +445,7 @@ impl Tap {
             ("w", Some(pane), None) => Some(Self::Write(pane)),
             ("d", Some(pane), Some(text)) => text.parse().ok().map(|text| Self::Deliver(pane, text)),
             ("n", None, None) => Some(Self::New),
+            ("bot", Some(key), None) => Some(Self::Bot(key)),
             ("np", _, Some(id)) => draft().zip(id.parse().ok()).map(|(d, id)| Self::Draft(d, Choice::Project(id))),
             ("nw", _, Some(id)) => draft().zip(id.parse().ok()).map(|(d, id)| Self::Draft(d, Choice::Workspace(id))),
             ("nt", _, None) => draft().map(|d| Self::Draft(d, Choice::Worktree)),

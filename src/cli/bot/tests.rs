@@ -199,6 +199,20 @@ fn edit_maps_follow_on_and_off() {
 }
 
 #[test]
+fn chat_apps_takes_away_always_or_off() {
+    use clap::Parser;
+
+    use crate::cli::args::Cli;
+    for given in ["away", "always", "off"] {
+        for action in ["new", "edit"] {
+            let cli = Cli::try_parse_from(["cornercase", "bot", action, "prs", "--chat-apps", given]).expect("parses");
+            assert!(format!("{cli:?}").contains(&format!("chat_apps: Some(\"{given}\")")), "{cli:?}");
+        }
+    }
+    assert!(Cli::try_parse_from(["cornercase", "bot", "edit", "prs", "--chat-apps", "sometimes"]).is_err());
+}
+
+#[test]
 fn what_a_bot_is_for_prints_as_it_is_with_one_final_newline() {
     assert_eq!(about(""), "");
     assert_eq!(about("a\nb"), "a\nb\n");

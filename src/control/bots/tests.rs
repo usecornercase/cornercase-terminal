@@ -14,11 +14,11 @@ fn request(args: &str) -> Request {
 #[case::agents(r#"{"action":"agents"}"#, BotRequest::Agents)]
 #[case::list(r#"{"action":"list"}"#, BotRequest::List)]
 #[case::new(
-    r#"{"action":"new","entry":{"name":"PRs","agent":"claude","model":null,"effort":null,"account":null,"access":null,"follow":null,"about":"x"}}"#,
+    r#"{"action":"new","entry":{"name":"PRs","agent":"claude","model":null,"effort":null,"account":null,"access":null,"follow":null,"chat_apps":null,"about":"x"}}"#,
     BotRequest::New(NewBot { name: "PRs".into(), agent: Some("claude".into()), about: "x".into(), ..NewBot::default() })
 )]
 #[case::edit(
-    r#"{"action":"edit","entry":{"bot":"prs","name":"Other","agent":null,"model":"","effort":null,"account":null,"access":null,"follow":null,"about":null}}"#,
+    r#"{"action":"edit","entry":{"bot":"prs","name":"Other","agent":null,"model":"","effort":null,"account":null,"access":null,"follow":null,"chat_apps":null,"about":null}}"#,
     BotRequest::Edit(EditBot { bot: "prs".into(), name: Some("Other".into()), model: Some(String::new()), ..EditBot::default() })
 )]
 #[case::remove(r#"{"action":"remove","entry":{"bot":"prs"}}"#, BotRequest::Remove(BotTarget { bot: "prs".into() }))]
@@ -91,6 +91,22 @@ fn new_and_edit_serialize_follow() {
     assert_eq!(serde_json::to_value(&edit).expect("json")["entry"]["follow"], Value::Bool(true));
     let fields = Command::Bot(edit).fields();
     assert!(fields.contains(&("follow", "true".to_string())), "{fields:?}");
+}
+
+#[test]
+fn new_and_edit_carry_chat_apps_and_log_it() {
+    let new = BotRequest::New(NewBot { name: "PRs".into(), chat_apps: Some("always".into()), ..NewBot::default() });
+    assert_eq!(serde_json::to_value(&new).expect("json")["entry"]["chat_apps"], Value::from("always"));
+    assert!(Command::Bot(new).fields().contains(&("chat_apps", "always".to_string())));
+    let edit = BotRequest::Edit(EditBot { bot: "prs".into(), chat_apps: Some("off".into()), ..EditBot::default() });
+    assert_eq!(serde_json::to_value(&edit).expect("json")["entry"]["chat_apps"], Value::from("off"));
+    assert!(Command::Bot(edit).fields().contains(&("chat_apps", "off".to_string())));
+}
+
+#[test]
+fn bot_info_says_when_its_answers_reach_the_chat_apps() {
+    let info = BotInfo { chat_apps: "away".into(), ..BotInfo::default() };
+    assert_eq!(serde_json::to_value(&info).expect("json")["chat_apps"], Value::from("away"));
 }
 
 #[test]

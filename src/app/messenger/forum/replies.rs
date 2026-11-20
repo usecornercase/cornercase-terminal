@@ -5,6 +5,7 @@ use ratatui::layout::Rect;
 
 use super::super::Route;
 use super::super::chat::command;
+use super::Owner;
 use crate::app::App;
 use crate::messenger::{Message, Via};
 use crate::project::Hierarchy;
@@ -46,11 +47,25 @@ impl App {
     }
 
     pub(in crate::app::messenger) fn post_message(&mut self, via: Via, message: &Message, area: Rect) {
-        let Some(workspace) = self.messenger(via).forum.posts.workspace_of(message.chat) else { return };
+        let Some(owner) = self.messenger(via).forum.posts.owner_of(message.chat) else { return };
         if command(&message.text).is_some() {
             self.reply(via, message.id, COMMANDS);
             return;
         }
+        match owner {
+            Owner::Workspace(workspace) => self.workspace_post_message(via, (workspace, message), area),
+            Owner::Bot(key) => {
+                let route = self.replied_route(via, message).unwrap_or(Route::Bot(key));
+                let messenger = self.messenger_mut(via);
+                if messenger.open_ask.is_some_and(|(open, _)| open == route) {
+                    messenger.open_ask = None;
+                }
+                self.text_for(via, route, message, area);
+            }
+        }
+    }
+
+    fn workspace_post_message(&mut self, via: Via, (workspace, message): (u64, &Message), area: Rect) {
         let route = self.replied_route(via, message).or_else(|| self.open_ask_in(via, workspace));
         if let Some(route) = route {
             self.text_for(via, route, message, area);

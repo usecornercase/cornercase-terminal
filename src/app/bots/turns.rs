@@ -263,10 +263,7 @@ impl App {
         let on_screen = self.bot_on_screen(at);
         let state = &mut self.panels.bots.live[at];
         let shown = finished.asked.iter().any(|id| state.waited.contains(id)) || on_screen;
-        self.bot_answer_waiters(at, &finished.asked, &line);
-        if let Some(notice) = dropped {
-            self.bot_answer_waiters(at, &finished.dropped, &notice);
-        }
+        self.bot_answered(at, &finished, &line, dropped.as_ref());
         if !shown && matches!(line.kind, Kind::Bot | Kind::Error) {
             let who = self.panels.bots.live[at].bot.name.clone();
             self.bot_notify(at, &line, &who);
@@ -284,6 +281,15 @@ impl App {
         );
         self.bot_settled(at);
         self.bot_next(at);
+    }
+
+    fn bot_answered(&mut self, at: usize, finished: &Turn, line: &Line, dropped: Option<&Line>) {
+        self.bot_answer_waiters(at, &finished.asked, line);
+        self.bot_line_to_chat_apps(at, line, &finished.asked);
+        if let Some(notice) = dropped {
+            self.bot_answer_waiters(at, &finished.dropped, notice);
+            self.bot_line_to_chat_apps(at, notice, &finished.dropped);
+        }
     }
 
     fn told_of_run(&mut self, at: usize, run: u64, line: &Line) {
@@ -425,6 +431,7 @@ impl App {
         folder::remove(&state.folder).map_err(|error| Refusal::new(Code::Failed, error.to_string()))?;
         let removed = self.panels.bots.live.remove(at);
         self.forget_tags(&removed.bot.id);
+        self.forget_bot_asks(removed.key);
         let entries = self.panels.queued.remove_bot(&removed.bot.id);
         if self.panels.bots.shown.as_ref().is_some_and(|shown| shown.bot == removed.bot.id) {
             self.leave_bot();

@@ -111,6 +111,7 @@ impl App {
         };
         let answer = Answer { model, tokens: ran.tokens, conversation: ran.session.clone() };
         let line = self.bot_append(at, |id, now| Line::answer(id, now, &ran.text, answer).of_run(run.entry));
+        self.bot_line_to_chat_apps(at, &line, &[]);
         let (text, cut) = queue::outcome::cap(&line.text);
         let outcome = queue::outcome::Outcome { at: line.at, text, cut, agent: Some(agent), ..Default::default() };
         self.panels.queued.answered(run.entry, ran.session, outcome);
@@ -122,7 +123,7 @@ impl App {
         "answered"
     }
 
-    pub(super) fn run_label(&self, entry: u64, at: i64) -> (String, String) {
+    pub(in crate::app) fn run_label(&self, entry: u64, at: i64) -> (String, String) {
         match self.panels.queued.queue().entry(entry) {
             Some(found) => (found.task.label.clone(), Self::run_clock(found, at)),
             None => (String::from("a routine"), String::new()),
@@ -148,7 +149,7 @@ impl App {
         if !self.bot_on_screen(at) {
             self.bot_notify(at, &line, &format!("{name} · {label} failed"));
         }
-        self.announce(&text);
+        self.bot_line_to_chat_apps(at, &line, &[]);
         self.publish_message(Message {
             kind: MessageKind::QueueFailed,
             text,

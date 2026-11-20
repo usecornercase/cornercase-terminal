@@ -219,6 +219,7 @@ mod setup {
 }
 
 mod background;
+mod bots;
 mod buttons;
 mod cleanup;
 mod gone;

@@ -20,6 +20,7 @@ use crate::settings;
 use crate::ui;
 use crate::web::auth::{Pairing, random_hex};
 
+mod bots;
 mod chat;
 mod drafts;
 mod every;
@@ -82,6 +83,7 @@ enum Route {
     Pane(u64),
     Branch(u32),
     Prompt(u32),
+    Bot(u64),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -106,6 +108,7 @@ enum Asked {
     Keys { press: String, chat: i64, chat_message: i64, key: String, agent: String },
     Finished { pane: u64, header: String },
     Start { message: i64, place: String, agent: String },
+    Bot { written: bots::Written, key: u64 },
 }
 
 pub(super) struct Messenger {
@@ -135,6 +138,7 @@ pub(super) struct Messenger {
     next_held: u32,
     drafts: VecDeque<drafts::Draft>,
     next_draft: u32,
+    bot_asks: bots::Asks,
 }
 
 fn unix_now() -> i64 {
@@ -179,6 +183,7 @@ impl Messenger {
             next_held: 0,
             drafts: VecDeque::new(),
             next_draft: 0,
+            bot_asks: bots::Asks::default(),
         }
     }
 
@@ -355,22 +360,31 @@ impl App {
     }
 
     fn say_long(&mut self, via: Via, header: &str, parts: Vec<String>, delivery: Delivery) {
-        let Delivery { keyboard, route, to, .. } = delivery;
+        let Delivery { keyboard, route, mut reply_to, to } = delivery;
+        let to = to.or_else(|| reply_to.and_then(|message| self.replied_in(via, message)));
         let count = parts.len();
         if count == 0 {
-            self.say(via, header.to_string(), Delivery { keyboard, route, reply_to: None, to });
+            self.say(via, header.to_string(), Delivery { keyboard, route, reply_to, to });
             return;
         }
         let markup = via.markup();
         for (i, part) in parts.into_iter().enumerate() {
             let joined = i == 0 && markup.fits(header, &part);
             if i == 0 && !joined {
-                self.say(via, header.to_string(), Delivery { route, to, ..Delivery::default() });
+                self.say(
+                    via,
+                    header.to_string(),
+                    Delivery { route, reply_to: reply_to.take(), to, ..Delivery::default() },
+                );
             }
             let text = if joined { format!("{header}\n\n{part}") } else { part };
             let keys = if i + 1 == count { keyboard.clone() } else { Vec::new() };
-            self.say(via, text, Delivery { keyboard: keys, route, reply_to: None, to });
+            self.say(via, text, Delivery { keyboard: keys, route, reply_to: reply_to.take(), to });
         }
+    }
+
+    fn replied_in(&self, via: Via, message: i64) -> Option<i64> {
+        self.heard_in(via, message).or_else(|| self.messenger(via).chat().map(|chat| chat.id))
     }
 
     fn ask(&mut self, via: Via, text: String, placeholder: &str, (route, to): (Route, Option<i64>)) {
@@ -437,11 +451,12 @@ impl App {
                 Ok(value) => self.started(via, &value, message, (&place, &agent)),
                 Err(why) => self.reply(via, message, &why),
             },
+            Asked::Bot { written, key } => self.bot_said(via, (written, key), reply),
         }
     }
 
     fn post_reaction(&self, via: Via, message: i64) {
-        if let Some(chat) = self.heard_in(via, message).or(self.messenger(via).chat().map(|c| c.id)) {
+        if let Some(chat) = self.replied_in(via, message) {
             self.post(via, Order::React { chat, message, emoji: "👍".into() });
         }
     }
@@ -845,12 +860,16 @@ pub(super) fn set_up(app: &mut App, via: Via, token: &str, bot: &str, chat: Opti
 }
 
 #[cfg(test)]
+pub(super) fn set_token(app: &mut App, via: Via, token: &str) {
+    app.messenger_mut(via).token = Some(token.into());
+}
+
+#[cfg(test)]
 pub(super) fn set_forum(app: &mut App, via: Via, forum: Option<crate::messenger::Forum>) {
     app.messenger_mut(via).saved.forum = forum;
 }
 
 #[cfg(test)]
-#[cfg(unix)]
 pub(super) fn run(app: &App, via: Via) -> &str {
     &app.messenger(via).run
 }

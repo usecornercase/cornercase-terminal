@@ -3,9 +3,9 @@ use crate::queue::form::Control;
 use crate::queue::repeat::Repeat;
 use crate::queue::{self, Place, State, Task};
 
-pub(super) const START: i64 = 1_800_000_000;
+pub(in crate::app::tests) const START: i64 = 1_800_000_000;
 
-pub(super) fn bot_routine(at: i64, every: &str) -> Task {
+pub(in crate::app::tests) fn bot_routine(at: i64, every: &str) -> Task {
     Task {
         at,
         zone: "UTC".into(),
@@ -19,6 +19,14 @@ pub(super) fn bot_routine(at: i64, every: &str) -> Task {
     }
 }
 
+pub(in crate::app::tests) fn runs_settle(app: &mut App, rx: &Receiver<AppEvent>) {
+    wait_until("the run ends", || {
+        drain(app, rx);
+        app.panels.bots.live[0].runs.is_empty()
+            && !app.panels.queued.queue().entries.iter().any(|entry| entry.state == State::Starting)
+    });
+}
+
 pub(super) fn scheduled(c: &mut Chat, task: Task) -> u64 {
     c.app.set_queue_area(AREA);
     c.app.panels.queued.schedule(None, task).expect("scheduled")
@@ -30,12 +38,7 @@ fn runs(c: &Chat, routine: u64) -> Vec<queue::Entry> {
 
 impl Chat {
     pub(super) fn runs_settle(&mut self) {
-        let Self { app, rx, .. } = self;
-        wait_until("the run ends", || {
-            drain(app, rx);
-            app.panels.bots.live[0].runs.is_empty()
-                && !app.panels.queued.queue().entries.iter().any(|entry| entry.state == State::Starting)
-        });
+        runs_settle(&mut self.app, &self.rx);
     }
 
     pub(super) fn fire(&mut self, at: i64) {

@@ -330,6 +330,21 @@ fn a_bot_is_edited_by_name_and_removed_by_id() {
     assert_eq!(b.ask("bot", &json!({"action": "list"}))["bots"], json!([]));
 }
 
+#[rstest::rstest]
+#[case::with_its_about(json!({"action": "edit", "bot": "prs", "model": "opus", "about": "reviews"}), "the about text was saved but the settings were not")]
+#[case::without_an_about(json!({"action": "edit", "bot": "prs", "model": "opus"}), "the settings were not saved")]
+fn an_edit_whose_settings_cannot_be_saved_says_what_was_written(#[case] edit: Value, #[case] said: &str) {
+    let mut b = bots();
+    b.new_prs();
+    let file = b.dirs.0.path().join("bots").join("prs").join("bot.json");
+    std::fs::remove_file(&file).expect("remove bot.json");
+    std::fs::create_dir(&file).expect("a folder in its place");
+    let refused = b.refuse(&edit);
+    assert_eq!(refused.code, "failed");
+    assert!(refused.message.starts_with(said), "{}", refused.message);
+    assert_eq!(b.ask("bot", &json!({"action": "list"}))["bots"][0]["model"], Value::Null);
+}
+
 #[test]
 fn a_turn_that_fails_answers_with_an_error_line_a_waiting_client_can_tell() {
     let mut b = bots();

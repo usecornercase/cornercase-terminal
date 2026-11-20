@@ -11,7 +11,7 @@ use crate::bots::sample as bot;
 use crate::test_util::{BotSleepers, fake_program, fixture, wait_until};
 use crate::ui::{ChatHit, RowHit};
 
-fn chat_of(dir: &Path, id: &str) -> Vec<Line> {
+pub(in crate::app::tests) fn chat_of(dir: &Path, id: &str) -> Vec<Line> {
     chat::read(&folder::of(dir, id).join(folder::CHAT_FILE))
 }
 
@@ -64,7 +64,7 @@ fn system_shell_app() -> (App, Receiver<AppEvent>) {
     (app, rx)
 }
 
-const ANSWER: &str = fixture!("claude/2.1.325/bot-new.jsonl");
+pub(in crate::app::tests) const ANSWER: &str = fixture!("claude/2.1.325/bot-new.jsonl");
 const FAILED: &str = fixture!("claude/2.1.318/recap-failed.jsonl");
 
 struct Chat {
@@ -111,6 +111,11 @@ fn chat_with(out: &str, access: Access) -> Chat {
     Chat { app, rx, dir, claude, bin }
 }
 
+pub(in crate::app::tests) fn argvs(program: &Path) -> Vec<String> {
+    let text = std::fs::read_to_string(program.with_extension("argv")).unwrap_or_default();
+    text.lines().map(str::to_string).collect()
+}
+
 pub(in crate::app::tests) fn settle(app: &mut App, rx: &Receiver<AppEvent>) {
     wait_until("the turn ends", || {
         drain(app, rx);
@@ -153,8 +158,7 @@ impl Chat {
     }
 
     fn argvs(&self) -> Vec<String> {
-        let text = std::fs::read_to_string(self.claude.with_extension("argv")).unwrap_or_default();
-        text.lines().map(str::to_string).collect()
+        argvs(&self.claude)
     }
 
     fn say(&mut self, text: &str) -> Line {
@@ -430,7 +434,7 @@ mod form;
 mod git;
 mod links;
 mod menu;
-mod routines;
+pub(in crate::app::tests) mod routines;
 mod routines_dialog;
 pub(in crate::app::tests) mod secrets;
 mod secrets_window;

@@ -11,7 +11,7 @@ mod setup;
 mod socket;
 mod tags;
 
-pub(super) use posts::Pointer;
+pub(super) use posts::{Owner, Pointer};
 
 const GUILD_INSTALL: &str = "turn on Guild Install: Developer Portal › Installation";
 const CONTENT: &str = "turn on Message Content Intent: Developer Portal › Bot";
@@ -44,6 +44,7 @@ impl Messenger {
 
     pub(super) fn forget_forum(&mut self) {
         self.saved.forum = None;
+        self.saved.bot_posts.clear();
         self.forum.posts.forget();
         self.forum.labels = tags::Labels::default();
         self.forum.setup = Setup::default();

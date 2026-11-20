@@ -60,6 +60,29 @@ fn a_bot_is_made_asked_and_read_back_over_the_socket() {
     assert!(args.contains("--setting-sources user") && args.contains("which are blocked?"), "{args}");
 }
 
+#[test]
+fn chat_apps_is_set_when_a_bot_is_made_changed_and_listed() {
+    let session = started();
+
+    let made: Value = serde_json::from_str(&session.says(&[
+        "bot",
+        "new",
+        "PRs",
+        "--agent",
+        "claude",
+        "--chat-apps",
+        "always",
+        "--json",
+    ]))
+    .expect("json");
+    assert_eq!(made["chat_apps"], "always", "{made}");
+    session.says(&["bot", "edit", "prs", "--chat-apps", "off"]);
+    let list: Value = serde_json::from_str(&session.says(&["bot", "list", "--json"])).expect("json");
+    assert_eq!(list["bots"][0]["chat_apps"], "off", "{list}");
+    let contract = session.says(&["contract"]);
+    assert!(contract.contains("bot-chat-apps"), "{contract}");
+}
+
 fn bot_state(session: &Session) -> Value {
     let list: Value = serde_json::from_str(&session.says(&["bot", "list", "--json"])).expect("json");
     list["bots"][0].clone()

@@ -1,7 +1,9 @@
+use std::path::Path;
+
 use crate::agents::headless::Access;
 use crate::agents::{self, Known};
 use crate::app::App;
-use crate::bots::{Bot, MAX_BOTS, NameProblem, chat, folder};
+use crate::bots::{Bot, ChatApps, MAX_BOTS, NameProblem, chat, folder};
 use crate::control::bots::{AgentInfo, BotInfo, BotLast, EditBot, NewBot};
 use crate::control::contract::{Code, Refusal};
 
@@ -30,6 +32,13 @@ fn bot_agent_names() -> String {
 fn needs_a_model(kind: Known, bot: &Bot) -> Done<()> {
     agents::effort_needs_model_refusal(kind.name(), bot.model.as_deref(), bot.effort.as_deref())
         .map_or(Ok(()), |why| Err(Refusal::new(Code::Malformed, why)))
+}
+
+fn chat_apps_of(asked: Option<&str>, kept: ChatApps) -> Done<ChatApps> {
+    clean(asked).map_or(Ok(kept), |text| {
+        ChatApps::parse(&text)
+            .ok_or_else(|| Refusal::new(Code::Malformed, "the chat apps option is away, always or off"))
+    })
 }
 
 fn problem(problem: &NameProblem) -> Refusal {
@@ -86,6 +95,7 @@ impl App {
             access: bot.access.name().to_string(),
             follow: bot.follow,
             following: self.following_panes(at),
+            chat_apps: bot.chat_apps.name().to_string(),
             state: String::from(if live.turn.is_some() { "thinking" } else { "idle" }),
             held: live.held.len(),
             unread: live.unread,
@@ -167,6 +177,7 @@ impl App {
             }
             bot.account = Some(account).filter(|account| !account.is_empty());
         }
+        bot.chat_apps = chat_apps_of(edit.chat_apps.as_deref(), bot.chat_apps)?;
         needs_a_model(kind, bot)
     }
 
@@ -196,11 +207,13 @@ impl App {
             created: crate::time::now(),
             conversation: None,
             follow: new.follow.unwrap_or(true),
+            chat_apps: ChatApps::Away,
         };
         let edit = EditBot {
             model: new.model.clone(),
             effort: new.effort.clone(),
             account: new.account.clone(),
+            chat_apps: new.chat_apps.clone(),
             ..EditBot::default()
         };
         self.bot_settings(kind, &mut bot, &edit)?;
@@ -245,15 +258,25 @@ impl App {
             let written = folder::write_about(&self.panels.bots.live[at].folder, about);
             written.map_err(|error| Refusal::new(Code::Failed, error.to_string()))?;
         }
-        let live = &mut self.panels.bots.live[at];
-        let followed = bot.follow;
+        let followed = self.panels.bots.live[at].bot.follow;
         bot.follow = edit.follow.unwrap_or(followed);
-        live.bot = bot;
-        let _ = folder::save(&live.folder, &live.bot);
+        save_edited(&self.panels.bots.live[at].folder, &bot, edit.about.is_some())?;
+        self.panels.bots.live[at].bot = bot;
         self.follow_changed(at, followed);
         self.publish_bot_change(at, "edited");
         Ok(at)
     }
+}
+
+fn save_edited(folder: &Path, bot: &Bot, about_written: bool) -> Done<()> {
+    folder::save(folder, bot).map_err(|error| {
+        let text = if about_written {
+            format!("the about text was saved but the settings were not: {error}")
+        } else {
+            format!("the settings were not saved: {error}")
+        };
+        Refusal::new(Code::Failed, text)
+    })
 }
 
 fn last(line: &chat::Line) -> BotLast {

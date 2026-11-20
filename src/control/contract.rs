@@ -102,6 +102,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "bot-asks",
     "machine-shown",
     "machine-hide",
+    "bot-chat-apps",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

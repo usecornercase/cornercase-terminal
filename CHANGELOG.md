@@ -2,6 +2,17 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.107
+
+- **Bots now talk on Telegram and Discord.** With a phone paired, a bot's answers reach it titled `🤖 <name>` (and `↻ <routine>` for a routine's), with their formatting; a failure starts with `✗`. What you wrote, its steps and its notices stay in cornercase.
+- **You choose when, per bot**: `while away` (the default), `always` or `off`, in the bot form's new **Chat apps** row or with `cornercase bot new` and `bot edit --chat-apps`. The row asks you to pair a phone in **Settings › Remote** when none is.
+- **Write to a bot from the phone**: reply to one of its messages, send `/bot NAME TEXT`, or `/bots` and its **✎** button. A 👍 says the bot took it, and its answer comes back as a reply to your message, even when the bot is set to `off`.
+- **`/bots`** lists every bot with what it is doing, its unread answers and its next routine.
+- When an agent a bot started needs you and the bot is set to `always`, its question and buttons reach the phone at the desk too, once.
+- **Discord's forum mode gives each bot its own post**, `🤖 <name>`, where its answers and its routines' go and where what you write goes to it. Removing the bot closes it, and the post is kept across restarts.
+- A bot's failed routine now reaches the phone once, as the bot's own message, instead of twice while away.
+- `cornercase bot edit` and the bot form now say so when a bot's settings cannot be saved, instead of showing a change that a restart would undo.
+
 ## 0.13.106
 
 - **Hide a machine without removing it.** Each machine in Settings › Machines has a toggle, `show here ✓` or `show here ·`: one click hides it, so its link ends and nothing of it shows in your sidebar, the agents section or your notifications, and another click shows it again. Its entry stays on the list, and nothing stops on the machine: its server, shells and agents keep running there.

@@ -9,7 +9,7 @@ use serde_json::{Value, json};
 
 use crate::http::{self, Method, Service};
 use crate::messenger::link::{Next, Transport};
-use crate::messenger::{Advice, COMMANDS, Chat, Key, Keyboard, Message, Order, Press, Update};
+use crate::messenger::{ARGUMENTS, Advice, COMMANDS, Chat, Key, Keyboard, Message, Order, Press, Update};
 use crate::time;
 use crate::version;
 
@@ -41,6 +41,7 @@ const DEFERRED_UPDATE: u64 = 6;
 const DEFERRED_MESSAGE: u64 = 5;
 const SLASH: u64 = 1;
 const USER_INSTALL: u64 = 1;
+const STRING: u64 = 3;
 const BOT_DM: u64 = 1;
 const DISCORD_EPOCH_MS: i64 = 1_420_070_400_000;
 pub(crate) const NO_USER_INSTALL: &str = "turn on User Install in the Developer Portal";
@@ -475,11 +476,28 @@ fn command_list() -> Value {
     let commands: Vec<Value> = COMMANDS
         .iter()
         .map(|(name, about)| {
-            json!({ "name": name, "description": about, "type": SLASH,
-                "integration_types": [USER_INSTALL], "contexts": [BOT_DM] })
+            let mut command = json!({ "name": name, "description": about, "type": SLASH,
+                "integration_types": [USER_INSTALL], "contexts": [BOT_DM] });
+            let options: Vec<Value> = ARGUMENTS
+                .iter()
+                .filter(|(of, ..)| of == name)
+                .map(|(_, option, about)| json!({ "type": STRING, "name": option, "description": about, "required": true }))
+                .collect();
+            if !options.is_empty() {
+                command["options"] = Value::Array(options);
+            }
+            command
         })
         .collect();
     Value::Array(commands)
+}
+
+fn slash_text(data: &Value) -> Option<String> {
+    let name = data["name"].as_str().filter(|name| !name.is_empty())?;
+    let options = data["options"].as_array().into_iter().flatten();
+    let values = options.filter_map(|option| option["value"].as_str());
+    let values: Vec<&str> = values.collect();
+    Some(if values.is_empty() { format!("/{name}") } else { format!("/{name} {}", values.join("\n")) })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -538,7 +556,7 @@ fn slash_command(d: &Value) -> Option<Update> {
         guild: None,
         date: ((id >> 22) + DISCORD_EPOCH_MS) / 1000,
         name: user["username"].as_str().unwrap_or_default().to_string(),
-        text: format!("/{}", d["data"]["name"].as_str().filter(|name| !name.is_empty())?),
+        text: slash_text(&d["data"])?,
         reply_to: None,
     }))
 }

@@ -24,7 +24,7 @@ impl App {
         let agents = self.bot_agent_infos();
         let preferred = self.config.agent.trim().to_string();
         let found = editing.and_then(|key| self.panels.bots.by_key(key));
-        let (form, saved) = match found {
+        let (mut form, saved) = match found {
             Some(at) => {
                 let live = &self.panels.bots.live[at];
                 let (about, _) = folder::notes(&live.folder);
@@ -32,6 +32,7 @@ impl App {
             }
             None => (Form::new(agents, &preferred), None),
         };
+        form.chat_ready = self.chat_apps_ready();
         self.screen.nav = None;
         self.overlay = Some(Overlay::BotForm(Box::new(form)));
         self.bot_accounts(saved.as_deref(), found.is_some());
@@ -176,6 +177,9 @@ fn choose_in_list(form: &mut Form, i: usize) -> Option<Field> {
 }
 
 fn press_field(form: &mut Form, area: Rect, (field, row, col): (Field, usize, usize)) {
+    if field == Field::ChatApps && !form.chat_ready {
+        return;
+    }
     let r = bot_form::text(area, form, field);
     let opening = form.combo_of(field).is_some_and(|combo| !combo.is_open());
     let grey = field == Field::Agent && form.editing.is_some();
