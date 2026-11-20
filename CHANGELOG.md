@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.108
+
+- **Your flows can follow you to your machines.** Tick **sync your flows to it** in a machine's form in Settings › Machines, or run `cornercase machines edit vps --sync-flows`, and a flow you make, change, rename or delete here is saved or deleted there too, as are the built-in flows you delete or restore. A machine that is off gets what it missed when its link comes back, a sync that fails while the machine stays linked is tried again on its own, and a deletion it refused is sent again with every later sync, so starting a flow there runs the version you just saved. Your default flow and your order stay on each computer, and nothing is sent to a machine you did not tick, nor to one you hid.
+- **The last saved wins.** Saving a flow now writes the time in its file (`changed`), by each computer's clock. A flow saved later on the machine is kept there, and when that machine syncs back, a toast here says the flow was replaced by its copy (or arrived, for a new one). A flow only the machine has is never deleted, and the first sync with a machine deletes nothing there. Nothing asks, since both ends are yours: a synced flow is saved there even when it sets `env` or `args`.
+- **Secrets stay yours.** A flow's `env` values and arguments go with it, so each flow file of yours is now written readable only by you when it is saved, here and on the machine.
+- **See and force it.** Settings › Flows has **sync now** while a machine syncs flows, which then says what each machine got or why it failed, each flow of yours says `synced to vps`, and the machine's row says `syncs flows`. `cornercase flow sync [--machine NAME] [--json]` sends everything now, prints what changed on each machine and exits with 1 when one could not be reached or refused a flow; `flow list --json` gives each flow of yours `changed` and `synced`, `machines --json` gives `sync_flows`, and `cornercase contract` lists `flow-sync`.
+
 ## 0.13.107
 
 - **Bots now talk on Telegram and Discord.** With a phone paired, a bot's answers reach it titled `🤖 <name>` (and `↻ <routine>` for a routine's), with their formatting; a failure starts with `✗`. What you wrote, its steps and its notices stay in cornercase.
