@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.108
+
+- **The queue has a window of its own.** Open it from **More ▴ › queue**, or with `e` in the keys menu, with or without a project open. The Issues window no longer has a `Queue` tab, and ` schedule ` still works on an issue: cancelling goes back to the issue, and saving opens the queue with the new entry selected.
+- **A routine's runs are listed under it**, indented and newest first. Click its `▾`, or press `←`, to fold them into one row that says how many there are, and `→` to unfold them. What starts next comes first, then paused routines, then what already ran, newest first.
+- The selection stays on its entry when a routine fires or a row is added above it.
+- **The schedule form's prompt takes line breaks**: `Enter` starts a new line there (and still saves from the other fields), a paste keeps its lines, the field is taller in a tall window, the wheel scrolls it, and `↑ n more` / `↓ n more` say how much is out of sight.
+
 ## 0.13.107
 
 - **Bots now talk on Telegram and Discord.** With a phone paired, a bot's answers reach it titled `🤖 <name>` (and `↻ <routine>` for a routine's), with their formatting; a failure starts with `✗`. What you wrote, its steps and its notices stay in cornercase.
