@@ -307,6 +307,7 @@ impl App {
         let reason = crate::machines::hide_destination(&reason, &tunnel.machine, &tunnel.destination);
         tunnel.running = None;
         tunnel.hold = None;
+        tunnel.registered = false;
         tunnel.state = TunnelState::Down(reason.clone());
         tunnel.down_at = Some(Instant::now());
         tunnel.failed += 1;
@@ -409,8 +410,11 @@ impl App {
         let Some(tunnel) = self.machines.tunnels.by_id(id) else { return };
         match &tunnel.state {
             TunnelState::Up => {
-                if tunnel.hold.as_ref().is_some_and(|(_, held)| Some(held) != boot.as_ref()) {
+                let moved = tunnel.hold.as_ref().is_some_and(|(_, held)| Some(held) != boot.as_ref());
+                if moved {
                     tunnel.hold = None;
+                    tunnel.registered = false;
+                    self.clients.events.snapshots.mark_changed();
                 }
                 let due = tunnel.hold_at.is_none_or(|at| now >= at + remote::backoff(tunnel.holds_failed));
                 if tunnel.hold.is_none() && linked && due {

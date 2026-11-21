@@ -114,6 +114,23 @@ mod a_machine_s_ports {
     }
 
     #[test]
+    fn are_not_stopped_when_the_machine_did_not_say_when_they_started() {
+        let mut panels = Panels::with_tabs();
+        panels.ports_open(8765);
+        let before = panels.rig.seen("start vps.lan");
+        let target = Target { pid: PID, port: 8765, started: None, program: Some("python3".into()) };
+
+        panels.rig.app.ports_act(Action::Stop(vec![target]));
+
+        let said = panels.rig.app.messages.toast.as_ref().map(|toast| toast.message.clone()).unwrap_or_default();
+        assert!(
+            said.starts_with("did not stop python3 (pid 4242) on port 8765 on vps: the machine did not say"),
+            "{said}"
+        );
+        assert_eq!(panels.rig.seen("start vps.lan"), before);
+    }
+
+    #[test]
     fn are_not_opened_from_a_menu_of_an_earlier_run() {
         let mut panels = Panels::with_tabs();
         let mut aim = panels.aim();
@@ -184,10 +201,47 @@ mod a_tunnel_to_a_machine {
         let (port, _stream) = tunnelled(&mut panels, &dir);
 
         assert_eq!(state(&panels.rig.app), [(port, Some(port), "up".to_string())]);
-        let registered = |app: &App| app.there_tunnel_infos().first().and_then(|info| info.registered) == Some(true);
-        panels.rig.until("the machine holds it", registered);
+        held(&mut panels);
         let said = format!("port {port} of vps is tunnelled to localhost:{port}");
         assert_eq!(panels.rig.app.messages.toast.as_ref().map(|toast| toast.message.clone()), Some(said));
+    }
+
+    fn registered(app: &App) -> Option<bool> {
+        app.there_tunnel_infos().first().and_then(|info| info.registered)
+    }
+
+    fn held(panels: &mut Panels) {
+        panels.rig.until("the machine holds it", |app| registered(app) == Some(true));
+    }
+
+    #[test]
+    fn is_no_longer_registered_once_its_ssh_ends() {
+        let (mut panels, dir) = (Panels::with_tabs(), TempDir::new());
+        let (_port, _stream) = tunnelled(&mut panels, &dir);
+        held(&mut panels);
+
+        std::fs::remove_file(dir.path().join("ssh").with_extension("hold")).expect("let ssh end");
+
+        panels.rig.until("the tunnel falls", |app| app.there_tunnel_infos().iter().any(|info| info.state == "down"));
+        assert_eq!(registered(&panels.rig.app), None);
+    }
+
+    #[test]
+    fn is_registered_again_with_a_machine_that_restarted() {
+        let (mut panels, dir) = (Panels::with_tabs(), TempDir::new());
+        let (port, _stream) = tunnelled(&mut panels, &dir);
+        held(&mut panels);
+
+        serve(&mut panels.link, 3, control::Report { boot: "vps-2".into(), ..with_a_tab() });
+        panels.rig.until("the restart is seen", |app| {
+            app.machines.held()[0].seen.as_ref().is_some_and(|seen| seen.boot == "vps-2")
+        });
+        panels.sync();
+
+        assert_eq!(registered(&panels.rig.app), None);
+        let mut stream = taken(&panels.ends);
+        let args = json!({ "port": port, "local": port });
+        assert_eq!(asked(&mut stream), json!({ "command": "tunnel-hold", "boot": "vps-2", "args": args }));
     }
 
     #[test]

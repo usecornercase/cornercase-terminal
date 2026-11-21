@@ -19,6 +19,9 @@ use crate::ui;
 pub(in crate::app) const STOPS_THERE: &str = "The machine stops only that process: it asks it to end, \
      then ends it if it still holds its port after 3 s.";
 
+const UNSTARTED: &str =
+    "the machine did not say when it started, so it could not be told from a program that took its pid since";
+
 #[derive(Default)]
 pub(in crate::app) struct RemotePorts {
     listing: Option<(Follow, u64)>,
@@ -126,7 +129,12 @@ impl App {
             return;
         }
         for target in targets {
-            let stop = StopPort { port: target.port, pid: Some(target.pid), started: target.started };
+            let Some(started) = target.started else {
+                let message = format!("did not stop {} on {}: {UNSTARTED}", target.label(), there.machine);
+                self.messages.toast = Some(Toast::new(message, ui::ToastIcon::Bug));
+                continue;
+            };
+            let stop = StopPort { port: target.port, pid: Some(target.pid), started: Some(started) };
             let Some(follow) = self.follow_machine(&aim, Command::StopPort(stop), true) else { continue };
             self.panels.ports.stopping += 1;
             self.machines.ports.stops.push((follow, target, there.machine.clone()));
