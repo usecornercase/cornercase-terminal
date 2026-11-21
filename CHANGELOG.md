@@ -7,6 +7,7 @@ Every pull request that changes the app adds a section here for its new version.
 - **A linked machine's workspace has a Ports dialog.** ` ⋯ ` or a right-click on its row, then **ports**, lists the ports its programs listen on there, with the machine's tab that started each one. **go** shows that tab, and **stop** asks first and has the machine stop the program.
 - **Tunnel a machine's port to this computer** from that dialog: **tunnel** forwards it with your own `ssh`, on the same port when it's free here, and **open** then opens it in your browser. Cornercase's server holds the tunnel, so it stays while the window is closed, and the machine lists it too, so closing it there ends it here.
 - Scripts do the same with `cornercase tunnel open 5173 --machine vps` and `tunnel close 5173 --machine vps`; `cornercase tunnels` and `status --json` list these tunnels under `machine_tunnels`.
+- `ports --json` gives each program's `started`, and the `stop-port` request takes it back: a program that was replaced on that pid since it was listed is then left alone.
 
 ## 0.13.108
 

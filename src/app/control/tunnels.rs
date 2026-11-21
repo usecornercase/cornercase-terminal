@@ -15,6 +15,7 @@ const NOT_HELD: &str = "no window holds a tunnel for port";
 const NOT_HELD_REVERSE: &str = "no program holds a reverse tunnel on port";
 const REVERSE_OPEN: &str =
     "a reverse tunnel is opened by `tunnel hold --reverse` on the computer whose port it is, never by the server";
+const REVERSE_MACHINE: &str = "this server holds no reverse tunnel to a machine: `machine` takes no `reverse`";
 const BUSY_CONNECTION: &str = "this connection already holds a tunnel or takes tunnel orders; open another connection";
 const OPEN_WITHIN: u32 = 45;
 const CLOSE_WITHIN: u32 = 10;
@@ -126,6 +127,9 @@ impl App {
     fn end_tunnel_request(&mut self, client: u64, tunnel: &TunnelPort, verb: Verb, now: Instant) -> Handled {
         let port = tunnel.port;
         if let Some(machine) = &tunnel.machine {
+            if tunnel.direction == Some(Direction::Reverse) {
+                return Err(malformed(REVERSE_MACHINE));
+            }
             let link = self.machine_link_named(machine)?;
             if !self.close_there_tunnel(link, port) {
                 let message =

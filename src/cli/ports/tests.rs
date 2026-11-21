@@ -17,6 +17,7 @@ fn port(port: u16, via: Option<&str>) -> PortInfo {
         pane: Some(3),
         via: via.map(str::to_string),
         agent: None,
+        started: None,
     }
 }
 

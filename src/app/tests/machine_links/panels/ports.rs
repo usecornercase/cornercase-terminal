@@ -36,6 +36,7 @@ fn listening(port: u16) -> Listing {
         pane: Some(PANE),
         via: Some("pane".into()),
         agent: None,
+        started: Some(77),
     };
     Listing { ports: vec![info] }
 }
@@ -99,17 +100,29 @@ mod a_machine_s_ports {
     fn are_stopped_by_the_machine_with_the_pid_that_was_listed() {
         let mut panels = Panels::with_tabs();
         panels.ports_open(8765);
-        let target = Target { pid: PID, port: 8765, started: None, program: Some("python3".into()) };
+        let target = Target { pid: PID, port: 8765, started: Some(77), program: Some("python3".into()) };
 
         panels.rig.app.ports_act(Action::Stop(vec![target]));
         let mut stream = taken(&panels.ends);
-        let args = json!({ "port": 8765, "pid": PID });
+        let args = json!({ "port": 8765, "pid": PID, "started": 77 });
         assert_eq!(asked(&mut stream), json!({ "command": "stop-port", "boot": BOOT, "args": args }));
         let stopped = PortStopped { port: 8765, pid: PID, program: Some("python3".into()), outcome: "stopped".into() };
         tell(&mut stream, &stopped);
 
         let said = "stopped python3 (pid 4242) on port 8765 on vps";
         panels.rig.until("the stop is told", |app| app.messages.toast.as_ref().is_some_and(|t| t.message == said));
+    }
+
+    #[test]
+    fn are_not_opened_from_a_menu_of_an_earlier_run() {
+        let mut panels = Panels::with_tabs();
+        let mut aim = panels.aim();
+        aim.era += 1;
+
+        panels.rig.app.remote_action(MenuAction::RemotePorts(aim));
+
+        assert!(panels.rig.app.overlay.is_none());
+        assert_eq!(panels.rig.seen("start vps.lan"), 1);
     }
 
     #[test]
@@ -171,6 +184,8 @@ mod a_tunnel_to_a_machine {
         let (port, _stream) = tunnelled(&mut panels, &dir);
 
         assert_eq!(state(&panels.rig.app), [(port, Some(port), "up".to_string())]);
+        let registered = |app: &App| app.there_tunnel_infos().first().and_then(|info| info.registered) == Some(true);
+        panels.rig.until("the machine holds it", registered);
         let said = format!("port {port} of vps is tunnelled to localhost:{port}");
         assert_eq!(panels.rig.app.messages.toast.as_ref().map(|toast| toast.message.clone()), Some(said));
     }
@@ -261,6 +276,15 @@ mod a_tunnel_to_a_machine {
         let tunnel = &answer["ok"]["machine_tunnels"][0];
         assert_eq!((tunnel["machine"].as_str(), tunnel["state"].as_str()), (Some("vps"), Some("up")));
         assert_eq!(tunnel["local"].as_u64(), Some(u64::from(port)));
+    }
+
+    #[test]
+    fn is_not_closed_in_reverse() {
+        let mut panels = Panels::with_tabs();
+
+        ask(&mut panels, "tunnel-close", &json!({ "port": 5173, "machine": "vps", "direction": "reverse" }));
+
+        assert_eq!(answered(&mut panels)["error"]["code"], "malformed");
     }
 
     #[test]

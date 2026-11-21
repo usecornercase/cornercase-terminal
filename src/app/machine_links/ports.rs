@@ -22,12 +22,16 @@ pub(in crate::app) const STOPS_THERE: &str = "The machine stops only that proces
 #[derive(Default)]
 pub(in crate::app) struct RemotePorts {
     listing: Option<(Follow, u64)>,
-    stops: Vec<(Follow, Target)>,
+    stops: Vec<(Follow, Target, String)>,
 }
 
 impl App {
     pub(in crate::app) fn open_remote_ports(&mut self, aim: Aim) {
         let Some(held) = self.held_by(aim.link) else { return };
+        if held.era != aim.era {
+            let why = format!("{} restarted", held.name);
+            return self.not_sent(&why);
+        }
         let Some(boot) = held.seen.as_deref().map(|seen| seen.boot.clone()) else { return };
         let there = There { link: aim.link, boot, machine: held.name.clone() };
         let generation = self.panels.ports.refresh.open();
@@ -86,18 +90,17 @@ impl App {
             self.ports_listed(generation, result);
             return true;
         }
-        let Some(at) = self.machines.ports.stops.iter().position(|(follow, _)| follow.id() == followed.id) else {
+        let Some(at) = self.machines.ports.stops.iter().position(|(follow, ..)| follow.id() == followed.id) else {
             return false;
         };
-        let (_, target) = self.machines.ports.stops.remove(at);
-        self.remote_port_stopped(&target, &followed.event);
+        let (_, target, machine) = self.machines.ports.stops.remove(at);
+        self.remote_port_stopped(&target, &machine, &followed.event);
         true
     }
 
-    fn remote_port_stopped(&mut self, target: &Target, event: &Event) {
+    fn remote_port_stopped(&mut self, target: &Target, machine: &str, event: &Event) {
         self.panels.ports.stopping = self.panels.ports.stopping.saturating_sub(1);
         self.panels.ports.refresh.again();
-        let machine = self.remote_ports_machine().unwrap_or_default();
         let said = match event {
             Event::Line(text) => heard::port_stopped(text).map_err(|refusal| refusal.message),
             Event::Ended(why) => Err(why.clone()),
@@ -116,13 +119,6 @@ impl App {
         self.messages.toast = Some(Toast::new(message, icon));
     }
 
-    fn remote_ports_machine(&self) -> Option<String> {
-        match &self.overlay {
-            Some(Overlay::Ports(dialog)) => dialog.there.as_ref().map(|there| there.machine.clone()),
-            _ => None,
-        }
-    }
-
     pub(in crate::app) fn stop_remote_ports(&mut self, there: &There, workspace: u64, targets: Vec<Target>) {
         let aim = RemoteAim { link: there.link, boot: there.boot.clone(), workspace };
         if let Err(why) = self.linked_held(there.link).map(|_| ()) {
@@ -130,10 +126,10 @@ impl App {
             return;
         }
         for target in targets {
-            let command = Command::StopPort(StopPort { port: target.port, pid: Some(target.pid) });
-            let Some(follow) = self.follow_machine(&aim, command, true) else { continue };
+            let stop = StopPort { port: target.port, pid: Some(target.pid), started: target.started };
+            let Some(follow) = self.follow_machine(&aim, Command::StopPort(stop), true) else { continue };
             self.panels.ports.stopping += 1;
-            self.machines.ports.stops.push((follow, target));
+            self.machines.ports.stops.push((follow, target, there.machine.clone()));
         }
     }
 

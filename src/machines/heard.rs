@@ -121,7 +121,7 @@ fn port_of(info: &PortInfo) -> Port {
         pid: info.pid,
         program: info.program.as_deref().map(link::clean),
         args: info.args.iter().take(MAX_ARGS).map(|arg| link::clean(arg)).collect(),
-        started: None,
+        started: info.started,
         place: Place { workspace: info.workspace, pane: info.pane, via, agent: info.agent.as_deref().map(link::clean) },
     }
 }

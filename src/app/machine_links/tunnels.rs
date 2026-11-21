@@ -68,7 +68,7 @@ impl ThereTunnels {
         self.by.iter().filter(|tunnel| tunnel.running.is_some() || tunnel.state == TunnelState::Opening).count()
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub(in crate::app) fn set_ssh(&mut self, ssh: OsString) {
         self.ssh = ssh;
     }
@@ -87,6 +87,7 @@ struct ThereTunnel {
     hold: Option<(Follow, String)>,
     hold_at: Option<Instant>,
     holds_failed: u32,
+    registered: bool,
     asked: Option<Origin>,
     was_up: bool,
     failed: u32,
@@ -108,6 +109,7 @@ impl ThereTunnel {
             hold: None,
             hold_at: None,
             holds_failed: 0,
+            registered: false,
             asked: Some(origin),
             was_up: false,
             failed: 0,
@@ -120,7 +122,7 @@ impl ThereTunnel {
             TunnelState::Down(reason) => Some(reason.clone()),
             _ => None,
         };
-        let registered = self.hold.is_some().then_some(true);
+        let registered = self.registered.then_some(true);
         MachineTunnelInfo {
             machine: self.machine.clone(),
             port: self.port,
@@ -159,6 +161,16 @@ impl App {
         }
     }
 
+    pub(in crate::app) fn browse_there(&mut self, link: u64, port: u16) {
+        let tunnel = self.machines.tunnels.find(link, port).map(ThereTunnel::port_tunnel);
+        if let Some(ui::PortTunnel::Up(local)) = tunnel {
+            self.browse(Browse { ip: None, port: local });
+        } else {
+            let message = format!("the tunnel of port {port} is not up");
+            self.messages.toast = Some(Toast::new(message, ui::ToastIcon::Bug));
+        }
+    }
+
     pub(in crate::app) fn open_there_port(&mut self, there: &There, port: &Port) {
         if let Some(ui::PortTunnel::Up(local)) = self.there_tunnel(there, port) {
             self.browse(Browse { ip: None, port: local });
@@ -189,18 +201,22 @@ impl App {
         let held = self.held_by(link).ok_or("that machine is no longer listed")?;
         let (machine, destination) = (held.name.clone(), held.destination.clone());
         let tunnels = &mut self.machines.tunnels;
+        let full = tunnels.running() >= MAX_THERE;
         if let Some(tunnel) = tunnels.by.iter_mut().find(|tunnel| tunnel.link == link && tunnel.port == port) {
             if matches!(tunnel.state, TunnelState::Up | TunnelState::Opening) {
                 tunnel.asked.get_or_insert(origin);
                 return Ok(());
+            }
+            if full {
+                return Err(too_many());
             }
             tunnel.asked = Some(origin);
             let id = tunnel.id;
             self.spawn_there(id);
             return Ok(());
         }
-        if tunnels.running() >= MAX_THERE {
-            return Err(format!("at most {MAX_THERE} tunnels to machines are held at once"));
+        if full {
+            return Err(too_many());
         }
         let id = tunnels.next;
         tunnels.next += 1;
@@ -276,7 +292,8 @@ impl App {
         tunnel.failed = 0;
         let (port, local, machine) = (tunnel.port, tunnel.local.unwrap_or(tunnel.port), tunnel.machine.clone());
         log::info!("machines", "tunnel up", name = machine, port = port, local = local);
-        let toast = tunnel.asked.take().map(|origin| up_toast(&machine, (port, local), origin, browse));
+        let link = tunnel.link;
+        let toast = tunnel.asked.take().map(|origin| up_toast(&machine, (link, port, local), origin, browse));
         if toast.is_some() {
             self.messages.toast = toast;
         }
@@ -337,6 +354,8 @@ impl App {
             Event::Line(text) => {
                 if heard::held(text) {
                     tunnel.holds_failed = 0;
+                    tunnel.registered = true;
+                    self.clients.events.snapshots.mark_changed();
                 }
                 let end = heard::hold_ended(text).filter(|end| !end.server_stopped());
                 let (link, port, machine) = (tunnel.link, tunnel.port, tunnel.machine.clone());
@@ -346,6 +365,7 @@ impl App {
             }
             Event::Ended(_) => {
                 tunnel.hold = None;
+                tunnel.registered = false;
                 tunnel.holds_failed += 1;
                 self.clients.events.snapshots.mark_changed();
             }
@@ -385,6 +405,7 @@ impl App {
         let link = tunnel.link;
         let boot = self.held_by(link).and_then(|held| held.seen.as_deref()).map(|seen| seen.boot.clone());
         let linked = self.linked(link);
+        let full = self.machines.tunnels.running() >= MAX_THERE;
         let Some(tunnel) = self.machines.tunnels.by_id(id) else { return };
         match &tunnel.state {
             TunnelState::Up => {
@@ -398,7 +419,7 @@ impl App {
             }
             TunnelState::Down(_) if tunnel.was_up && linked => {
                 let due = tunnel.down_at.is_none_or(|at| now >= at + remote::backoff(tunnel.failed));
-                if due {
+                if due && !full {
                     self.spawn_there(id);
                 }
             }
@@ -417,7 +438,11 @@ impl App {
     }
 }
 
-fn up_toast(machine: &str, (port, local): (u16, u16), origin: Origin, browse: bool) -> Toast {
+fn too_many() -> String {
+    format!("at most {MAX_THERE} tunnels to machines are held at once")
+}
+
+fn up_toast(machine: &str, (link, port, local): (u64, u16, u16), origin: Origin, browse: bool) -> Toast {
     let mut toast = match origin {
         Origin::Click => {
             let taken = if local == port { String::new() } else { format!(" ({port} is taken here)") };
@@ -431,6 +456,6 @@ fn up_toast(machine: &str, (port, local): (u16, u16), origin: Origin, browse: bo
             ui::ToastIcon::Check,
         ),
     };
-    toast.tunnel = browse.then_some(TunnelButton::Local(local));
+    toast.tunnel = browse.then_some(TunnelButton::There(link, port));
     toast
 }
