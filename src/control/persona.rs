@@ -102,11 +102,50 @@ pub(crate) struct PersonaRemoved {
     pub(crate) path: PathBuf,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct PersonaSave {
+    pub(crate) id: String,
+    pub(crate) text: String,
+    pub(crate) replace: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct PersonaShow {
+    pub(crate) id: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct PersonaShown {
+    pub(crate) persona: PersonaInfo,
+    pub(crate) text: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct PersonaSaved {
+    pub(crate) persona: PersonaInfo,
+}
+
 impl PersonaImport {
     pub(super) fn fields(&self, fields: &mut Fields) {
         let bytes: usize = self.personas.iter().map(|persona| persona.text.len()).sum();
         fields.add("count", self.personas.len()).add("text_bytes", bytes);
         fields.add("replace", self.replace).add("check", self.check);
+    }
+}
+
+impl PersonaSave {
+    pub(super) fn fields(&self, fields: &mut Fields) {
+        fields.add("persona", &self.id).add("text_bytes", self.text.len()).add("replace", self.replace);
+    }
+}
+
+impl PersonaShow {
+    pub(super) fn fields(&self, fields: &mut Fields) {
+        fields.add("persona", &self.id);
     }
 }
 

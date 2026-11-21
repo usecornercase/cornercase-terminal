@@ -1,5 +1,5 @@
 use super::args::{Command, Control, FlowAction, ImportTo};
-use super::flow::{confirmation, fetched, folder_note, imported_line, listing, started};
+use super::flow::{confirmation, fetched, folder_note, imported_line, listing, role_summary, started};
 use crate::control::{BrokenFlow, FlowInfo, Flows, Imported, MemberInfo, RoleInfo, RunInfo};
 use crate::flows::Worktree;
 use crate::flows::registry::Source;
@@ -41,9 +41,25 @@ fn role(role: &str, agent: &str, model: Option<&str>, edits: bool) -> RoleInfo {
         model: model.map(str::to_string),
         effort: None,
         persona: None,
+        persona_name: String::new(),
+        persona_emoji: String::new(),
         edits,
         worktree: Worktree::Shared,
     }
+}
+
+#[rstest::rstest]
+#[case::named("👁️", "Code Reviewer", "reviewer: claude · sonnet · 👁️ Code Reviewer")]
+#[case::without_an_emoji("", "Code Reviewer", "reviewer: claude · sonnet · Code Reviewer")]
+#[case::not_in_the_library("", "", "reviewer: claude · sonnet · engineering-code-reviewer")]
+fn a_role_names_its_persona(#[case] emoji: &str, #[case] name: &str, #[case] line: &str) {
+    let role = RoleInfo {
+        persona: Some("engineering-code-reviewer".into()),
+        persona_name: name.into(),
+        persona_emoji: emoji.into(),
+        ..role("reviewer", "claude", Some("sonnet"), false)
+    };
+    assert_eq!(role_summary(&role), line);
 }
 
 #[test]

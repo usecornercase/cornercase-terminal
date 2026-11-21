@@ -790,7 +790,7 @@ pub(in crate::cli) use machines::{MACHINES_ADD_HELP, MACHINES_HELP, MACHINES_UPD
 pub(in crate::cli) use open::OPEN_HELP;
 pub(in crate::cli) use pair::CONFIG_PAIR_HELP;
 pub(in crate::cli) use paste_file::PASTE_FILE_HELP;
-pub(in crate::cli) use persona::{PERSONA_HELP, PERSONA_IMPORT_HELP};
+pub(in crate::cli) use persona::{PERSONA_EDIT_HELP, PERSONA_HELP, PERSONA_IMPORT_HELP, PERSONA_NEW_HELP};
 pub(in crate::cli) use plugin::PLUGIN_HELP;
 pub(in crate::cli) use plugin_windows::PLUGIN_WINDOWS_HELP;
 pub(in crate::cli) use ports::{PORTS_HELP, PORTS_STOP_ABOUT, PORTS_STOP_HELP};

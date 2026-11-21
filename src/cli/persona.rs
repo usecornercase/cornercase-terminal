@@ -2,17 +2,18 @@ use std::fmt::Write as _;
 use std::io::IsTerminal as _;
 use std::path::Path;
 
-use super::args::persona::{PersonaAction, PersonaImportArgs, PersonaRemoveArgs};
+use super::args::persona::{PersonaAction, PersonaEditArgs, PersonaIdArgs, PersonaImportArgs, PersonaNewArgs};
 use super::{note, print_json, print_out, read_limited};
 use crate::client::{answer, ask, confirm_on_stderr};
 use crate::control::Command;
 use crate::control::persona::{
-    CHECK, PersonaImport, PersonaInfo, PersonaList, PersonaRemove, PersonaRemoved, PersonaText, Personas,
-    PersonasImported,
+    CHECK, PersonaImport, PersonaInfo, PersonaList, PersonaRemove, PersonaRemoved, PersonaSave, PersonaSaved,
+    PersonaShow, PersonaShown, PersonaText, Personas, PersonasImported,
 };
 use crate::error::{Error, Result};
-use crate::flows::persona::MAX_BYTES;
+use crate::flows::persona::draft::{self, Draft};
 use crate::flows::persona::source::{self, Gathered, Hosts, Source};
+use crate::flows::persona::{MAX_BYTES, parse};
 use crate::flows::share::visible;
 
 pub(super) fn run(action: PersonaAction) -> Result<()> {
@@ -26,10 +27,70 @@ pub(super) fn run(action: PersonaAction) -> Result<()> {
         }
         PersonaAction::Import(args) => import(&args),
         PersonaAction::Remove(args) => remove(&args),
+        PersonaAction::Show(args) => show(&args),
+        PersonaAction::New(args) => new(&args),
+        PersonaAction::Edit(args) => edit(&args),
     }
 }
 
-fn remove(args: &PersonaRemoveArgs) -> Result<()> {
+fn show(args: &PersonaIdArgs) -> Result<()> {
+    let value = ask("persona show", Command::PersonaShow(PersonaShow { id: args.id.clone() }))?;
+    if args.print.json {
+        return print_json(&value);
+    }
+    let shown: PersonaShown = answer(value)?;
+    print_out(&visible_text(&shown.text))
+}
+
+fn visible_text(text: &str) -> String {
+    text.lines().map(|line| format!("{}\n", visible(line))).collect()
+}
+
+fn instructions(file: &Path) -> Result<String> {
+    read_limited(file, MAX_BYTES, "is too long for a persona (at most 256 KiB)")
+}
+
+fn new(args: &PersonaNewArgs) -> Result<()> {
+    let draft = Draft {
+        name: args.name.clone(),
+        description: args.description.clone().unwrap_or_default(),
+        emoji: args.emoji.clone().unwrap_or_default(),
+        body: instructions(&args.instructions)?,
+    };
+    let save =
+        PersonaSave { id: args.id.clone().unwrap_or_default(), text: draft::compose(&draft, None), replace: false };
+    saved(save, args.print.json)
+}
+
+fn edit(args: &PersonaEditArgs) -> Result<()> {
+    let value = ask("persona show", Command::PersonaShow(PersonaShow { id: args.id.clone() }))?;
+    let shown: PersonaShown = answer(value)?;
+    let was = parse(&shown.persona.id, &shown.text).map_err(|e| Error::Control(visible(&e)))?;
+    let body = match &args.instructions {
+        Some(file) => instructions(file)?,
+        None => draft::body(&shown.text).to_string(),
+    };
+    let draft = Draft {
+        name: args.name.clone().unwrap_or(was.name),
+        description: args.description.clone().unwrap_or(was.description),
+        emoji: args.emoji.clone().unwrap_or(was.emoji),
+        body,
+    };
+    let text = draft::compose(&draft, Some(&shown.text));
+    saved(PersonaSave { id: shown.persona.id, text, replace: true }, args.print.json)
+}
+
+fn saved(save: PersonaSave, json: bool) -> Result<()> {
+    let value = ask("persona save", Command::PersonaSave(save))?;
+    if json {
+        return print_json(&value);
+    }
+    let saved: PersonaSaved = answer(value)?;
+    let path = saved.persona.path.as_ref().map(|path| format!(": {}", path.display())).unwrap_or_default();
+    print_out(&format!("saved the persona {} as {}{path}\n", visible(&saved.persona.name), saved.persona.id))
+}
+
+fn remove(args: &PersonaIdArgs) -> Result<()> {
     let value = ask("persona remove", Command::PersonaRemove(PersonaRemove { id: args.id.clone() }))?;
     if args.print.json {
         return print_json(&value);

@@ -33,7 +33,7 @@ impl App {
             None => self.here(caller).project,
         };
         let listing = self.flow_listing(p.map(|p| self.projects[p].path.as_path()));
-        let (flows, hidden) = manage::info_listing(&listing, &self.persona_ids());
+        let (flows, hidden) = manage::info_listing(&listing, &self.persona_library());
         let builtins = listing.builtins;
         let broken = listing.broken.into_iter().map(|(path, error)| BrokenFlow { path, error }).collect();
         Ok(Some(json(&Flows { flows, broken, hidden, builtins })))

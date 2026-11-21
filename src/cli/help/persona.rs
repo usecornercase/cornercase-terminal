@@ -10,8 +10,26 @@ Examples:
   cornercase persona import msitarzewski/agency-agents/engineering
   cornercase persona import msitarzewski/agency-agents --check
   cornercase persona import ./reviewer.md
+  cornercase persona new --name \"Careful Tester\" --emoji 🧪 ./tester.md
+  cornercase persona edit careful-tester --description \"Tests before it fixes\"
+  cornercase persona show careful-tester
   cornercase persona list
   cornercase persona remove engineering-code-reviewer";
+
+pub(in crate::cli) const PERSONA_NEW_HELP: &str =
+    "INSTRUCTIONS is a Markdown file, or - for standard input, with what the agent should do and how;
+cornercase writes the front matter from --name, --description and --emoji. The persona is yours:
+it has no `source:`. Its ID comes from the name, or from --id. A persona whose ID or name you
+already have is refused.
+
+With --json it prints {\"persona\": {\"id\", \"name\", \"description\", \"emoji\", \"bytes\", \"path\"}}.";
+
+pub(in crate::cli) const PERSONA_EDIT_HELP: &str =
+    "Only what you pass changes; the ID stays, so the flows that follow the persona keep it. Other keys
+of its front matter (such as `color`) are kept, and `source:` goes: an edited persona is yours, and
+importing its source again with --replace would undo your edit.
+
+With --json it prints {\"persona\": {\"id\", \"name\", \"description\", \"emoji\", \"bytes\", \"path\"}}.";
 
 pub(in crate::cli) const PERSONA_IMPORT_HELP: &str =
     "SOURCE is a .md file, a folder, - for standard input, an https:// address, or a GitHub repository

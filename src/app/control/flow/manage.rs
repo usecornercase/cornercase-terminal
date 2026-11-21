@@ -7,6 +7,7 @@ use crate::control::contract::{Code, Refusal};
 use crate::control::{self, FlowDefaultSet, FlowOrdered, FlowRemoved, FlowSaved};
 use crate::flows::Flow;
 use crate::flows::dialog::project_risks;
+use crate::flows::persona::Persona;
 use crate::flows::share::{self, To};
 use crate::flows::store::{self, Listing, Origin, Saved};
 use crate::paths;
@@ -320,13 +321,15 @@ fn edited(listing: &Listing, name: &str) -> Option<PathBuf> {
         .and_then(|saved| saved.origin.path().map(PathBuf::from))
 }
 
-pub(super) fn info_listing(listing: &Listing, known: &[String]) -> (Vec<control::FlowInfo>, Vec<control::FlowInfo>) {
+pub(super) fn info_listing(listing: &Listing, library: &[Persona]) -> (Vec<control::FlowInfo>, Vec<control::FlowInfo>) {
+    let known: Vec<String> = library.iter().map(|persona| persona.id.clone()).collect();
     let shown = listing
         .flows
         .iter()
         .map(|saved| {
             let mut info = super::flow_info(&saved.flow, &saved.origin);
-            info.problems.extend(saved.flow.persona_problems(known));
+            info.problems.extend(saved.flow.persona_problems(&known));
+            control::RoleInfo::name_personas(&mut info.roles, library);
             info.problems.extend(listing.conflict(saved));
             info.edited = store::edits_builtin(&listing.builtins, saved);
             info.default = listing.is_default(saved);

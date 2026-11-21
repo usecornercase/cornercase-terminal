@@ -185,6 +185,8 @@ impl Command {
             Self::FlowFiles(files) => files.fields(fields),
             Self::PersonaImport(import) => import.fields(fields),
             Self::PersonaRemove(remove) => remove.fields(fields),
+            Self::PersonaSave(save) => save.fields(fields),
+            Self::PersonaShow(show) => show.fields(fields),
             _ => return false,
         }
         true

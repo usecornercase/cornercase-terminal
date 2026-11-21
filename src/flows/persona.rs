@@ -6,6 +6,7 @@ use crate::error::{Error, Result};
 use crate::issues::slug;
 use crate::persist;
 
+pub(crate) mod draft;
 pub(crate) mod source;
 
 pub(crate) const EXTENSION: &str = "md";
@@ -159,7 +160,7 @@ pub(crate) fn with_source(text: &str, source: &str) -> String {
     let Some(front) = front(text) else { return text.to_string() };
     let newline = if text.contains("\r\n") { "\r\n" } else { "\n" };
     let mut out = format!("{FENCE}{newline}");
-    for line in without_source(&front) {
+    for line in without_keys(&front, &["source"]) {
         out.push_str(line);
         out.push_str(newline);
     }
@@ -168,15 +169,15 @@ pub(crate) fn with_source(text: &str, source: &str) -> String {
     out
 }
 
-fn without_source<'a>(front: &Front<'a>) -> Vec<&'a str> {
-    let mut in_source = false;
+fn without_keys<'a>(front: &Front<'a>, keys: &[&str]) -> Vec<&'a str> {
+    let mut in_dropped = false;
     let mut kept = Vec::new();
     for line in &front.lines {
-        if in_source && (line.is_empty() || line.starts_with([' ', '\t'])) {
+        if in_dropped && (line.is_empty() || line.starts_with([' ', '\t'])) {
             continue;
         }
-        in_source = line.split_once(':').is_some_and(|(key, _)| key == "source");
-        if !in_source {
+        in_dropped = line.split_once(':').is_some_and(|(key, _)| keys.contains(&key));
+        if !in_dropped {
             kept.push(*line);
         }
     }

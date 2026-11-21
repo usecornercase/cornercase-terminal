@@ -300,6 +300,8 @@ pub(crate) enum Command {
     PersonaList(persona::PersonaList),
     PersonaImport(persona::PersonaImport),
     PersonaRemove(persona::PersonaRemove),
+    PersonaSave(persona::PersonaSave),
+    PersonaShow(persona::PersonaShow),
 }
 
 impl Command {
@@ -451,6 +453,8 @@ impl Command {
             Self::PersonaList(_) => 138,
             Self::PersonaImport(_) => 139,
             Self::PersonaRemove(_) => 140,
+            Self::PersonaSave(_) => 141,
+            Self::PersonaShow(_) => 142,
             _ => return None,
         })
     }
@@ -668,6 +672,8 @@ impl Command {
         "persona-list",
         "persona-import",
         "persona-remove",
+        "persona-save",
+        "persona-show",
     ];
 
     pub(crate) fn unreported_request(text: &str) -> bool {

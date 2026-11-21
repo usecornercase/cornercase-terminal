@@ -272,3 +272,108 @@ fn a_flow_that_follows_a_persona_file_it_cannot_read_is_not_saved() {
 
     assert!(matches!(&saved, Response::Error(message) if message.contains("cannot be read")), "{saved:?}");
 }
+
+mod saving {
+    use super::*;
+    use crate::control::persona::{PersonaSave, PersonaSaved, PersonaShow, PersonaShown};
+    use crate::flows::persona::draft::{self, Draft};
+
+    fn tester(body: &str) -> String {
+        let draft =
+            Draft { name: "Careful Tester".into(), emoji: "🧪".into(), body: body.into(), ..Draft::default() };
+        draft::compose(&draft, None)
+    }
+
+    fn save(library: &mut Library, id: &str, text: String, replace: bool) -> Response {
+        now(&mut library.app, None, Command::PersonaSave(PersonaSave { id: id.into(), text, replace }))
+    }
+
+    fn saved(response: Response) -> PersonaSaved {
+        match response {
+            Response::Ok(value) => serde_json::from_value(value).expect("saved"),
+            Response::Error(message) => panic!("not saved: {message}"),
+        }
+    }
+
+    fn refused(response: Response) -> String {
+        match response {
+            Response::Error(message) => message,
+            Response::Ok(value) => panic!("saved: {value}"),
+        }
+    }
+
+    #[test]
+    fn a_new_persona_takes_its_id_from_its_name_and_has_no_source() {
+        let mut library = Library::new();
+
+        let saved = saved(save(&mut library, "", tester("Test first."), false));
+
+        assert_eq!((saved.persona.id.as_str(), saved.persona.source.as_deref()), ("careful-tester", None));
+        let file = std::fs::read_to_string(library.dir().join("careful-tester.md")).expect("the file");
+        assert_eq!(draft::body(&file), "Test first.\n");
+        assert_eq!(library.listed().personas[0].emoji, "🧪");
+    }
+
+    #[test]
+    fn an_id_or_a_name_you_have_is_refused_unless_it_replaces_that_id() {
+        let mut library = Library::new();
+        library.imported(vec![text("reviewer.md", REVIEWER)], |_| {});
+
+        let same_id = refused(save(&mut library, "reviewer", tester("x"), false));
+        let renamed = REVIEWER.replace("You review code.", "You review code twice.");
+        let same_name = refused(save(&mut library, "other", renamed.clone(), false));
+        let replaced = saved(save(&mut library, "reviewer", renamed, true));
+
+        assert!(same_id.contains("you already have the persona `reviewer`"), "{same_id}");
+        assert!(same_name.contains("is also named `Code Reviewer`"), "{same_name}");
+        assert!(replaced.persona.replaced);
+        let file = std::fs::read_to_string(library.dir().join("reviewer.md")).expect("the file");
+        assert!(file.contains("You review code twice."), "{file}");
+    }
+
+    #[rstest::rstest]
+    #[case::not_an_id("Not An Id", tester("x"), "is not a persona id")]
+    #[case::no_name("", "---\ndescription: x\n---\nbody\n".to_string(), "gives no `name`")]
+    fn what_cannot_be_a_persona_is_refused(#[case] id: &str, #[case] text: String, #[case] reason: &str) {
+        let mut library = Library::new();
+
+        let message = refused(save(&mut library, id, text, false));
+
+        assert!(message.contains(reason), "{message}");
+        assert!(!library.dir().exists());
+    }
+
+    #[test]
+    fn show_gives_the_whole_text_and_refuses_one_you_lack() {
+        let mut library = Library::new();
+        library.imported(vec![text("reviewer.md", REVIEWER)], |_| {});
+
+        let shown: PersonaShown = serde_json::from_value(value(
+            &mut library.app,
+            None,
+            Command::PersonaShow(PersonaShow { id: "reviewer".into() }),
+        ))
+        .expect("shown");
+        let missing = now(&mut library.app, None, Command::PersonaShow(PersonaShow { id: "gone".into() }));
+
+        assert!(shown.text.starts_with("---\nname: Code Reviewer\n"), "{}", shown.text);
+        assert_eq!(shown.persona.path, Some(library.dir().join("reviewer.md")));
+        assert!(matches!(missing, Response::Error(_)), "{missing:?}");
+    }
+
+    #[test]
+    fn flow_list_names_the_persona_of_each_role() {
+        let mut library = Library::new();
+        library.imported(vec![text("reviewer.md", REVIEWER)], |_| {});
+        let save = FlowSave { flow: FlowSpec::from(&following("reviewer")), ..FlowSave::default() };
+        assert!(matches!(now(&mut library.app, None, Command::FlowSave(save)), Response::Ok(_)));
+
+        let flows: Flows =
+            serde_json::from_value(value(&mut library.app, None, Command::FlowList(FlowList::default())))
+                .expect("flows");
+
+        let flow = flows.flows.iter().find(|flow| flow.name == "Reviewed").expect("the flow");
+        let reviewer = flow.roles.iter().find(|role| role.role == "reviewer").expect("the reviewer");
+        assert_eq!((reviewer.persona_name.as_str(), reviewer.persona_emoji.as_str()), ("Code Reviewer", "👁️"));
+    }
+}

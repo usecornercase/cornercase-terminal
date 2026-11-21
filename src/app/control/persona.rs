@@ -5,8 +5,8 @@ use super::{Handled, json, malformed};
 use crate::app::App;
 use crate::control::contract::{Code, Refusal};
 use crate::control::persona::{
-    BrokenPersona, CHECK, PersonaImport, PersonaInfo, PersonaRemove, PersonaRemoved, PersonaText, Personas,
-    PersonasImported,
+    BrokenPersona, CHECK, PersonaImport, PersonaInfo, PersonaRemove, PersonaRemoved, PersonaSave, PersonaSaved,
+    PersonaShow, PersonaShown, PersonaText, Personas, PersonasImported,
 };
 use crate::flows::persona::{self, Listing, MAX_IMPORT, Persona};
 use crate::flows::share::visible;
@@ -21,7 +21,11 @@ impl App {
     }
 
     pub(in crate::app) fn persona_ids(&self) -> Vec<String> {
-        persona::list(&self.personas_dir()).personas.into_iter().map(|found| found.id).collect()
+        self.persona_library().into_iter().map(|found| found.id).collect()
+    }
+
+    pub(in crate::app) fn persona_library(&self) -> Vec<Persona> {
+        persona::list(&self.personas_dir()).personas
     }
 
     pub(in crate::app) fn run_personas(&self, flow: &Flow) -> Result<BTreeMap<String, String>, String> {
@@ -48,10 +52,35 @@ impl App {
     }
 
     pub(super) fn persona_import_request(&mut self, import: &PersonaImport) -> Handled {
-        self.import_personas(import).map_err(|e| Refusal::new(e.code, visible(&e.message)))
+        self.import_personas(import).map(|answer| Some(json(&answer))).map_err(seen)
     }
 
-    fn import_personas(&mut self, import: &PersonaImport) -> Handled {
+    pub(super) fn persona_save_request(&mut self, save: &PersonaSave) -> Handled {
+        let persona = self.save_persona(save).map_err(seen)?;
+        Ok(Some(json(&PersonaSaved { persona })))
+    }
+
+    pub(in crate::app) fn save_persona(&mut self, save: &PersonaSave) -> Result<PersonaInfo, Refusal> {
+        let id = save.id.trim();
+        if !id.is_empty() && !persona::valid_id(id) {
+            return Err(malformed(format!("`{id}` is not a persona id: use lower-case letters, digits and -")));
+        }
+        let file = if id.is_empty() { String::new() } else { format!("{id}.{}", persona::EXTENSION) };
+        let text = PersonaText { file, text: save.text.clone(), source: None };
+        let import = PersonaImport { personas: vec![text], replace: save.replace, check: false };
+        let answer = self.import_personas(&import)?;
+        answer.personas.into_iter().next().ok_or_else(|| malformed("nothing to save"))
+    }
+
+    pub(super) fn persona_show_request(&self, show: &PersonaShow) -> Handled {
+        let dir = self.personas_dir();
+        let id = show.id.trim();
+        let found = persona::read(&dir, id).map_err(|e| Refusal::new(Code::NotFound, visible(&e)))?;
+        let persona = PersonaInfo { path: Some(persona::path(&dir, id)), ..(&found).into() };
+        Ok(Some(json(&PersonaShown { persona, text: found.text })))
+    }
+
+    pub(in crate::app) fn import_personas(&mut self, import: &PersonaImport) -> Result<PersonasImported, Refusal> {
         if import.personas.is_empty() {
             return Err(malformed("nothing to import: give at least one persona"));
         }
@@ -69,7 +98,7 @@ impl App {
             .map(|(found, replaced)| PersonaInfo { replaced: *replaced, ..found.into() })
             .collect();
         if import.check {
-            return Ok(Some(json(&answer)));
+            return Ok(answer);
         }
         let paths = persona::save_all(&dir, &incoming)?;
         for (info, path) in answer.personas.iter_mut().zip(paths) {
@@ -78,7 +107,7 @@ impl App {
         let bytes: usize = incoming.iter().map(|found| found.text.len()).sum();
         log::info!("flows", "personas imported", count = incoming.len(), bytes = bytes);
         answer.saved = true;
-        Ok(Some(json(&answer)))
+        Ok(answer)
     }
 
     pub(super) fn persona_remove_request(&mut self, remove: &PersonaRemove) -> Handled {
@@ -89,6 +118,10 @@ impl App {
         log::info!("flows", "persona removed", persona = id);
         Ok(Some(json(&PersonaRemoved { id: id.to_string(), name, path })))
     }
+}
+
+fn seen(e: Refusal) -> Refusal {
+    Refusal::new(e.code, visible(&e.message))
 }
 
 fn unreadable(role: &Role, id: &str, reason: &str) -> String {

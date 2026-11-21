@@ -194,6 +194,8 @@ impl App {
             Command::PersonaList(_) => Ok(Some(self.persona_listing())),
             Command::PersonaImport(import) => self.persona_import_request(&import),
             Command::PersonaRemove(remove) => self.persona_remove_request(&remove),
+            Command::PersonaSave(save) => self.persona_save_request(&save),
+            Command::PersonaShow(show) => self.persona_show_request(&show),
             other => return ControlFlow::Continue(other),
         })
     }
