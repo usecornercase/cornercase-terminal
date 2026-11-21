@@ -2,6 +2,18 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.111
+
+- **Personas for a flow's roles.** A persona is how an agent works, written in Markdown with a front matter that gives its `name`, such as the ones in [agency-agents](https://github.com/msitarzewski/agency-agents). Import some or write your own, then give one to any role of a flow, on any agent: the same Code Reviewer can run on Claude Code or Codex.
+  - **In the window**: Settings → Flows has a **personas** button. Its page lists your personas with where they came from and which flows follow each one. **import** takes a GitHub repository, an address or a folder and shows its personas grouped by division, to check the ones you want (or a whole division) and import them at once. **new** writes one of your own from a name, a description, an emoji and its instructions; **edit** changes one and keeps its id; **remove** asks first and names the flows that follow it.
+  - In a flow's editor, each role's tab and the orchestrator's have a **persona** row to pick one of yours. The diagram shows each role's persona after its agent where there is room, in the Flows and start dialogs and in the Flow panel.
+  - **From the command line**: `persona import` takes a `.md` file, a folder, `-`, an `https://` address, or a GitHub repository as `OWNER/REPO`, `OWNER/REPO/FOLDER` or `OWNER/REPO/PATH/FILE.md`, with no GitHub token; a folder or a repository imports every persona in it, in one download, limited to the folders its `divisions.json` lists. `persona new`, `persona edit`, `persona show`, `persona list` and `persona remove` manage them, and `flow list` names each role's persona.
+  - Personas are prompt text that agents follow without asking, so an import from the web asks first in the window and at the terminal (`--yes` without one), and `--check` lists what would be imported and saves nothing.
+  - They live in `personas/` next to `config.json`. An imported one keeps a `source:` saying where it came from, so importing it again with `--replace` refreshes it; one you write or edit is yours and has none.
+  - When a run starts, each persona its roles name is copied into the run's folder (`personas/ID.md`), and the role's prompt tells the agent to read and follow it before its first work. The run keeps its copy, so changing a persona later never changes a running team.
+  - A flow that names a persona you don't have cannot run, and cannot be saved: the editor shows it in red, the start dialog and `flow list` say which.
+- **For programs**: the requests `persona-list`, `persona-import` (with `check`), `persona-save`, `persona-show` and `persona-remove`; `persona` on the roles of `flow list --json`, `flow save` and `flow runs`, with `persona_name` and `persona_emoji` in `flow list`; and the feature `flow-personas` in `cornercase contract`. A bot cannot change personas, as it cannot change flows.
+
 ## 0.13.110
 
 - **Send your flows to your machines.** Settings › Flows has **sync**, which sends the selected flow of yours to every machine shown in Settings › Machines, and **sync all**, which sends all of them, so starting a flow on a machine runs the version you just saved. Both show while a machine is linked, and then say what each machine got or why it did not (`vps: sent Duo`). A machine still on an older cornercase gets nothing until you update it there. Nothing is sent on its own and nothing is deleted there; your default flow, your order and the built-in flows you deleted stay on each computer.
