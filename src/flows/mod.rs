@@ -16,6 +16,7 @@ pub(crate) mod run;
 pub(crate) mod share;
 pub(crate) mod start;
 pub(crate) mod store;
+pub(crate) mod sync;
 
 pub(crate) const ORCHESTRATOR: &str = "orchestrator";
 pub(crate) const VERSION: u32 = 2;
@@ -32,6 +33,8 @@ pub(crate) struct Flow {
     #[serde(default = "first_version")]
     pub(crate) version: u32,
     pub(crate) name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) changed: Option<String>,
     #[serde(skip_serializing_if = "String::is_empty")]
     pub(crate) description: String,
     #[serde(skip_serializing_if = "String::is_empty")]
@@ -49,6 +52,7 @@ impl Default for Flow {
         Self {
             version: VERSION,
             name: String::new(),
+            changed: None,
             description: String::new(),
             notes: String::new(),
             end: End::default(),

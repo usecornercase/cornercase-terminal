@@ -80,3 +80,67 @@ mod saving {
         assert!(!old.exists());
     }
 }
+
+mod listing {
+    use super::*;
+
+    #[test]
+    fn an_entry_that_cannot_be_read_names_the_folder_and_keeps_the_flows_it_read() {
+        let dir = TempDir::new();
+        let duo = save(dir.path(), &named("Duo"), None).expect("save Duo");
+        let entries = vec![Ok(duo.clone()), Err(std::io::Error::other("an entry went missing"))];
+        let mut listing = Listing::default();
+
+        let paths = flow_files(dir.path(), entries.into_iter(), &mut listing);
+
+        assert_eq!(paths, [duo]);
+        assert_eq!(listing.unlisted, [(dir.path().to_path_buf(), "an entry went missing".to_string())]);
+    }
+
+    #[test]
+    fn a_folder_not_made_yet_is_no_error() {
+        let dir = TempDir::new();
+        let mut listing = Listing::default();
+
+        read_dir(&dir.path().join("flows"), Origin::User, &mut listing);
+
+        assert_eq!(listing, Listing::default());
+    }
+}
+
+#[cfg(unix)]
+mod modes {
+    use std::os::unix::fs::PermissionsExt;
+
+    use super::*;
+
+    fn mode(path: &Path) -> u32 {
+        std::fs::metadata(path).expect("metadata").permissions().mode() & 0o777
+    }
+
+    #[test]
+    fn yours_are_readable_only_by_their_owner_and_a_project_s_are_not() {
+        let dir = TempDir::new();
+        let mut secret = named("Deploy");
+        secret.roles[0].args = vec!["--api-key=abc".into()];
+
+        let yours = save_in(&dir.path().join("flows"), &secret, None, Folder::Yours).expect("save it");
+        let project = save_in(&project_dir(dir.path()), &named("Plain"), None, Folder::Project).expect("save it");
+        let ordinary = project_dir(dir.path()).join("ordinary.txt");
+        std::fs::write(&ordinary, "plain").expect("an ordinary file");
+
+        assert_eq!(mode(&yours), 0o600);
+        assert_eq!(mode(&project), mode(&ordinary));
+    }
+
+    #[test]
+    fn a_folder_of_yours_named_like_a_project_s_is_still_yours() {
+        let dir = TempDir::new();
+        let yours = dir.path().join(".cornercase").join("flows");
+
+        let saved = save_in(&yours, &named("Deploy"), None, Folder::Yours).expect("save it");
+        let unsaid = save(&yours, &named("Quick"), None).expect("save it");
+
+        assert_eq!((mode(&saved), mode(&unsaid)), (0o600, 0o600));
+    }
+}

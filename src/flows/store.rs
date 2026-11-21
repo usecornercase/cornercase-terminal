@@ -65,6 +65,7 @@ pub(crate) struct Listing {
     pub(crate) flows: Vec<Saved>,
     pub(crate) hidden: Vec<Flow>,
     pub(crate) broken: Vec<(PathBuf, String)>,
+    pub(crate) unlisted: Vec<(PathBuf, String)>,
     pub(crate) builtins: Vec<String>,
     pub(crate) default: Option<String>,
 }
@@ -255,18 +256,36 @@ fn hide_flows(listing: &mut Listing, hidden: &[String]) {
 }
 
 fn read_dir(dir: &Path, origin: fn(PathBuf) -> Origin, listing: &mut Listing) {
-    let Ok(entries) = std::fs::read_dir(dir) else { return };
-    let mut paths: Vec<PathBuf> = entries
-        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
-        .filter(|path| path.extension().is_some_and(|ext| ext == EXTENSION) && path.is_file())
-        .collect();
-    paths.sort();
-    for path in paths {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries.map(|entry| entry.map(|entry| entry.path())),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return,
+        Err(error) => return listing.unlisted.push((dir.to_path_buf(), error.to_string())),
+    };
+    for path in flow_files(dir, entries, listing) {
         match read(&path) {
             Ok(flow) => listing.flows.push(Saved { flow, origin: origin(path) }),
             Err(e) => listing.broken.push((path, e.to_string())),
         }
     }
+}
+
+fn flow_files(
+    dir: &Path,
+    entries: impl Iterator<Item = std::io::Result<PathBuf>>,
+    listing: &mut Listing,
+) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    for entry in entries {
+        match entry {
+            Ok(path) if path.extension().is_some_and(|ext| ext == EXTENSION) && path.is_file() => paths.push(path),
+            Err(error) if !listing.unlisted.iter().any(|(unlisted, _)| unlisted == dir) => {
+                listing.unlisted.push((dir.to_path_buf(), error.to_string()));
+            }
+            Ok(_) | Err(_) => {}
+        }
+    }
+    paths.sort();
+    paths
 }
 
 pub(crate) fn read(path: &Path) -> Result<Flow> {
@@ -316,7 +335,27 @@ pub(crate) fn file_name(name: &str) -> String {
     if slug.is_empty() { "flow".to_string() } else { slug.to_string() }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Folder {
+    Yours,
+    Project,
+}
+
+impl Folder {
+    fn kind(self) -> persist::Kind {
+        match self {
+            Self::Yours => persist::Kind::Private,
+            Self::Project => persist::Kind::Synced,
+        }
+    }
+}
+
+#[cfg(test)]
 pub(crate) fn save(dir: &Path, flow: &Flow, previous: Option<&Path>) -> Result<PathBuf> {
+    save_in(dir, flow, previous, Folder::Yours)
+}
+
+pub(crate) fn save_in(dir: &Path, flow: &Flow, previous: Option<&Path>, folder: Folder) -> Result<PathBuf> {
     let text = to_text(flow).map_err(|reason| Error::FlowFile { path: dir.to_path_buf(), reason })?;
     let stem = file_name(&flow.name);
     let path = (1..=MAX_COPIES)
@@ -324,7 +363,7 @@ pub(crate) fn save(dir: &Path, flow: &Flow, previous: Option<&Path>) -> Result<P
         .map(|stem| dir.join(format!("{stem}.{EXTENSION}")))
         .find(|path| Some(path.as_path()) == previous || !path.exists())
         .ok_or_else(|| Error::FlowFile { path: dir.to_path_buf(), reason: "too many flows share its name".into() })?;
-    persist::write_bytes(&path, text.as_bytes(), persist::Kind::Synced)?;
+    persist::write_bytes(&path, text.as_bytes(), folder.kind())?;
     if let Some(previous) = previous.filter(|previous| *previous != path) {
         std::fs::remove_file(previous)?;
     }

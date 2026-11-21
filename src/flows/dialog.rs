@@ -13,6 +13,8 @@ pub(crate) const SET_DEFAULT: &str = "set default";
 pub(crate) const EXPORT: &str = "export";
 pub(crate) const IMPORT: &str = "import";
 pub(crate) const NEW: &str = "new";
+pub(crate) const SYNC_ALL: &str = "sync all";
+pub(crate) const SYNC: &str = "sync";
 pub(crate) const SAVE: &str = "save";
 pub(crate) const CANCEL: &str = "cancel";
 pub(crate) const DIAGRAM: &str = "diagram";
@@ -64,6 +66,7 @@ pub(crate) enum Action {
     Find(char),
     Restart,
     Share,
+    Sync(Option<String>),
     ReadModels(Known),
     Fetch(registry::Source),
 }
@@ -182,6 +185,7 @@ pub(crate) struct Dialog {
     pub(crate) importing: Option<Importing>,
     pub(crate) preview: u16,
     pub(crate) diagram: bool,
+    pub(crate) sync_to: Vec<String>,
 }
 
 impl Dialog {
@@ -206,6 +210,7 @@ impl Dialog {
             importing: None,
             preview: 0,
             diagram: false,
+            sync_to: Vec::new(),
         }
     }
 
@@ -585,11 +590,14 @@ impl Dialog {
             buttons.push(if self.diagram { LIST } else { DIAGRAM });
         }
         buttons.extend([IMPORT, NEW]);
+        if !self.sync_to.is_empty() {
+            buttons.push(SYNC_ALL);
+        }
         if self.in_settings {
             buttons.extend([crate::settings::SHARE, crate::settings::RESTART]);
         }
         buttons.push(DONE);
-        for dropped in [crate::settings::SHARE, IMPORT, EXPORT, SET_DEFAULT, DUPLICATE] {
+        for dropped in [crate::settings::SHARE, SYNC_ALL, SYNC, IMPORT, EXPORT, SET_DEFAULT, DUPLICATE] {
             if !room.wide && room.width > 0 && row_width(&buttons) > room.width {
                 buttons.retain(|label| *label != dropped);
             }
@@ -601,6 +609,9 @@ impl Dialog {
         match self.entry(self.cursor) {
             Some(Entry::Flow(saved)) => {
                 let mut buttons = vec![EDIT, DUPLICATE, SET_DEFAULT, EXPORT];
+                if !self.sync_to.is_empty() && matches!(saved.origin, Origin::User(_)) {
+                    buttons.push(SYNC);
+                }
                 if store::edits_builtin(&self.builtins, saved) {
                     buttons.push(RESTORE);
                 }
@@ -682,6 +693,8 @@ impl Dialog {
             RESTORE_BUILT_IN => return self.unhide(),
             crate::settings::RESTART => return Action::Restart,
             crate::settings::SHARE => return Action::Share,
+            SYNC_ALL => return Action::Sync(None),
+            SYNC => return self.selected().map_or(Action::None, |saved| Action::Sync(Some(saved.flow.name.clone()))),
             NEW => self.open_new(),
             DONE => return Action::Close,
             _ => {}

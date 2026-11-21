@@ -133,6 +133,34 @@ does with the delete button on a built-in flow. Hiding one that is already hidde
 
 Examples:
   cornercase flow hide Quick";
+pub(in crate::cli) const FLOW_SYNC_HELP: &str =
+    "Sends your flows (the files of flows/ next to config.json, built-ins you edited included), or only
+FLOW, to every machine of Settings › Machines that shows its work here, or only --machine's, and waits
+for their answers. Nothing is sent on its own: run it, or click ` sync all ` or a flow's ` sync ` in
+Settings › Flows, when you want a machine to have what you saved here. A hidden machine, or a computer
+you only open a window on, has no link and gets nothing.
+
+A flow is sent when the machine has none of that name among its own, or an older one: each save stamps
+the flow's file with `changed`, and the last saved wins, by each computer's clock (a time more than 5
+minutes ahead of the receiver's is replaced by its own), so a flow saved there later is left alone
+(`kept`), also when it is saved there while the sync runs. Nothing is deleted there, the built-ins you
+deleted stay deleted only here, and the default flow and the order stay per computer. Nothing asks:
+both ends are yours.
+
+It prints one line per machine; with --json {\"machines\": [{\"machine\", \"sent\", \"kept\", \"same\",
+\"failed\": [{\"name\", \"error\"}], \"error\"}]}: the names of the flows sent and kept, how many were
+already the same, the flows that did not go and why (refused there, too large to share, a time ahead
+that could not be fixed here, two files of yours with one name, a file of yours that cannot be read,
+named by its file name, or a folder of your flows that cannot be read, named by its path), and error
+when the machine could not be reached. It exits with 1 when no machine is shown here, when --machine or
+FLOW names none, and, after printing the answer, when a machine could not be reached or a flow did not
+go. A machine on an older cornercase is sent nothing, and its error says to update it. Each flow's env
+values and args go too; on Linux and macOS each flow file of yours is written readable only by you on
+both ends, and on Windows it is in your user profile.
+
+Examples:
+  cornercase flow sync
+  cornercase flow sync Review --machine vps --json";
 pub(in crate::cli) const FLOW_RESTORE_HELP: &str =
     "It brings a deleted built-in flow back, and when you edited it, deletes your version so the built-in
 is the one that runs again. A flow that is shown and not edited has nothing to restore.

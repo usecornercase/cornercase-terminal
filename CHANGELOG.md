@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.110
+
+- **Send your flows to your machines.** Settings › Flows has **sync**, which sends the selected flow of yours to every machine shown in Settings › Machines, and **sync all**, which sends all of them, so starting a flow on a machine runs the version you just saved. Both show while a machine is linked, and then say what each machine got or why it did not (`vps: sent Duo`). A machine still on an older cornercase gets nothing until you update it there. Nothing is sent on its own and nothing is deleted there; your default flow, your order and the built-in flows you deleted stay on each computer.
+- **The last saved wins.** Saving a flow now writes the time in its file (`changed`), by each computer's clock, and a flow saved later on the machine is left alone there, even when it is saved while the sync runs. The machine shows a note naming the computer a flow came from. Nothing asks, since both ends are yours: a synced flow is saved there even when it sets `env` or `args`.
+- **Secrets stay yours.** A flow's `env` values and arguments go with it, so on Linux and macOS each flow file of yours is now written readable only by you when it is saved, here and on the machine; on Windows it is in your user profile.
+- **From a terminal.** `cornercase flow sync [FLOW] [--machine NAME] [--json]` sends every flow of yours, or one, prints what each machine got and exits with 1 when one could not be reached or a flow did not go; `flow list --json` gives each flow of yours `changed`, and `cornercase contract` lists `flow-sync`.
+
 ## 0.13.109
 
 - **A linked machine's workspace has a Ports dialog.** ` ⋯ ` or a right-click on its row, then **ports**, lists the ports its programs listen on there, with the machine's tab that started each one. **go** shows that tab, and **stop** asks first and has the machine stop the program.

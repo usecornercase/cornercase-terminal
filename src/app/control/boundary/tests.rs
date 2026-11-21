@@ -155,6 +155,7 @@ fn every_request_is_decided_once() {
 #[case::keys("keys", "a bot cannot press keys")]
 #[case::flow_run("flow-run", "a bot cannot run a flow")]
 #[case::flows("flow-delete", "a bot cannot change cornercase's flows")]
+#[case::flow_sync("flow-sync", "a bot cannot change cornercase's flows")]
 #[case::plugins("plugin-run", "a bot cannot run or change cornercase's plugins")]
 #[case::stop("stop-port", "a bot cannot stop a process")]
 #[case::discard("changes-discard", "a bot cannot discard changes")]

@@ -87,8 +87,7 @@ impl App {
             (To::Project, Some(path)) => store::project_dir(path),
             _ => paths::flows(self.config_file.path()),
         };
-        let saved =
-            store::save(&dir, &flow, replaced.as_deref()).map_err(|e| format!("could not save the flow: {e}"))?;
+        let saved = self.save_imported(&dir, &flow, replaced.as_deref(), import.synced_from.as_deref())?;
         log::info!("flows", "flow imported", place = imported.origin, bytes = import.text.len());
         imported.path = Some(saved);
         self.refresh_flows();
@@ -375,6 +374,7 @@ fn flow_info(flow: &Flow, origin: &Origin) -> FlowInfo {
         flow: FlowSpec::from(flow),
         edited: false,
         default: false,
+        changed: flow.changed.clone().filter(|_| matches!(origin, Origin::User(_))),
     }
 }
 

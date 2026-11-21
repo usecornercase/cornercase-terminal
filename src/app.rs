@@ -114,6 +114,7 @@ mod events;
 mod files_panel;
 mod flow_panel;
 mod flow_runs;
+mod flow_sync;
 mod flows_dialog;
 mod groups;
 mod help_menu;

@@ -3,7 +3,7 @@ use serde_json::{Value, json};
 use super::commands::Followed;
 use super::*;
 
-const FLOW: &str = r#"# shared
+pub(super) const FLOW: &str = r#"# shared
 version = 1
 name = "Mine"
 
@@ -24,11 +24,11 @@ roles = ["coder"]
 
 const DRAFT: &str = r#"{"name": "Mine", "orchestrator": {"agent": "claude", "prompt": "Run it."}, "roles": [{"name": "coder", "agent": "claude", "edits": true, "prompt": "Write it."}], "stages": [{"roles": ["coder"]}]}"#;
 
-fn json(session: &Session, args: &[&str]) -> Value {
+pub(super) fn json(session: &Session, args: &[&str]) -> Value {
     serde_json::from_str(&session.says(args)).expect("a JSON answer")
 }
 
-fn names(list: &Value, key: &str) -> Vec<String> {
+pub(super) fn names(list: &Value, key: &str) -> Vec<String> {
     list[key].as_array().expect("a list").iter().filter_map(|f| f["name"].as_str().map(str::to_string)).collect()
 }
 

@@ -15,7 +15,7 @@ use crate::editor::Editor;
 use crate::error::Error;
 use crate::flows::dialog::{Action, Agents, Dialog, Editing, Hit, Place, Preview, Room, RowText};
 use crate::flows::registry::{self, Source};
-use crate::flows::store::{self, Origin};
+use crate::flows::store::{self, Folder, Origin};
 use crate::flows::{Flow, builtin, share};
 use crate::log::{self, Job, Level};
 use crate::paths;
@@ -36,6 +36,7 @@ impl App {
         let agents = Agents::new(installed, Known::of(&self.config.agent), path.is_some());
         let mut dialog = Dialog::new(self.flow_listing(path.as_deref()), agents);
         dialog.project = project;
+        dialog.sync_to = self.flow_sync_machines();
         dialog
     }
 
@@ -63,7 +64,7 @@ impl App {
         self.overlay = Some(Overlay::Flows { dialog: Box::new(dialog), back });
     }
 
-    fn flows_dialog(&mut self) -> Option<&mut Dialog> {
+    pub(super) fn flows_dialog(&mut self) -> Option<&mut Dialog> {
         match &mut self.overlay {
             Some(Overlay::Flows { dialog, .. }) => Some(dialog.as_mut()),
             _ => None,
@@ -170,6 +171,7 @@ impl App {
             Action::Export(flow) => self.flow_exported(&flow),
             Action::ReadModels(kind) => self.read_models(kind),
             Action::Fetch(source) => self.fetch_flow(source),
+            Action::Sync(name) => self.flows_sync_now(name),
         }
     }
 
@@ -235,7 +237,7 @@ impl App {
         dialog.notice = Some(format!("restored {name}"));
     }
 
-    fn flows_notice(&mut self, notice: String) {
+    pub(super) fn flows_notice(&mut self, notice: String) {
         if let Some(dialog) = self.flows_dialog() {
             dialog.notice = Some(notice);
         }
@@ -249,7 +251,8 @@ impl App {
     ) -> Result<PathBuf, String> {
         let old = previous.and_then(|path| store::read(path).ok()).map(|flow| flow.name);
         let was_default = previous.is_some_and(|path| self.is_default_file(path));
-        let saved = save(dir, flow, previous);
+        let flow = &self.stamped(dir, flow);
+        let saved = save(dir, flow, previous, self.folder_of(dir));
         if let Ok(path) = &saved {
             log::info!("flows", "flow saved", file = file_name(path));
             if let Some(old) = old.filter(|old| !store::same_name(old, &flow.name)) {
@@ -445,8 +448,10 @@ impl App {
 
     pub(in crate::app) fn refresh_flows(&mut self) {
         let listing = self.flow_listing(self.flows_project().as_deref());
+        let sync = self.flow_sync_machines();
         if let Some(dialog) = self.flows_dialog() {
             dialog.set_listing(listing);
+            dialog.sync_to = sync;
         }
     }
 
@@ -487,8 +492,8 @@ impl App {
     }
 }
 
-fn save(dir: &Path, flow: &Flow, previous: Option<&Path>) -> Result<PathBuf, String> {
-    store::save(dir, flow, previous).map_err(|e| e.to_string())
+fn save(dir: &Path, flow: &Flow, previous: Option<&Path>, folder: Folder) -> Result<PathBuf, String> {
+    store::save_in(dir, flow, previous, folder).map_err(|e| e.to_string())
 }
 
 fn file_name(path: &Path) -> String {
