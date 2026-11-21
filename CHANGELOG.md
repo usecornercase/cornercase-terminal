@@ -2,7 +2,7 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.13.108
+## 0.13.110
 
 - **Send your flows to your machines.** Settings › Flows has **sync**, which sends the selected flow of yours to every machine shown in Settings › Machines, and **sync all**, which sends all of them, so starting a flow on a machine runs the version you just saved. Both show while a machine is linked, and then say what each machine got or why it did not (`vps: sent Duo`). Nothing is sent on its own and nothing is deleted there; your default flow, your order and the built-in flows you deleted stay on each computer.
 - **The last saved wins.** Saving a flow now writes the time in its file (`changed`), by each computer's clock, and a flow saved later on the machine is left alone there, even when it is saved while the sync runs. The machine shows a note naming the computer a flow came from. Nothing asks, since both ends are yours: a synced flow is saved there even when it sets `env` or `args`.
