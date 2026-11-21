@@ -166,7 +166,7 @@ mod its_menu {
 
         assert_eq!(
             (menu_labels(&remote.rig.app), menu_disabled(&remote.rig.app)),
-            (vec!["rename workspace".into()], vec![false])
+            (vec!["rename workspace".into(), "ports".into()], vec![false, false])
         );
         assert_eq!(shown(&remote.rig.app), before);
         let pos = menu_item_at(&remote.rig.app, 0);
@@ -181,8 +181,8 @@ mod its_menu {
 
         remote.menu_at(Place::Column, Way::Button);
 
-        let labels: Vec<String> = vec!["vps unreachable".into(), "rename workspace".into()];
-        assert_eq!((menu_labels(&remote.rig.app), menu_disabled(&remote.rig.app)), (labels, vec![true, true]));
+        let labels: Vec<String> = vec!["vps unreachable".into(), "rename workspace".into(), "ports".into()];
+        assert_eq!((menu_labels(&remote.rig.app), menu_disabled(&remote.rig.app)), (labels, vec![true, true, true]));
         let pos = menu_item_at(&remote.rig.app, 1);
         click(&mut remote.rig.app, pos);
         assert!(remote.rig.app.overlay.is_none());
@@ -195,7 +195,7 @@ mod its_menu {
 
         remote.menu_at(Place::Column, Way::Button);
 
-        assert_eq!(menu_disabled(&remote.rig.app), vec![true]);
+        assert_eq!(menu_disabled(&remote.rig.app), vec![true, false]);
         let pos = menu_item_at(&remote.rig.app, 0);
         click(&mut remote.rig.app, pos);
         assert!(remote.rig.app.overlay.is_none());

@@ -190,7 +190,7 @@ impl App {
         Some(Streamed { follow, command })
     }
 
-    fn follow_machine(&mut self, aim: &RemoteAim, command: Command, once: bool) -> Option<Follow> {
+    pub(in crate::app) fn follow_machine(&mut self, aim: &RemoteAim, command: Command, once: bool) -> Option<Follow> {
         let held = self.machines.held.iter().find(|held| held.link.id() == aim.link)?;
         let id = self.machines.panels.next;
         self.machines.panels.next += 1;
@@ -208,6 +208,9 @@ impl App {
     }
 
     pub(super) fn remote_followed(&mut self, followed: Followed) {
+        if self.remote_ports_heard(&followed) || self.there_hold_heard(&followed) {
+            return;
+        }
         let panels = &mut self.machines.panels;
         let Some(workspace) = panels.aim.as_ref().map(|aim| aim.workspace) else { return };
         if let Some(slot) = panels.changes.slot(followed.id) {

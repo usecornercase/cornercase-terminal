@@ -9,12 +9,17 @@ use crate::changes::diff::{MAX_LINES, expand};
 use crate::control::changes::{FileInfo, Gap, GapLineInfo, HunkInfo, LineInfo, Patch, Segment, Summary};
 use crate::control::contract::{Code, Refusal};
 use crate::control::files::{EntryInfo, FolderInfo, Found, FoundFile, Listing, NameInfo, Read};
+use crate::control::ports::{Listing as PortListing, PortInfo, PortStopped};
+use crate::control::{HoldEnd, HoldEnded};
 use crate::files::disk::MAX_ENTRIES;
 use crate::files::search::{MAX_MATCHES, MAX_NAMES};
+use crate::ports::{Place, Port, Via};
 use crate::text;
 
 const CONTEXT_LINES: usize = 3;
 const LINES_KEPT: usize = MAX_LINES * (1 + 2 * CONTEXT_LINES);
+pub(crate) const MAX_PORTS: usize = 500;
+const MAX_ARGS: usize = 64;
 
 pub(crate) fn summary(text: &str) -> Result<Summary, Refusal> {
     let mut summary: Summary = typed(text)?;
@@ -80,6 +85,45 @@ pub(crate) fn found(text: &str) -> Result<Found, Refusal> {
         clean_found_file(file);
     }
     Ok(found)
+}
+
+pub(crate) fn ports(text: &str) -> Result<Vec<Port>, Refusal> {
+    let listing: PortListing = typed(text)?;
+    Ok(listing.ports.iter().take(MAX_PORTS).filter(|info| info.port != 0).map(port_of).collect())
+}
+
+pub(crate) fn port_stopped(text: &str) -> Result<PortStopped, Refusal> {
+    let mut stopped: PortStopped = typed(text)?;
+    stopped.program = stopped.program.as_deref().map(link::clean);
+    stopped.outcome = link::clean(&stopped.outcome);
+    Ok(stopped)
+}
+
+pub(crate) fn held(text: &str) -> bool {
+    link::replied(text).is_some_and(|said| said.is_ok_and(|value| value.get("tunnels").is_some()))
+}
+
+pub(crate) fn hold_ended(text: &str) -> Option<HoldEnd> {
+    let value = link::replied(text)?.ok()?;
+    serde_json::from_value::<HoldEnded>(value).ok().map(|ended| ended.ended)
+}
+
+fn port_of(info: &PortInfo) -> Port {
+    let via = match info.via.as_deref() {
+        Some("pane") => Some(Via::Pane),
+        Some("agent") => Some(Via::Agent),
+        Some("cwd") => Some(Via::Cwd),
+        _ => None,
+    };
+    Port {
+        number: info.port,
+        addresses: info.addresses.iter().filter_map(|address| address.parse().ok()).collect(),
+        pid: info.pid,
+        program: info.program.as_deref().map(link::clean),
+        args: info.args.iter().take(MAX_ARGS).map(|arg| link::clean(arg)).collect(),
+        started: None,
+        place: Place { workspace: info.workspace, pane: info.pane, via, agent: info.agent.as_deref().map(link::clean) },
+    }
 }
 
 fn clean_code(text: &str) -> String {

@@ -33,6 +33,7 @@ mod drag;
 mod mouse;
 mod notices;
 pub(super) mod panels;
+mod ports;
 pub(super) mod relay;
 mod repo;
 mod report;
@@ -40,11 +41,13 @@ mod rows;
 mod run_on;
 mod selection;
 mod stream;
+pub(super) mod tunnels;
 mod typing;
 
 pub(super) use agents::{PaneAim, ThereAgent};
 pub(super) use clicks::RemoteAt;
 pub(super) use drag::RemoteDrag;
+pub(super) use ports::STOPS_THERE;
 pub(super) use rows::{RemoteProject, machine_project, machine_shape, paired, remote_only, statuses};
 pub(super) use selection::{RemoteItem, RemoteShown};
 pub(super) use stream::Flow;
@@ -68,6 +71,7 @@ pub(crate) enum MachineEvent {
     Relayed(relay::Relayed),
     Ignored { key: u64, result: std::result::Result<crate::git::ignored::Listing, String> },
     Packed(Box<Packed>),
+    Tunnel(tunnels::TunnelHeard),
 }
 
 impl From<Report> for AppEvent {
@@ -110,6 +114,8 @@ pub(super) struct Machines {
     watched: Option<stream::Watched>,
     streams: u64,
     pub(super) clones: Vec<Pending>,
+    pub(super) ports: ports::RemotePorts,
+    pub(super) tunnels: tunnels::ThereTunnels,
 }
 
 impl Machines {
@@ -134,6 +140,8 @@ impl Machines {
             watched: None,
             streams: 1,
             clones: Vec::new(),
+            ports: ports::RemotePorts::default(),
+            tunnels: tunnels::ThereTunnels::default(),
         }
     }
 
@@ -246,6 +254,7 @@ impl App {
         self.follow_stream();
         self.drop_late_typed(now);
         self.drop_late_awaited(now);
+        self.sync_there_tunnels(now);
     }
 
     pub(super) fn follow_machines(&mut self) {
@@ -319,6 +328,7 @@ impl App {
             MachineEvent::Relayed(relayed) => self.relayed(relayed),
             MachineEvent::Ignored { key, result } => self.ignored_listed(key, result),
             MachineEvent::Packed(packed) => self.clone_packed(*packed),
+            MachineEvent::Tunnel(heard) => self.there_tunnel_heard(heard),
         }
         if streamed {
             return;
