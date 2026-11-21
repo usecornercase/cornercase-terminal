@@ -808,3 +808,15 @@ impl std::io::Write for BrokenPipe {
 
 #[cfg(test)]
 mod tests;
+
+pub(crate) fn tarball(files: &[(&str, &str)]) -> Vec<u8> {
+    let mut builder = tar::Builder::new(flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast()));
+    for (path, text) in files {
+        let mut header = tar::Header::new_gnu();
+        header.set_size(text.len() as u64);
+        header.set_mode(0o644);
+        header.set_cksum();
+        builder.append_data(&mut header, format!("agency-agents-HEAD/{path}"), text.as_bytes()).expect("append");
+    }
+    builder.into_inner().expect("tar").finish().expect("gzip")
+}

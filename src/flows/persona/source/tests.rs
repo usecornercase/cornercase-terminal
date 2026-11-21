@@ -5,7 +5,7 @@ use flate2::write::GzEncoder;
 use rstest::rstest;
 
 use super::*;
-use crate::test_util::{FakeHttp, TempDir};
+use crate::test_util::{FakeHttp, TempDir, tarball as archive_of};
 
 const REVIEWER: &str = "---\nname: Code Reviewer\n---\nReview it.\n";
 const TESTER: &str = "---\nname: Tester\n---\nTest it.\n";
@@ -14,18 +14,6 @@ const DIVISIONS_JSON: &str = r#"{"divisions": {"engineering": {"label": "Enginee
 
 fn hosts(server: &FakeHttp) -> Hosts {
     Hosts { raw: server.url(), archive: server.url() }
-}
-
-fn archive_of(files: &[(&str, &str)]) -> Vec<u8> {
-    let mut builder = tar::Builder::new(GzEncoder::new(Vec::new(), Compression::fast()));
-    for (path, text) in files {
-        let mut header = tar::Header::new_gnu();
-        header.set_size(text.len() as u64);
-        header.set_mode(0o644);
-        header.set_cksum();
-        builder.append_data(&mut header, format!("agency-agents-HEAD/{path}"), text.as_bytes()).expect("append");
-    }
-    builder.into_inner().expect("tar").finish().expect("gzip")
 }
 
 fn ids(gathered: &Gathered) -> Vec<(&str, Option<&str>)> {

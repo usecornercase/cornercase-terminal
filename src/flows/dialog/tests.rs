@@ -117,9 +117,9 @@ mod the_list {
     }
 
     #[rstest]
-    #[case::built_in(0, vec![EDIT, DUPLICATE, SET_DEFAULT, EXPORT, DELETE, IMPORT, NEW, DONE])]
-    #[case::yours(4, vec![EDIT, DUPLICATE, SET_DEFAULT, EXPORT, DELETE, IMPORT, NEW, DONE])]
-    #[case::unreadable(5, vec![DELETE, IMPORT, NEW, DONE])]
+    #[case::built_in(0, vec![EDIT, DUPLICATE, SET_DEFAULT, EXPORT, DELETE, PERSONAS, IMPORT, NEW, DONE])]
+    #[case::yours(4, vec![EDIT, DUPLICATE, SET_DEFAULT, EXPORT, DELETE, PERSONAS, IMPORT, NEW, DONE])]
+    #[case::unreadable(5, vec![DELETE, PERSONAS, IMPORT, NEW, DONE])]
     fn the_buttons_follow_the_selected_flow(#[case] selected: usize, #[case] expected: Vec<&str>) {
         let mut d = dialog();
         d.select(selected);
@@ -141,7 +141,7 @@ mod the_list {
         let mut d = dialog();
         d.flows[mine()].flow.name = "Full issue".into();
         d.select(mine());
-        assert_eq!(d.buttons(ROOM), [EDIT, DUPLICATE, SET_DEFAULT, EXPORT, RESTORE, DELETE, IMPORT, NEW, DONE]);
+        assert_eq!(d.buttons(ROOM), [EDIT, DUPLICATE, SET_DEFAULT, EXPORT, RESTORE, DELETE, PERSONAS, IMPORT, NEW, DONE]);
         d.press(RESTORE);
         assert_eq!(d.confirm, Some(Confirm::Restore(mine())));
         assert_eq!(d.confirm_text().map(|(title, ..)| title), Some("Restore default"));
@@ -262,22 +262,22 @@ mod list_preview {
         d.flows[mine()].flow.name = "Full issue".into();
         d.select(mine());
         let room = Room { width: 62, ..ROOM };
-        assert_eq!(d.buttons(room), [EDIT, DUPLICATE, SET_DEFAULT, EXPORT, RESTORE, DELETE, IMPORT, NEW, DONE]);
+        assert_eq!(d.buttons(room), [EDIT, DUPLICATE, SET_DEFAULT, EXPORT, RESTORE, DELETE, PERSONAS, IMPORT, NEW, DONE]);
     }
 
     #[test]
     fn a_narrow_list_swaps_between_the_flows_and_the_diagram() {
         let narrow = Room { wide: false, width: 0, ..ROOM };
         let mut d = dialog();
-        assert_eq!(d.buttons(narrow), [EDIT, DUPLICATE, SET_DEFAULT, EXPORT, DELETE, DIAGRAM, IMPORT, NEW, DONE]);
+        assert_eq!(d.buttons(narrow), [EDIT, DUPLICATE, SET_DEFAULT, EXPORT, DELETE, DIAGRAM, PERSONAS, IMPORT, NEW, DONE]);
         d.press(DIAGRAM);
         assert!(d.diagram());
-        assert_eq!(d.buttons(narrow), [EDIT, DUPLICATE, SET_DEFAULT, EXPORT, DELETE, LIST, IMPORT, NEW, DONE]);
+        assert_eq!(d.buttons(narrow), [EDIT, DUPLICATE, SET_DEFAULT, EXPORT, DELETE, LIST, PERSONAS, IMPORT, NEW, DONE]);
         d.press(LIST);
         assert!(!d.diagram());
         assert_eq!(
             d.buttons(Room { width: 0, ..ROOM }),
-            [EDIT, DUPLICATE, SET_DEFAULT, EXPORT, DELETE, IMPORT, NEW, DONE]
+            [EDIT, DUPLICATE, SET_DEFAULT, EXPORT, DELETE, PERSONAS, IMPORT, NEW, DONE]
         );
     }
 }
@@ -572,7 +572,7 @@ mod roles_tabs {
     fn the_orchestrator_tab_has_no_name_edits_or_delete() {
         let mut d = editing();
         d.hit(Hit::Tab(1), ROOM);
-        assert_eq!(edit(&d).rows(), [Row::Agent, Row::Model, Row::Effort, Row::Args, Row::Env, Row::Prompt]);
+        assert_eq!(edit(&d).rows(), [Row::Agent, Row::Model, Row::Effort, Row::Persona, Row::Args, Row::Env, Row::Prompt]);
         assert_eq!(d.buttons(ROOM), [SAVE, DONE]);
     }
 

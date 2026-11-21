@@ -1,15 +1,12 @@
 use std::time::Duration;
 
-use flate2::Compression;
-use flate2::write::GzEncoder;
-
 use super::*;
 use crate::flows::dialog::Page;
 use crate::flows::dialog::personas::catalogue::IMPORT_SELECTED;
 use crate::flows::dialog::personas::{PERSONAS, REMOVE};
 use crate::flows::persona::source::Hosts;
 use crate::flows::persona::{self, draft};
-use crate::test_util::FakeHttp;
+use crate::test_util::{FakeHttp, tarball as archive_of};
 
 const REVIEWER: &str = "---\nname: Code Reviewer\ndescription: Reviews code.\nemoji: 👁️\n---\n\nYou review code.\n";
 const TESTER: &str = "---\nname: Tester\ndescription: Tests it.\n---\n\nYou test.\n";
@@ -45,16 +42,19 @@ fn fill(s: &mut Setup, row: usize, text: &str) {
     key_in(&mut s.app, KeyCode::Enter, WIDE);
 }
 
-fn archive_of(files: &[(&str, &str)]) -> Vec<u8> {
-    let mut builder = tar::Builder::new(GzEncoder::new(Vec::new(), Compression::fast()));
-    for (path, text) in files {
-        let mut header = tar::Header::new_gnu();
-        header.set_size(text.len() as u64);
-        header.set_mode(0o644);
-        header.set_cksum();
-        builder.append_data(&mut header, format!("agents-HEAD/{path}"), text.as_bytes()).expect("append");
-    }
-    builder.into_inner().expect("tar").finish().expect("gzip")
+fn open_catalogue(s: &mut Setup) -> FakeHttp {
+    let archive = archive_of(&[
+        ("divisions.json", DIVISIONS),
+        ("engineering/reviewer.md", REVIEWER),
+        ("testing/tester.md", TESTER),
+    ]);
+    let server = FakeHttp::start(vec![("GET /octo/agents/tar.gz/HEAD", 200, archive)]);
+    s.app.runs.persona_hosts = Hosts { raw: server.url(), archive: server.url() };
+    button(&mut s.app, WIDE, dialog::IMPORT);
+    type_in(&mut s.app, "octo/agents", WIDE);
+    key_in(&mut s.app, KeyCode::Enter, WIDE);
+    fetched(s);
+    server
 }
 
 fn fetched(s: &mut Setup) {
@@ -140,18 +140,8 @@ fn remove_asks_naming_the_flows_that_follow_it() {
 
 #[test]
 fn import_fetches_a_repository_by_division_and_imports_only_the_checked_ones() {
-    let archive = archive_of(&[
-        ("divisions.json", DIVISIONS),
-        ("engineering/reviewer.md", REVIEWER),
-        ("testing/tester.md", TESTER),
-    ]);
-    let server = FakeHttp::start(vec![("GET /octo/agents/tar.gz/HEAD", 200, archive)]);
     let mut s = personas_page();
-    s.app.runs.persona_hosts = Hosts { raw: server.url(), archive: server.url() };
-    button(&mut s.app, WIDE, dialog::IMPORT);
-    type_in(&mut s.app, "octo/agents", WIDE);
-    key_in(&mut s.app, KeyCode::Enter, WIDE);
-    fetched(&mut s);
+    let _server = open_catalogue(&mut s);
 
     let screen = shown(&mut s.app, WIDE);
     assert!(screen.contains("[ ] Engineering") && screen.contains("[ ] Testing"), "{screen}");
@@ -217,18 +207,8 @@ mod pages {
 
     #[test]
     fn the_catalogue() {
-        let archive = archive_of(&[
-            ("divisions.json", DIVISIONS),
-            ("engineering/reviewer.md", REVIEWER),
-            ("testing/tester.md", TESTER),
-        ]);
-        let server = FakeHttp::start(vec![("GET /octo/agents/tar.gz/HEAD", 200, archive)]);
         let mut s = with_reviewer();
-        s.app.runs.persona_hosts = Hosts { raw: server.url(), archive: server.url() };
-        button(&mut s.app, WIDE, dialog::IMPORT);
-        type_in(&mut s.app, "octo/agents", WIDE);
-        key_in(&mut s.app, KeyCode::Enter, WIDE);
-        fetched(&mut s);
+        let server = open_catalogue(&mut s);
         insta::assert_snapshot!(shown(&mut s.app, WIDE).replace(&server.url(), "SERVER"));
     }
 }

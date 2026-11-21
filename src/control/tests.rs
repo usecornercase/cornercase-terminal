@@ -230,6 +230,8 @@ fn persona_commands() -> Vec<Command> {
         Command::PersonaList(persona::PersonaList::default()),
         Command::PersonaImport(persona::PersonaImport::default()),
         Command::PersonaRemove(persona::PersonaRemove::default()),
+        Command::PersonaSave(persona::PersonaSave::default()),
+        Command::PersonaShow(persona::PersonaShow::default()),
     ]
 }
 

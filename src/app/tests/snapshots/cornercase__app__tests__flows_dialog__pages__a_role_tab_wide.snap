@@ -1,5 +1,6 @@
 ---
 source: src/app/tests/flows_dialog.rs
+assertion_line: 678
 expression: "shown(&mut s.app, area)"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                                                            "
@@ -11,12 +12,12 @@ expression: "shown(&mut s.app, area)"
 "     │   agent           claude  not installed                                                   │          ╭─ orchestrator ───╮              │ │     "
 "     │   model           default                                                                 │          │ claude           │              │ │     "
 "     │   effort          default  how hard it thinks                                             │          ╰──────────────────╯              │ │     "
-"     │   args            none  added to the agent's command                                      │                                            │ │     "
-"     │   env             none  KEY=value pairs                                                   │          ╭─ coder ──────────╮◀───────────╮ │ │     "
-"     │   edits files     [ ] no  it is told not to change files                                  │          │ claude           │◀─────────╮ │ │ │     "
-"     │   worktree        shared  where the team works                                            │          ╰─────────┬────────╯          │ │ │ │     "
-"     │   prompt          You are a code reviewer in a team of coding agents working in this…  ✎  │                    │     findings · ≤3 │ │ │ │     "
-"     │                                                                                           │          ╭─────────┴─────────╮         │ │ │ │     "
+"     │   persona         none  how it works, from your personas                                  │                                            │ │     "
+"     │   args            none  added to the agent's command                                      │          ╭─ coder ──────────╮◀───────────╮ │ │     "
+"     │   env             none  KEY=value pairs                                                   │          │ claude           │◀─────────╮ │ │ │     "
+"     │   edits files     [ ] no  it is told not to change files                                  │          ╰─────────┬────────╯          │ │ │ │     "
+"     │   worktree        shared  where the team works                                            │                    │     findings · ≤3 │ │ │ │     "
+"     │   prompt          You are a code reviewer in a team of coding agents working in this…  ✎  │          ╭─────────┴─────────╮         │ │ │ │     "
 "     │                                                                                           │          ▼                   ▼         │ │ │ │     "
 "     │                                                                                           │ ╭─ reviewer ─────╮  ╭─ security ─────╮ │ │ │ │     "
 "     │                                                                                           │ │ claude         │  │ claude         │─╯ │ │ │     "

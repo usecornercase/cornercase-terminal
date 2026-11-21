@@ -1,5 +1,6 @@
 ---
 source: src/app/tests/flows_dialog.rs
+assertion_line: 658
 expression: "shown(&mut s.app, WIDE)"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                                                            "
@@ -42,7 +43,7 @@ expression: "shown(&mut s.app, WIDE)"
 "     │                                                                                           ╰────────────────────────────────────────────╯ │     "
 "     │                                                                                                                                          │     "
 "     │ a deleted built-in flow: restore brings it back to every list                                                                            │     "
-"     │                                                                                         restore   import   new   share   restart   done  │     "
+"     │                                                                              restore   personas   import   new   share   restart   done  │     "
 " ────╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯     "
 "  Worktrees      Recap         │                         │                                                                                            "
 "  More ▴                 Help  │                         │                                                                                            "
