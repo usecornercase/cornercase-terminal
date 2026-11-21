@@ -254,6 +254,13 @@ fn hide_flows(listing: &mut Listing, hidden: &[String]) {
     listing.hidden.sort_by_key(|flow| flow.name.trim().to_lowercase());
 }
 
+pub(crate) fn unreadable(dir: &Path) -> Option<String> {
+    match std::fs::read_dir(dir) {
+        Err(error) if error.kind() != std::io::ErrorKind::NotFound => Some(error.to_string()),
+        _ => None,
+    }
+}
+
 fn read_dir(dir: &Path, origin: fn(PathBuf) -> Origin, listing: &mut Listing) {
     let Ok(entries) = std::fs::read_dir(dir) else { return };
     let mut paths: Vec<PathBuf> = entries

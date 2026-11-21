@@ -229,22 +229,39 @@ impl App {
         }
     }
 
-    fn flows_to_send(&self, name: Option<&str>) -> Result<Sending, Refusal> {
+    pub(super) fn flows_to_send(&self, name: Option<&str>) -> Result<Sending, Refusal> {
         let listing = self.flow_listing(None);
         let wanted = |saved: &&Saved| name.is_none_or(|name| store::same_name(&saved.flow.name, name));
         let yours: Vec<&Saved> =
             listing.flows.iter().filter(|saved| matches!(saved.origin, Origin::User(_))).filter(wanted).collect();
+        let unreadable = self.unreadable_flows(&listing, name.is_none());
         if let Some(name) = name
             && yours.is_empty()
+            && unreadable.is_empty()
         {
             return Err(not_yours(&listing, name));
         }
         let now = SystemTime::now();
         let mut outgoing = Sending::default();
-        for saved in yours {
-            add_flow(&mut outgoing, saved, now);
+        for copies in by_name(yours) {
+            match copies.as_slice() {
+                [saved] => add_flow(&mut outgoing, saved, now),
+                _ => outgoing.left_out.push(duplicated(&copies)),
+            }
         }
+        outgoing.left_out.extend(unreadable);
         Ok(outgoing)
+    }
+
+    fn unreadable_flows(&self, listing: &Listing, every: bool) -> Vec<FlowSyncFailure> {
+        let dir = self.yours_flows();
+        let folder = store::unreadable(&dir).map(|why| FlowSyncFailure {
+            name: dir.display().to_string(),
+            error: format!("the folder of your flows could not be read: {why}"),
+        });
+        let files = listing.broken.iter().filter(|(path, _)| every && path.parent() == Some(dir.as_path()));
+        let files = files.map(|(path, why)| FlowSyncFailure { name: file_name(path), error: why.clone() });
+        folder.into_iter().chain(files).collect()
     }
 
     fn flow_sync_targets(&self, machine: Option<&str>) -> Result<Vec<(String, String)>, Refusal> {
@@ -337,6 +354,33 @@ fn kept_time(flow: &Flow) -> Flow {
     let Some(fixed) = present(flow, SystemTime::now()) else { return flow.clone() };
     log::warning!("flows", "a synced flow's time is in the future: it is saved with this computer's time");
     fixed
+}
+
+fn by_name(yours: Vec<&Saved>) -> Vec<Vec<&Saved>> {
+    let mut named: Vec<Vec<&Saved>> = Vec::new();
+    for saved in yours {
+        match named.iter_mut().find(|copies| store::same_name(&copies[0].flow.name, &saved.flow.name)) {
+            Some(copies) => copies.push(saved),
+            None => named.push(vec![saved]),
+        }
+    }
+    named
+}
+
+fn file_name(path: &Path) -> String {
+    path.file_name().map_or_else(|| path.display().to_string(), |name| name.to_string_lossy().into_owned())
+}
+
+fn duplicated(copies: &[&Saved]) -> FlowSyncFailure {
+    let files: Vec<String> = copies.iter().filter_map(|saved| saved.origin.path()).map(file_name).collect();
+    FlowSyncFailure {
+        name: copies[0].flow.name.clone(),
+        error: format!(
+            "{} files of yours have this name ({}): rename or delete one, then sync again",
+            copies.len(),
+            files.join(", ")
+        ),
+    }
 }
 
 fn in_the_present(saved: &Saved, now: SystemTime) -> Result<Flow, String> {

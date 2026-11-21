@@ -527,4 +527,22 @@ mod file_modes {
         assert!(failed[0].error.contains("ahead"), "{failed:?}");
         assert_eq!((there.count("flow-import"), store::read(&path).expect("unchanged").changed), (0, ahead.changed));
     }
+
+    #[test]
+    fn a_folder_of_your_flows_that_cannot_be_read_is_reported_as_failed() {
+        let there = There::default();
+        let mut rig = linked(&there);
+        rig.save("Duo");
+        let folder = rig.yours();
+        let locked = |mode| std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(mode));
+        locked(0o000).expect("lock the folder");
+
+        let synced = rig.sync_now(&json!({}));
+        locked(0o700).expect("unlock the folder");
+
+        let failed = &synced.machines[0].failed;
+        assert_eq!(failed.iter().map(|f| f.name.clone()).collect::<Vec<_>>(), [folder.display().to_string()]);
+        assert!(failed[0].error.contains("could not be read"), "{failed:?}");
+        assert_eq!(there.count("flow-import"), 0);
+    }
 }

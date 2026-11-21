@@ -149,8 +149,9 @@ both ends are yours.
 
 It prints one line per machine; with --json {\"machines\": [{\"machine\", \"sent\", \"kept\", \"same\",
 \"failed\": [{\"name\", \"error\"}], \"error\"}]}: the names of the flows sent and kept, how many were
-already the same, the flows that did not go and why (refused there, too large to share, or a time ahead
-that could not be fixed here), and error when the machine could not be reached. It exits with 1 when no
+already the same, the flows that did not go and why (refused there, too large to share, a time ahead
+that could not be fixed here, a file of yours that cannot be read, two files of yours with one name, or a
+folder of your flows that cannot be read), and error when the machine could not be reached. It exits with 1 when no
 machine is shown here, when --machine or FLOW names none, and, after printing the answer, when a
 machine could not be reached or a flow did not go. Each flow's env values go too, and each flow file of
 yours is written readable only by you on both ends.
