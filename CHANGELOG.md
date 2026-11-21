@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.109
+
+- **A linked machine's workspace has a Ports dialog.** ` ⋯ ` or a right-click on its row, then **ports**, lists the ports its programs listen on there, with the machine's tab that started each one. **go** shows that tab, and **stop** asks first and has the machine stop the program.
+- **Tunnel a machine's port to this computer** from that dialog: **tunnel** forwards it with your own `ssh`, on the same port when it's free here, and **open** then opens it in your browser. Cornercase's server holds the tunnel, so it stays while the window is closed, and the machine lists it too, so closing it there ends it here.
+- Scripts do the same with `cornercase tunnel open 5173 --machine vps` and `tunnel close 5173 --machine vps`; `cornercase tunnels` and `status --json` list these tunnels under `machine_tunnels`.
+
 ## 0.13.108
 
 - **The queue has a window of its own.** Open it from **More ▴ › queue**, or with `e` in the keys menu, with or without a project open. The Issues window no longer has a `Queue` tab, and ` schedule ` still works on an issue: cancelling goes back to the issue, and saving opens the queue with the new entry selected.
