@@ -40,8 +40,7 @@ impl Sending {
 }
 
 pub(crate) fn sync(connect: &dyn Connect, machine: &str, sending: &Sending) -> MachineFlows {
-    let mut report =
-        MachineFlows { machine: machine.into(), failed: sending.left_out.clone(), ..MachineFlows::default() };
+    let mut report = MachineFlows { machine: machine.into(), ..MachineFlows::default() };
     let theirs = match listed(connect, machine) {
         Ok(theirs) => theirs,
         Err(why) => {

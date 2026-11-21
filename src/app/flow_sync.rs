@@ -39,14 +39,14 @@ struct Waiter {
     answer: Answer,
     pending: usize,
     reports: Vec<MachineFlows>,
-    left_out: Vec<String>,
+    left_out: Vec<FlowSyncFailure>,
 }
 
 struct Started {
     id: u64,
     machines: Vec<String>,
     reports: Vec<MachineFlows>,
-    left_out: Vec<String>,
+    left_out: Vec<FlowSyncFailure>,
 }
 
 impl Syncing {
@@ -63,13 +63,10 @@ impl Syncing {
         self.waiters.push(Waiter { id, answer, pending: machines.len(), reports, left_out });
     }
 
-    fn left_out(&self, id: u64) -> &[String] {
-        self.waiters.iter().find(|waiter| waiter.id == id).map_or(&[], |waiter| &waiter.left_out)
-    }
-
-    fn settled(&mut self, id: u64, report: MachineFlows) -> Option<Waiter> {
+    fn settled(&mut self, id: u64, mut report: MachineFlows) -> Option<Waiter> {
         let at = self.waiters.iter().position(|waiter| waiter.id == id)?;
         let waiter = &mut self.waiters[at];
+        report.failed.splice(0..0, waiter.left_out.iter().cloned());
         waiter.reports.push(report);
         waiter.pending = waiter.pending.saturating_sub(1);
         (waiter.pending == 0).then(|| self.waiters.remove(at))
@@ -182,10 +179,10 @@ impl App {
         let targets = self.flow_sync_targets(request.machine.as_deref())?;
         let outgoing = self.flows_to_send(request.name.as_deref())?;
         self.machines.flows.next += 1;
-        let left_out = outgoing.left_out.iter().map(|failed| failed.name.clone()).collect();
+        let left_out = outgoing.left_out.clone();
         let mut started = Started { id: self.machines.flows.next, machines: Vec::new(), reports: Vec::new(), left_out };
-        for name in &started.left_out {
-            log::warning!("flows", "flow left out of a sync", name = name);
+        for failed in &started.left_out {
+            log::warning!("flows", "flow left out of a sync", name = failed.name);
         }
         for (name, destination) in targets {
             if self.linked_destination(&destination) {
@@ -220,7 +217,7 @@ impl App {
 
     pub(super) fn flows_synced(&mut self, waiter: u64, destination: &str, report: MachineFlows) {
         let report = hidden_report(report, destination);
-        log_report(&report, self.machines.flows.left_out(waiter));
+        log_report(&report);
         let Some(mut waiter) = self.machines.flows.settled(waiter, report) else { return };
         let order = |report: &MachineFlows| self.config.machines.iter().position(|m| m.name == report.machine);
         waiter.reports.sort_by_key(order);
@@ -417,7 +414,7 @@ fn hidden_report(mut report: MachineFlows, destination: &str) -> MachineFlows {
     report
 }
 
-fn log_report(report: &MachineFlows, left_out: &[String]) {
+fn log_report(report: &MachineFlows) {
     let machine = &report.machine;
     for name in &report.sent {
         log::info!("flows", "flow synced", machine = machine, name = name);
@@ -425,7 +422,7 @@ fn log_report(report: &MachineFlows, left_out: &[String]) {
     for name in &report.kept {
         log::info!("flows", "flow kept newer there", machine = machine, name = name);
     }
-    for failed in report.failed.iter().filter(|failed| !left_out.contains(&failed.name)) {
+    for failed in &report.failed {
         log::warning!("flows", "flow not synced", machine = machine, name = failed.name, why = failed.error);
     }
     if let Some(error) = &report.error {

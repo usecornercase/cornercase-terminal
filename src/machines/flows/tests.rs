@@ -142,15 +142,16 @@ mod a_sync {
     }
 
     #[test]
-    fn reports_the_flows_left_out_here_as_failed() {
+    fn leaves_the_flows_left_out_here_and_their_reasons_out_of_its_report() {
         let machine = Machine::new(listed(&[]));
         let mut sending = sending(&["Duo"]);
-        sending.left_out = vec![FlowSyncFailure { name: "Huge".into(), error: "it is too large".into() }];
+        let why = "line 3: invalid type: string \"API_TOKEN=sk-left-\", expected a map";
+        sending.left_out = vec![FlowSyncFailure { name: "leak.toml".into(), error: why.into() }];
 
         let synced = sync(&machine, "vps", &sending);
 
         assert_eq!(synced.sent, ["Duo"]);
-        assert_eq!(synced.failed, sending.left_out);
+        assert_eq!(synced.failed, []);
     }
 }
 
