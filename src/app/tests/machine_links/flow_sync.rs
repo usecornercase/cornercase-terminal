@@ -248,6 +248,19 @@ mod the_request {
     }
 
     #[test]
+    fn tells_to_update_a_machine_whose_link_found_an_older_cornercase() {
+        let there = There::default();
+        let mut rig = rig_with(vec![machine("vps", "vps.lan")], &there);
+        let older = machines::Status { state: State::Older, ..machines::Status::default() };
+        rig.app.machines.set_status(0, older);
+
+        let synced = rig.ask_flows(&json!({})).expect("an answer at once").expect("synced");
+
+        assert_eq!(synced["machines"][0]["error"], "it runs an older cornercase: update it there, then sync again");
+        assert_eq!(there.commands(), Vec::<String>::new());
+    }
+
+    #[test]
     fn is_refused_when_no_machine_is_shown_or_the_one_named_is_hidden() {
         let mut none = rig_with(Vec::new(), &There::default());
         let hidden = Machine { shown: false, ..machine("vps", "vps.lan") };

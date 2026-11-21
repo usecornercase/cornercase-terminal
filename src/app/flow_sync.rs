@@ -309,6 +309,7 @@ impl App {
     fn not_linked(&self, name: &str, destination: &str) -> String {
         match self.machines.held().iter().find(|held| held.destination == destination) {
             Some(held) if held.status.state == State::Connecting => format!("{name} is still connecting"),
+            Some(held) if held.status.state == State::Older => sending::OLDER.into(),
             Some(held) => self.unlinked(held),
             None => format!("{name} is still connecting"),
         }

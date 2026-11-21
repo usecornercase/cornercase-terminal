@@ -14,8 +14,7 @@ use crate::time::Stamp;
 const USER: &str = "user";
 const YOURS: &str = "yours";
 const SENDER_KEPT: usize = 64;
-const OLDER: &str = "it runs an older cornercase, which keeps no time on a flow and may save it readable by \
-                                other users: update cornercase there, then sync again";
+pub(crate) const OLDER: &str = "it runs an older cornercase: update it there, then sync again";
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Sending {
