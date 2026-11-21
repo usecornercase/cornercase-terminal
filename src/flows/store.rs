@@ -261,12 +261,23 @@ fn read_dir(dir: &Path, origin: fn(PathBuf) -> Origin, listing: &mut Listing) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return,
         Err(error) => return listing.unlisted.push((dir.to_path_buf(), error.to_string())),
     };
+    read_entries(dir, entries, origin, listing);
+}
+
+fn read_entries(
+    dir: &Path,
+    entries: impl Iterator<Item = std::io::Result<PathBuf>>,
+    origin: fn(PathBuf) -> Origin,
+    listing: &mut Listing,
+) {
+    let added = listing.broken.len();
     for path in flow_files(dir, entries, listing) {
         match read(&path) {
             Ok(flow) => listing.flows.push(Saved { flow, origin: origin(path) }),
             Err(e) => listing.broken.push((path, e.to_string())),
         }
     }
+    listing.broken[added..].sort_by(|(a, _), (b, _)| a.cmp(b));
 }
 
 fn flow_files(

@@ -98,6 +98,32 @@ mod listing {
     }
 
     #[test]
+    fn a_flow_file_that_cannot_be_looked_at_is_broken_and_the_others_are_kept() {
+        let dir = TempDir::new();
+        let duo = save(dir.path(), &named("Duo"), None).expect("save Duo");
+        let gone = dir.path().join("gone.toml");
+        let mut listing = Listing::default();
+
+        let paths = flow_files(dir.path(), vec![Ok(gone.clone()), Ok(duo.clone())].into_iter(), &mut listing);
+
+        assert_eq!(paths, [duo]);
+        assert_eq!(listing.broken.iter().map(|(path, _)| path).collect::<Vec<_>>(), [&gone]);
+        assert!(listing.unlisted.is_empty(), "{listing:?}");
+    }
+
+    #[test]
+    fn broken_files_are_in_path_order_whatever_made_them_broken() {
+        let dir = TempDir::new();
+        std::fs::write(dir.path().join("a.toml"), "not a flow").expect("write a.toml");
+        let mut listing = Listing::default();
+        let (a, z) = (dir.path().join("a.toml"), dir.path().join("z.toml"));
+
+        read_entries(dir.path(), [Ok(z.clone()), Ok(a.clone())].into_iter(), Origin::User, &mut listing);
+
+        assert_eq!(listing.broken.iter().map(|(path, _)| path).collect::<Vec<_>>(), [&a, &z]);
+    }
+
+    #[test]
     fn a_folder_not_made_yet_is_no_error() {
         let dir = TempDir::new();
         let mut listing = Listing::default();
