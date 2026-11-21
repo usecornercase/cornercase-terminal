@@ -16,16 +16,21 @@ use crate::remote::Killer;
 struct Machine {
     listed: Value,
     refuses: Option<(&'static str, &'static str)>,
+    features: Vec<&'static str>,
     asked: Arc<Mutex<Vec<Value>>>,
 }
 
 impl Machine {
     fn new(listed: Value) -> Self {
-        Self { listed, refuses: None, asked: Arc::default() }
+        Self { listed, refuses: None, features: vec!["tunnel-machine", FEATURE], asked: Arc::default() }
     }
 
     fn asked(&self) -> Vec<Value> {
         self.asked.lock().clone()
+    }
+
+    fn commands(&self) -> Vec<String> {
+        self.asked().iter().map(|asked| asked["command"].as_str().unwrap_or_default().to_string()).collect()
     }
 }
 
@@ -37,7 +42,9 @@ impl Connect for Machine {
             let asked = request(&mut theirs);
             let command = asked["command"].as_str().unwrap_or_default().to_string();
             machine.asked.lock().push(asked);
-            if command == "flow-list" {
+            if command == "contract" {
+                respond(&mut theirs, &Response::Ok(json!({"version": "0.13.110", "features": machine.features})));
+            } else if command == "flow-list" {
                 respond(&mut theirs, &Response::Ok(machine.listed.clone()));
             } else if let Some((_, why)) = machine.refuses.filter(|(refused, _)| *refused == command) {
                 let refusal = Structured::Error(Refusal::new(Code::Malformed, why));
@@ -87,14 +94,11 @@ mod a_sync {
         let synced = sync(&machine, "vps", &sending(&["Duo"]));
 
         let asked = machine.asked();
-        assert_eq!(
-            asked.iter().map(|asked| asked["command"].clone()).collect::<Vec<_>>(),
-            ["flow-list", "flow-import"]
-        );
-        assert_eq!(asked[1]["args"]["text"], "name = \"Duo\"");
-        assert_eq!(asked[1]["args"]["place"], "yours");
-        assert_eq!(asked[1]["args"]["replace"], true);
-        assert_eq!(asked[1]["args"]["synced_from"], "laptop");
+        assert_eq!(machine.commands(), ["contract", "flow-list", "flow-import"]);
+        assert_eq!(asked[2]["args"]["text"], "name = \"Duo\"");
+        assert_eq!(asked[2]["args"]["place"], "yours");
+        assert_eq!(asked[2]["args"]["replace"], true);
+        assert_eq!(asked[2]["args"]["synced_from"], "laptop");
         assert_eq!(synced.sent, ["Duo"]);
     }
 
@@ -107,7 +111,7 @@ mod a_sync {
 
         let failed: Vec<(&str, &str)> = synced.failed.iter().map(|f| (f.name.as_str(), f.error.as_str())).collect();
         assert_eq!(failed, [("Duo", "the flow cannot run: no roles"), ("Pair", "the flow cannot run: no roles")]);
-        assert_eq!(machine.asked().len(), 3);
+        assert_eq!(machine.asked().len(), 4);
     }
 
     #[test]
@@ -128,7 +132,18 @@ mod a_sync {
         let synced = sync(&machine, "vps", &sending);
 
         assert_eq!((synced.kept, synced.same), (vec!["Duo".to_string()], 1));
-        assert_eq!(machine.asked().len(), 1);
+        assert_eq!(machine.asked().len(), 2);
+    }
+
+    #[test]
+    fn sends_nothing_to_a_machine_on_an_older_cornercase_and_says_to_update_it() {
+        let mut machine = Machine::new(listed(&[]));
+        machine.features = vec!["tunnel-machine"];
+
+        let synced = sync(&machine, "vps", &sending(&["Duo"]));
+
+        assert_eq!((synced.error.as_deref(), synced.sent.len()), (Some(OLDER), 0));
+        assert_eq!(machine.commands(), ["contract"]);
     }
 
     #[test]

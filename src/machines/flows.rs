@@ -4,7 +4,7 @@ use super::act::{self, QUICK};
 use super::ask;
 use super::link::{self, Connect};
 use crate::control::{
-    Command, FlowImport, FlowInfo, FlowList, FlowSpec, FlowSyncFailure, Flows, MachineFlows, Response,
+    Command, Contract, FlowImport, FlowInfo, FlowList, FlowSpec, FlowSyncFailure, Flows, MachineFlows, Response,
 };
 use crate::flows::store::same_name;
 use crate::flows::sync::{self, Held};
@@ -13,6 +13,9 @@ use crate::time::Stamp;
 const USER: &str = "user";
 const YOURS: &str = "yours";
 const SENDER_KEPT: usize = 64;
+const FEATURE: &str = "flow-sync";
+const OLDER: &str = "it runs an older cornercase, which keeps no time on a flow and may save it readable by \
+                                other users: update cornercase there, then sync again";
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Sending {
@@ -41,7 +44,7 @@ impl Sending {
 
 pub(crate) fn sync(connect: &dyn Connect, machine: &str, sending: &Sending) -> MachineFlows {
     let mut report = MachineFlows { machine: machine.into(), ..MachineFlows::default() };
-    let theirs = match listed(connect, machine) {
+    let theirs = match offers_sync(connect, machine).and_then(|()| listed(connect, machine)) {
         Ok(theirs) => theirs,
         Err(why) => {
             report.error = Some(why);
@@ -71,6 +74,12 @@ fn answered(text: &str) -> Result<Value, String> {
 
 fn told(connect: &dyn Connect, machine: &str, command: Command) -> Result<(), String> {
     answered(&ask::ask(connect, machine, command, None, QUICK)?).map(drop)
+}
+
+fn offers_sync(connect: &dyn Connect, machine: &str) -> Result<(), String> {
+    let described = answered(&ask::ask(connect, machine, Command::Contract(Contract {}), None, QUICK)?)?;
+    let features = described["features"].as_array().map(Vec::as_slice).unwrap_or_default();
+    if features.iter().any(|feature| feature == FEATURE) { Ok(()) } else { Err(OLDER.into()) }
 }
 
 fn listed(connect: &dyn Connect, machine: &str) -> Result<Vec<Held<FlowSpec>>, String> {

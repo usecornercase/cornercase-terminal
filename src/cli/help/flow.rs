@@ -154,8 +154,9 @@ that could not be fixed here, two files of yours with one name, a file of yours 
 named by its file name, or a folder of your flows that cannot be read, named by its path), and error
 when the machine could not be reached. It exits with 1 when no machine is shown here, when --machine or
 FLOW names none, and, after printing the answer, when a machine could not be reached or a flow did not
-go. Each flow's env values go too; on Linux and macOS each flow file of yours is written readable only
-by you on both ends, and on Windows it is in your user profile.
+go. A machine on an older cornercase is sent nothing, and its error says to update it. Each flow's env
+values and args go too; on Linux and macOS each flow file of yours is written readable only by you on
+both ends, and on Windows it is in your user profile.
 
 Examples:
   cornercase flow sync

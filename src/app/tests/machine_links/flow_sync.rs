@@ -30,6 +30,9 @@ impl There {
         if refused {
             return Response::Error("the file is busy".into());
         }
+        if command == "contract" {
+            return Response::Ok(json!({"features": ["flow-sync"]}));
+        }
         if command == "flow-list" {
             let flows = Flows { flows: self.listed.lock().clone(), builtins: vec!["Quick".into()], ..Flows::default() };
             return Response::Ok(serde_json::to_value(flows).expect("a listing"));
@@ -191,9 +194,9 @@ mod the_request {
 
         let synced = rig.sync_now(&json!({}));
 
-        assert_eq!(there.commands(), ["flow-list", "flow-import"]);
+        assert_eq!(there.commands(), ["contract", "flow-list", "flow-import"]);
         assert!(there.imported()[0].contains("name = \"Duo\""), "{:?}", there.imported());
-        assert!(there.asked.lock()[1]["args"]["synced_from"].is_string());
+        assert!(there.asked.lock()[2]["args"]["synced_from"].is_string());
         assert_eq!((synced.machines[0].machine.as_str(), synced.machines[0].sent.clone()), ("vps", vec!["Duo".into()]));
     }
 
