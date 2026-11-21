@@ -29,6 +29,55 @@ impl Cursor {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct Chosen {
+    pub(crate) selected: Option<u64>,
+    pub(crate) scroll: usize,
+    follow: bool,
+}
+
+impl Chosen {
+    pub(crate) fn new(selected: Option<u64>) -> Self {
+        Self { selected, scroll: 0, follow: true }
+    }
+
+    pub(crate) fn index(&self, ids: &[u64]) -> Option<usize> {
+        let found = self.selected.and_then(|id| ids.iter().position(|other| *other == id));
+        found.or_else(|| (!ids.is_empty()).then_some(0))
+    }
+
+    pub(crate) fn fit(&mut self, ids: &[u64], rows: usize) {
+        if !self.follow {
+            return;
+        }
+        let mut cursor = Cursor { selected: self.index(ids), scroll: self.scroll };
+        cursor.move_by(0, ids.len(), rows);
+        self.scroll = cursor.scroll;
+    }
+
+    pub(crate) fn move_by(&mut self, delta: isize, ids: &[u64], rows: usize) {
+        let mut cursor = Cursor { selected: self.index(ids), scroll: self.scroll };
+        cursor.move_by(delta, ids.len(), rows);
+        self.scroll = cursor.scroll;
+        self.follow = true;
+        self.selected = cursor.selected.and_then(|at| ids.get(at).copied());
+    }
+
+    pub(crate) fn choose(&mut self, at: usize, ids: &[u64]) -> Option<u64> {
+        let id = ids.get(at).copied()?;
+        self.selected = Some(id);
+        self.follow = true;
+        Some(id)
+    }
+
+    pub(crate) fn scroll_by(&mut self, delta: isize, len: usize, rows: usize) {
+        let mut cursor = Cursor { selected: None, scroll: self.scroll };
+        cursor.scroll_by(delta, len, rows);
+        self.scroll = cursor.scroll;
+        self.follow = false;
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct Search {
     query: String,
     selected: usize,

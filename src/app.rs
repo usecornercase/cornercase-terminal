@@ -153,6 +153,7 @@ mod processes_dialog;
 mod project_settings_dialog;
 mod pull_requests;
 mod queue_dialog;
+mod queue_list_dialog;
 mod queue_panel;
 mod queue_result_dialog;
 mod queue_results;

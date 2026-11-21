@@ -49,7 +49,7 @@ for (const [columns, sidebar] of [[140, 'projects_on_top'], [140, 'side_by_side'
     const app = demo(columns, sidebar);
     for (const gone of [' Settings ', ' Usage ', ' Quit ']) assert.equal(app.textAt(gone), null, gone);
     press(app, ' More ▴ ');
-    assert.deepEqual(menu(app), ['settings', 'usage', 'processes', 'new bot…', 'quit']);
+    assert.deepEqual(menu(app), ['settings', 'usage', 'processes', 'new bot…', 'queue', 'quit']);
     press(app, 'settings');
     assert.equal(app.overlay?.kind, 'settings');
     app.closeOverlay();

@@ -33,7 +33,7 @@ pub(super) fn run(args: &PortsArgs) -> Result<bool> {
 }
 
 fn run_stop(args: &StopArgs) -> Result<bool> {
-    let value = ask("stop-port", Command::StopPort(StopPort { port: args.port, pid: args.pid }))?;
+    let value = ask("stop-port", Command::StopPort(StopPort { port: args.port, pid: args.pid, started: None }))?;
     let stopped: PortStopped = answer(value.clone())?;
     if args.print.json {
         print_json(&value)?;

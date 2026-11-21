@@ -7,7 +7,7 @@ const QUOTED: &str = "`cornercase ";
 const STAYS_HERE: [&str; 5] = ["remote", "skill", "server", "proxy", "plugin windows"];
 const MACHINE: [&str; 2] = ["there", "here"];
 
-const ON_A_MACHINE: [(&str, &[&str]); 7] = [
+const ON_A_MACHINE: [(&str, &[&str]); 10] = [
     ("start", &[]),
     ("new-workspace", &[]),
     ("focus", &["--pane", "--worktree", "--project", "--view", "--reveal"]),
@@ -15,6 +15,9 @@ const ON_A_MACHINE: [(&str, &[&str]); 7] = [
     ("flow sync", &[]),
     ("stats", &[]),
     ("usage", &[]),
+    ("tunnel open", &[]),
+    ("tunnel close", &["--reverse"]),
+    ("tunnel forget", &["--reverse"]),
 ];
 const LISTS_THE_MACHINES: [&str; 2] = ["status", "status --json"];
 

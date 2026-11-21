@@ -94,7 +94,7 @@ impl App {
     pub(super) fn queue_result_view(&self, detail: &Dialog, area: Rect) -> Option<ui::Overlay> {
         let entry = self.panels.queued.queue().entry(detail.entry)?;
         let width = usize::from(ui::update_notes(area).width);
-        let meta = self.queued_row(entry, self.panels.queued.display_zone()).meta;
+        let meta = self.queued_row(entry, self.panels.queued.display_zone()).meta();
         let (title, note) = match &detail.showing {
             Showing::Result => (RESULT_TITLE, None),
             Showing::Reading => (TALK_TITLE, Some(ui::Note::Busy(READING))),

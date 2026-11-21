@@ -347,6 +347,7 @@ impl App {
             tunnels: self.opening.tunnels.listing(only),
             windows: self.opening.tunnels.windows(),
             takers: self.opening.tunnels.takers.len(),
+            machine_tunnels: if only.is_none() { self.there_tunnel_infos() } else { Vec::new() },
         }
     }
 

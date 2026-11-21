@@ -290,3 +290,87 @@ mod files {
         assert_eq!(heard.files[1].lines.len(), 1);
     }
 }
+
+mod a_machine_s_ports {
+    use super::*;
+    use crate::control::ports::Listing as Ports;
+
+    fn listed(info: PortInfo) -> Vec<Port> {
+        ports(&ok(&Ports { ports: vec![info] })).expect("ports")
+    }
+
+    #[test]
+    fn are_read_with_their_place_and_no_start() {
+        let info = PortInfo {
+            port: 8765,
+            addresses: vec!["127.0.0.1".into(), "::1".into(), "nonsense".into()],
+            pid: 4242,
+            program: Some("python3".into()),
+            args: vec!["-m".into(), "http.server".into()],
+            workspace: Some(7),
+            pane: Some(31),
+            via: Some("agent".into()),
+            agent: Some("claude".into()),
+            ..PortInfo::default()
+        };
+
+        let [port] = &listed(info)[..] else { panic!("one port") };
+
+        assert_eq!(port.addresses.len(), 2);
+        assert_eq!((port.number, port.pid, port.started), (8765, 4242, None));
+        assert_eq!(
+            port.place,
+            Place { workspace: Some(7), pane: Some(31), via: Some(Via::Agent), agent: Some("claude".into()) }
+        );
+    }
+
+    #[test]
+    fn lose_what_would_write_to_this_terminal() {
+        let info = PortInfo {
+            port: 3000,
+            program: Some(HOSTILE.into()),
+            args: vec![HOSTILE.into()],
+            agent: Some(HOSTILE.into()),
+            ..PortInfo::default()
+        };
+
+        let [port] = &listed(info)[..] else { panic!("one port") };
+
+        assert_eq!(port.program.as_deref(), Some(SAID));
+        assert_eq!(port.args, [SAID]);
+        assert_eq!(port.place.agent.as_deref(), Some(SAID));
+    }
+
+    #[test]
+    fn leave_out_port_zero_and_an_unknown_rule() {
+        assert_eq!(listed(PortInfo::default()), []);
+        let [port] = &listed(PortInfo { port: 1, via: Some("magic".into()), ..PortInfo::default() })[..] else {
+            panic!("one port")
+        };
+        assert_eq!(port.place.via, None);
+    }
+
+    #[test]
+    fn are_cut_to_what_a_dialog_holds() {
+        let many = Ports { ports: vec![PortInfo { port: 80, ..PortInfo::default() }; MAX_PORTS + 3] };
+
+        assert_eq!(ports(&ok(&many)).expect("ports").len(), MAX_PORTS);
+    }
+
+    #[test]
+    fn a_hold_s_last_line_says_how_it_ended() {
+        assert_eq!(hold_ended(&ok(&HoldEnded { ended: HoldEnd::Forgotten })), Some(HoldEnd::Forgotten));
+        assert_eq!(hold_ended(&ok(&json!({ "tunnels": [] }))), None);
+        assert!(held(&ok(&json!({ "tunnels": [], "windows": 0 }))));
+        assert!(!held(&ok(&HoldEnded { ended: HoldEnd::Closed })));
+    }
+
+    #[test]
+    fn a_stop_s_outcome_is_cleaned() {
+        let stopped = PortStopped { port: 3000, pid: 1, program: Some(HOSTILE.into()), outcome: HOSTILE.into() };
+
+        let read = port_stopped(&ok(&stopped)).expect("stopped");
+
+        assert_eq!((read.program.as_deref(), read.outcome.as_str()), (Some(SAID), SAID));
+    }
+}

@@ -275,6 +275,10 @@ pub(crate) fn use_tunnel_hold() -> Result<()> {
     require("tunnel-hold", "cannot hold a tunnel for a program")
 }
 
+pub(crate) fn use_tunnel_machine() -> Result<()> {
+    require("tunnel-machine", "cannot tunnel a port of a linked machine")
+}
+
 pub(crate) fn use_tunnel_reverse() -> Result<()> {
     require("tunnel-reverse", "has no reverse tunnels")
 }

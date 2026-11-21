@@ -126,7 +126,11 @@ pub(crate) fn draw_list(f: &mut Frame, view: &View, list: Rect, combo: &Combo) {
     for (count, arrow, y) in [(above, "↑", list.y), (below, "↓", list.bottom().saturating_sub(1))] {
         if count > 0 {
             let r = Rect::new(list.x.saturating_add(2), y, list.width.saturating_sub(4), 1);
-            f.render_widget(Paragraph::new(Span::styled(format!(" {arrow} {count} more "), dim)), r);
+            f.render_widget(Paragraph::new(Span::styled(more(arrow, count), dim)), r);
         }
     }
+}
+
+pub(crate) fn more(arrow: &str, count: usize) -> String {
+    format!(" {arrow} {count} more ")
 }

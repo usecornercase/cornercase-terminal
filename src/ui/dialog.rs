@@ -14,6 +14,7 @@ pub(super) mod ports;
 pub(super) mod processes;
 pub(super) mod project_settings;
 pub(crate) mod queue;
+pub(super) mod queue_list;
 pub(super) mod routines;
 pub(super) mod run_on;
 pub(super) mod search;
@@ -202,6 +203,7 @@ pub(crate) enum Overlay {
     Form(Form),
     RunOnForm(Form, RunOnRow),
     Queue(Box<crate::queue::form::Form>),
+    QueueList(Box<queue_list::QueueList>),
     BotForm(Box<crate::bots::form::Form>),
     BotAsk(Box<bot_ask::BotAsk>),
     Machine(Box<crate::machines::form::Form>),
@@ -245,7 +247,7 @@ impl Overlay {
             Self::Usage(usage) => Some(usage_area(area, usage)),
             Self::Remote(remote) => Some(remote_access::area(area, remote)),
             Self::Forum(setup) => Some(super::forum::area(area, setup)),
-            Self::Issues(_) => Some(issues_area(area)),
+            Self::Issues(_) | Self::QueueList(_) => Some(issues_area(area)),
             Self::Settings(_) | Self::ShareSettings(_) | Self::CloneOnMachine(_) | Self::BotAsk(_) => {
                 Some(settings_area(area))
             }

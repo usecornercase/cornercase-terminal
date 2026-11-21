@@ -3,7 +3,6 @@ use crossterm::event::Event;
 
 use super::*;
 use crate::agents::context::Pointer;
-use crate::issues::browser::Tab as IssueTab;
 use crate::queue::outcome::Taken;
 use crate::queue::{Place, State as QueueState, Task};
 use crate::test_util::TempDir;
@@ -15,8 +14,8 @@ fn key(app: &mut App, code: KeyCode) {
 
 fn open_row(app: &mut App) {
     app.sync_queued();
-    let list = ui::issues_list(ui::issues_area(AREA));
-    click(app, Position::new(list.x + 2, list.y));
+    let list = ui::queue_list_rows(AREA);
+    click(app, Position::new(list.x + 6, list.y));
 }
 
 fn await_conversation(app: &mut App, rx: &Receiver<AppEvent>) {
@@ -31,9 +30,10 @@ fn await_conversation(app: &mut App, rx: &Receiver<AppEvent>) {
 
 fn click_entry(app: &mut App, id: u64) {
     app.sync_queued();
-    let row = app.panels.queued.queue().entries.iter().position(|entry| entry.id == id).expect("row");
-    let list = ui::issues_list(ui::issues_area(AREA));
-    click(app, Position::new(list.x + 2, list.y + u16::try_from(row).expect("row")));
+    let Some(Overlay::QueueList(dialog)) = &app.overlay else { panic!("the queue modal") };
+    let row = dialog.shown().iter().position(|shown| shown.row.id == id).expect("row");
+    let list = ui::queue_list_rows(AREA);
+    click(app, Position::new(list.x + 6, list.y + u16::try_from(row).expect("row")));
 }
 
 fn update(app: &App) -> ui::Update {
@@ -50,12 +50,12 @@ fn lines(app: &App) -> String {
     text.join("\n")
 }
 
-fn back_on_the_queue_tab(app: &App) -> bool {
-    matches!(&app.overlay, Some(Overlay::Issues(b)) if b.tabs.get(b.tab) == Some(&IssueTab::Queue))
+fn back_on_the_queue(app: &App) -> bool {
+    matches!(&app.overlay, Some(Overlay::QueueList(_)))
 }
 
 #[test]
-fn enter_on_an_entry_whose_pane_is_gone_opens_its_detail_and_esc_goes_back_to_the_queue_tab() {
+fn enter_on_an_entry_whose_pane_is_gone_opens_its_detail_and_esc_goes_back_to_the_queue() {
     let (mut app, _rx, _dirs) = opened();
     let id = gone(&mut app);
     keep(&mut app, id, "Reviewed #480.", None);
@@ -64,7 +64,7 @@ fn enter_on_an_entry_whose_pane_is_gone_opens_its_detail_and_esc_goes_back_to_th
 
     assert!(matches!(app.overlay, Some(Overlay::QueueResult(_))));
     key(&mut app, KeyCode::Esc);
-    assert!(back_on_the_queue_tab(&app));
+    assert!(back_on_the_queue(&app));
 }
 
 #[test]
@@ -75,12 +75,12 @@ fn a_click_outside_and_done_go_back_too() {
     open_row(&mut app);
 
     click(&mut app, Position::new(0, 0));
-    assert!(back_on_the_queue_tab(&app));
+    assert!(back_on_the_queue(&app));
 
     open_row(&mut app);
     let [_, done] = ui::update_buttons(AREA, "copy", "done");
     click(&mut app, done.as_position());
-    assert!(back_on_the_queue_tab(&app));
+    assert!(back_on_the_queue(&app));
 }
 
 #[test]
@@ -211,7 +211,7 @@ fn the_detail_closes_when_its_entry_goes_on_the_next_refresh() {
     app.panels.queued.remove(id).expect("removed");
     app.refresh(Instant::now());
 
-    assert!(matches!(app.overlay, Some(Overlay::Issues(_))));
+    assert!(back_on_the_queue(&app));
 }
 
 #[test]
@@ -265,10 +265,7 @@ mod pictures {
         let routine = app.panels.queued.schedule(None, Task { repeat: Some(repeat), ..shop() }).expect("routine");
         let run = app.panels.queued.run_now(routine, STARTED).expect("run");
         app.panels.queued.set_state(run, QueueState::Failed { reason: "the project folder is gone".into() });
-        app.sync_queued();
-        let row = app.panels.queued.queue().entries.iter().position(|entry| entry.id == run).expect("row");
-        let list = ui::issues_list(ui::issues_area(AREA));
-        click(&mut app, Position::new(list.x + 2, list.y + u16::try_from(row).expect("row")));
+        click_entry(&mut app, run);
         insta::assert_snapshot!(picture(&mut app));
     }
 

@@ -9,6 +9,20 @@ Every pull request that changes the app adds a section here for its new version.
 - **Secrets stay yours.** A flow's `env` values and arguments go with it, so each flow file of yours is now written readable only by you when it is saved, here and on the machine.
 - **From a terminal.** `cornercase flow sync [FLOW] [--machine NAME] [--json]` sends every flow of yours, or one, prints what each machine got and exits with 1 when one could not be reached or a flow did not go; `flow list --json` gives each flow of yours `changed`, and `cornercase contract` lists `flow-sync`.
 
+## 0.13.109
+
+- **A linked machine's workspace has a Ports dialog.** ` ⋯ ` or a right-click on its row, then **ports**, lists the ports its programs listen on there, with the machine's tab that started each one. **go** shows that tab, and **stop** asks first and has the machine stop the program.
+- **Tunnel a machine's port to this computer** from that dialog: **tunnel** forwards it with your own `ssh`, on the same port when it's free here, and **open** then opens it in your browser. Cornercase's server holds the tunnel, so it stays while the window is closed, and the machine lists it too, so closing it there ends it here.
+- Scripts do the same with `cornercase tunnel open 5173 --machine vps` and `tunnel close 5173 --machine vps`; `cornercase tunnels` and `status --json` list these tunnels under `machine_tunnels`.
+- `ports --json` gives each program's `started`, and the `stop-port` request takes it back: a program that was replaced on that pid since it was listed is then left alone.
+
+## 0.13.108
+
+- **The queue has a window of its own.** Open it from **More ▴ › queue**, or with `e` in the keys menu, with or without a project open. The Issues window no longer has a `Queue` tab, and ` schedule ` still works on an issue: cancelling goes back to the issue, and saving opens the queue with the new entry selected.
+- **A routine's runs are listed under it**, indented and newest first. Click its `▾`, or press `←`, to fold them into one row that says how many there are, and `→` to unfold them. What starts next comes first, then paused routines, then what already ran, newest first.
+- The selection stays on its entry when a routine fires or a row is added above it.
+- **The schedule form's prompt takes line breaks**: `Enter` starts a new line there (and still saves from the other fields), a paste keeps its lines, the field is taller in a tall window, the wheel scrolls it, and `↑ n more` / `↓ n more` say how much is out of sight.
+
 ## 0.13.107
 
 - **Bots now talk on Telegram and Discord.** With a phone paired, a bot's answers reach it titled `🤖 <name>` (and `↻ <routine>` for a routine's), with their formatting; a failure starts with `✗`. What you wrote, its steps and its notices stay in cornercase.

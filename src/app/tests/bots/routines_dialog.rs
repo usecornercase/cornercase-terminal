@@ -90,7 +90,7 @@ fn routines_in_the_menu_and_a_routine_on_the_card_open_it_too() {
     let row = ui::bot_rows(a.bots_list, a.pitch, 1, 0).item(0);
     right_click(&mut c.app, Position::new(row.x + 3, row.y));
     pick(&mut c.app, "routines…");
-    assert!(matches!(&c.app.overlay, Some(Overlay::BotRoutines(dialog)) if dialog.selected.is_some()));
+    assert!(matches!(&c.app.overlay, Some(Overlay::BotRoutines(dialog)) if dialog.list.selected.is_some()));
     c.app.overlay = None;
     render(&mut c.app, AREA);
     assert_a_card_click_opens_its_routines(&mut c, id);
@@ -203,7 +203,7 @@ fn plus_routine_opens_a_daily_form_for_the_bot_and_saving_lists_it() {
     for ch in "check".chars() {
         send_key(&mut c.app, KeyCode::Char(ch), KeyModifiers::NONE);
     }
-    send_key(&mut c.app, KeyCode::Enter, KeyModifiers::NONE);
+    save_queue_form(&mut c.app);
     assert!(matches!(c.app.overlay, Some(Overlay::BotRoutines(_))), "{:?}", c.app.overlay);
     let view = view(&c);
     assert_eq!(view.rows.len(), 1);
@@ -271,7 +271,7 @@ fn opening_without_a_selection_pins_the_first_routine_to_its_entry() {
     let early = scheduled(&mut c, bot_routine(later(), "2h"));
     let key = c.app.panels.bots.live[0].key;
     c.app.open_bot_routines(key, None);
-    assert!(matches!(&c.app.overlay, Some(Overlay::BotRoutines(dialog)) if dialog.selected == Some(early)));
+    assert!(matches!(&c.app.overlay, Some(Overlay::BotRoutines(dialog)) if dialog.list.selected == Some(early)));
     let mut task = c.app.panels.queued.queue().entry(early).expect("early").task.clone();
     task.at = later() + 20_000;
     c.app.panels.queued.schedule(Some(early), task).expect("moved after the other");
@@ -279,6 +279,6 @@ fn opening_without_a_selection_pins_the_first_routine_to_its_entry() {
     let shown = view(&c);
     assert_eq!(shown.selected, Some(1), "the highlight followed its entry down");
     assert_eq!(shown.rows[1].name, "Review PRs");
-    assert!(matches!(&c.app.overlay, Some(Overlay::BotRoutines(dialog)) if dialog.selected == Some(early)));
+    assert!(matches!(&c.app.overlay, Some(Overlay::BotRoutines(dialog)) if dialog.list.selected == Some(early)));
     assert!(c.app.panels.queued.queue().entry(late).is_some());
 }

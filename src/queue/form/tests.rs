@@ -19,8 +19,10 @@ fn form(when: When) -> Form {
     form
 }
 
+const ROOM: Room = Room { width: 60, list: 8, prompt: 3 };
+
 fn press(form: &mut Form, code: KeyCode) -> Step {
-    form.key(KeyEvent::new(code, KeyModifiers::NONE), 60, 8)
+    form.key(KeyEvent::new(code, KeyModifiers::NONE), ROOM)
 }
 
 #[rstest]
@@ -85,6 +87,7 @@ fn choosing_a_kind_changes_the_values_and_says_what_was_chosen() {
 #[test]
 fn enter_submits_unless_a_list_is_open_and_escape_closes_the_list_first() {
     let mut f = form(When::At);
+    f.focus = Control::Clock;
     assert_eq!(press(&mut f, KeyCode::Enter), Step::Submit);
     f.focus = Control::Agent;
     assert_eq!(press(&mut f, KeyCode::Enter), Step::Submit);
@@ -94,6 +97,36 @@ fn enter_submits_unless_a_list_is_open_and_escape_closes_the_list_first() {
     press(&mut f, KeyCode::Up);
     assert_eq!(press(&mut f, KeyCode::Esc), Step::None);
     assert_eq!(press(&mut f, KeyCode::Esc), Step::Cancel);
+}
+
+#[test]
+fn enter_in_the_prompt_breaks_the_line_and_never_submits() {
+    let mut f = form(When::At);
+    f.focus = Control::Prompt;
+    assert_eq!(press(&mut f, KeyCode::Enter), Step::None);
+    press(&mut f, KeyCode::Char('x'));
+    assert_eq!(f.prompt.text(), "fix the login\nx");
+}
+
+#[test]
+fn enter_in_the_prompt_with_a_list_open_still_chooses() {
+    let mut f = form(When::At);
+    f.focus = Control::When;
+    press(&mut f, KeyCode::Down);
+    press(&mut f, KeyCode::Down);
+    f.focus = Control::Prompt;
+    assert_eq!(press(&mut f, KeyCode::Enter), Step::Chose(Control::When));
+    assert_eq!(f.prompt.text(), "fix the login");
+}
+
+#[test]
+fn the_wheel_scrolls_the_prompt_inside_its_lines() {
+    let mut f = form(When::At);
+    f.prompt = Editor::new("1\n2\n3\n4\n5\n6");
+    f.scroll_prompt(2, 60, 3);
+    assert_eq!(f.prompt.scroll(), 2);
+    f.scroll_prompt(9, 60, 3);
+    assert_eq!(f.prompt.scroll(), 3);
 }
 
 #[test]
@@ -111,7 +144,7 @@ fn ctrl_and_the_arrows_move_a_field_by_word() {
     let mut f = form(When::At);
     f.focus = Control::Prompt;
     f.prompt = Editor::new("fix the login");
-    f.key(KeyEvent::new(KeyCode::Left, KeyModifiers::CONTROL), 60, 8);
+    f.key(KeyEvent::new(KeyCode::Left, KeyModifiers::CONTROL), ROOM);
     press(&mut f, KeyCode::Char('x'));
     assert_eq!(f.prompt.text(), "fix the xlogin");
 }

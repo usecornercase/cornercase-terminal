@@ -62,17 +62,30 @@ pub(crate) struct EndArg {
     pub(crate) port: u16,
     #[arg(
         long,
+        conflicts_with = "machine",
         help = "Act on the reverse tunnel listening on PORT (`tunnel hold --reverse`), not on the tunnel of PORT"
     )]
     pub(crate) reverse: bool,
+    #[arg(
+        long,
+        value_name = "NAME",
+        help = "Act on the tunnel this server holds to port PORT of the linked machine NAME"
+    )]
+    pub(crate) machine: Option<String>,
     #[command(flatten)]
     pub(crate) print: Print,
 }
 
 #[derive(Debug, Args)]
 pub(crate) struct PortArg {
-    #[arg(value_name = "PORT", value_parser = clap::value_parser!(u16).range(1..), help = "The port to tunnel, on this server's machine")]
+    #[arg(value_name = "PORT", value_parser = clap::value_parser!(u16).range(1..), help = "The port to tunnel, on this server's machine (with --machine, on that machine)")]
     pub(crate) port: u16,
+    #[arg(
+        long,
+        value_name = "NAME",
+        help = "Tunnel port PORT of the linked machine NAME to this server's computer; the server holds it, no window is needed"
+    )]
+    pub(crate) machine: Option<String>,
     #[command(flatten)]
     pub(crate) print: Print,
 }

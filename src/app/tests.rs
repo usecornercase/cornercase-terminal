@@ -457,6 +457,10 @@ fn click(app: &mut App, pos: Position) {
     click_in(app, pos, AREA);
 }
 
+fn save_queue_form(app: &mut App) {
+    click(app, ui::queue_form::schedule_button(AREA).as_position());
+}
+
 #[cfg(unix)]
 fn press(app: &mut App, pos: Position) {
     mouse_down(app, MouseButton::Left, pos);

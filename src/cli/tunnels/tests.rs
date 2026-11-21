@@ -117,6 +117,56 @@ mod opening {
     }
 }
 
+mod a_machine_s_tunnels {
+    use super::*;
+
+    fn there(state: &str, local: Option<u16>, error: Option<&str>) -> MachineTunnelInfo {
+        let error = error.map(str::to_string);
+        MachineTunnelInfo { machine: "vps".into(), port: 5173, local, state: state.into(), error, registered: None }
+    }
+
+    #[test]
+    fn are_listed_after_the_windows_with_their_machine() {
+        let list = TunnelList {
+            tunnels: vec![info(3000, Some(3000), "up", None, 3)],
+            windows: 1,
+            machine_tunnels: vec![there("up", Some(5174), None)],
+            ..TunnelList::default()
+        };
+
+        assert_eq!(text(&list), "3000 → localhost:3000  up\n5173 of vps → localhost:5174  up (this server)\n");
+    }
+
+    #[test]
+    fn are_listed_with_no_window_attached() {
+        let list = TunnelList { machine_tunnels: vec![there("down", None, Some("refused"))], ..TunnelList::default() };
+
+        assert_eq!(text(&list), "5173 of vps  down: refused (this server)\n");
+    }
+
+    #[test]
+    fn say_where_an_opened_one_listens() {
+        let list = TunnelList { machine_tunnels: vec![there("up", Some(5174), None)], ..TunnelList::default() };
+
+        assert_eq!(machine_opened_text(5173, "vps", &list), "port 5173 of vps is tunnelled to localhost:5174\n");
+    }
+
+    #[test]
+    fn are_opened_and_closed_by_the_machine_s_name() {
+        assert!(matches!(
+            parsing::action_of(&["open", "5173", "--machine", "vps"]),
+            TunnelAction::Open(arg) if arg.machine.as_deref() == Some("vps")
+        ));
+        assert!(matches!(
+            parsing::action_of(&["close", "5173", "--machine", "vps"]),
+            TunnelAction::Close(arg) if arg.machine.as_deref() == Some("vps")
+        ));
+        assert!(
+            Cli::try_parse_from(["cornercase", "tunnel", "close", "5173", "--reverse", "--machine", "vps"]).is_err()
+        );
+    }
+}
+
 mod opening_with_a_program {
     use super::*;
 
@@ -158,7 +208,7 @@ mod parsing {
         assert!(Cli::try_parse_from(["cornercase", "tunnel", "hold", "0"]).is_err());
     }
 
-    fn action_of(args: &[&str]) -> TunnelAction {
+    pub(super) fn action_of(args: &[&str]) -> TunnelAction {
         let words = ["cornercase", "tunnel"].into_iter().chain(args.iter().copied());
         match Cli::try_parse_from(words).expect("parse").command {
             Some(Cmd::Control(Control::Tunnel(args))) => args.action,
