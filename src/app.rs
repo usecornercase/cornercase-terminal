@@ -672,6 +672,7 @@ impl App {
             AppEvent::FlowModels(agent, models) => self.flow_models(agent, models),
             AppEvent::AgentModels { request, kind, result } => self.agent_models_read(request, kind, result),
             AppEvent::FlowFetched(source, result) => self.flow_fetched(&source, result),
+            AppEvent::PersonasFetched(source, result) => self.personas_fetched(&source, result),
             AppEvent::LastMessage { request, result } => self.message_read(request, result),
             AppEvent::Ports(event) => self.ports_answered(event),
             AppEvent::Processes(event) => self.processes_answered(event, area),

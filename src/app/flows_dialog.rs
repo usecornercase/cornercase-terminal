@@ -72,6 +72,9 @@ impl App {
     }
 
     pub(super) fn flows_text_field(&mut self, area: Rect) -> Option<(FieldArea, &mut Editor)> {
+        if self.flows_dialog()?.personas.is_some() {
+            return self.personas_text_field(area);
+        }
         let dialog = self.flows_dialog()?;
         let text = ui::flows_text(area, dialog.warnings().len(), dialog.preview().is_some());
         let editor = dialog.text_mut()?;
@@ -80,6 +83,9 @@ impl App {
 
     pub(super) fn flows_key(&mut self, key: KeyEvent, area: Rect) {
         let Some(dialog) = self.flows_dialog() else { return };
+        if dialog.personas.is_some() {
+            return self.personas_key(key, area);
+        }
         let room = room(dialog, area);
         let action = dialog.key(key, room);
         follow_preview(dialog, area);
@@ -87,6 +93,9 @@ impl App {
     }
 
     pub(super) fn flows_paste(&mut self, text: &str, area: Rect) {
+        if self.flows_dialog().is_some_and(|dialog| dialog.personas.is_some()) {
+            return self.personas_paste(text, area);
+        }
         if let Some(dialog) = self.flows_dialog() {
             let room = room(dialog, area);
             dialog.paste(text, room);
@@ -104,6 +113,9 @@ impl App {
 
     pub(super) fn flows_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) {
         let Some(dialog) = self.flows_dialog() else { return };
+        if dialog.personas.is_some() {
+            return self.personas_mouse(ev, pos, area);
+        }
         let room = room(dialog, area);
         if dialog.confirm_text().is_some() {
             if ev.kind == MouseEventKind::Down(MouseButton::Left)
@@ -171,6 +183,7 @@ impl App {
             Action::Export(flow) => self.flow_exported(&flow),
             Action::ReadModels(kind) => self.read_models(kind),
             Action::Fetch(source) => self.fetch_flow(source),
+            Action::Personas => self.open_personas(),
         }
     }
 
@@ -673,6 +686,9 @@ fn flows_text(dialog: &Dialog, edit: Option<&Editing>) -> Option<Editor> {
 }
 
 pub(super) fn flows_view(dialog: &Dialog, area: Rect) -> ui::Overlay {
+    if let Some(page) = &dialog.personas {
+        return personas::page_view(page);
+    }
     if let Some((title, message, submit)) = dialog.confirm_text() {
         return confirm_view(title, message, submit, None);
     }
@@ -710,3 +726,5 @@ pub(super) fn flows_view(dialog: &Dialog, area: Rect) -> ui::Overlay {
         landing: dialog.drag.filter(|drag| drag.moved).and_then(|drag| drag.landing),
     }))
 }
+
+mod personas;

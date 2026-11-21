@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 use super::Fields;
 use crate::flows::persona::Persona;
 
+pub(crate) const CHECK_SHORT: &str =
+    "personas are prompt text that a flow's agents read and follow without asking for permission";
 pub(crate) const CHECK: &str =
     "personas are prompt text that a flow's agents read and follow without asking for permission: read them first";
 

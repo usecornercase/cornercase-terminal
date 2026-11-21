@@ -45,6 +45,7 @@ pub(super) struct Runs {
     wakes: Vec<Wake>,
     woken: u64,
     to_free: Vec<merged::BuildsToFree>,
+    pub(super) persona_hosts: flows::persona::source::Hosts,
 }
 
 pub(super) struct Wake {
@@ -69,6 +70,7 @@ impl Runs {
             wakes: Vec::new(),
             woken: 0,
             to_free: Vec::new(),
+            persona_hosts: flows::persona::source::Hosts::from_env(),
         }
     }
 

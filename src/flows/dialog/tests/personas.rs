@@ -52,4 +52,5 @@ fn a_persona_you_lack_is_red_and_a_problem_to_fix() {
 
     assert_eq!((row.value.as_str(), row.note.as_str(), row.red), ("gone", "not among your personas", true));
     assert!(d.warnings().iter().any(|w| w.contains("`gone`, which is not among your personas")), "{:?}", d.warnings());
+    assert_eq!(d.save(), Action::None);
 }

@@ -34,12 +34,14 @@ pub(crate) struct Found {
     pub(crate) file: String,
     pub(crate) text: String,
     pub(crate) source: Option<String>,
+    pub(crate) division: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct Gathered {
     pub(crate) found: Vec<Found>,
     pub(crate) skipped: usize,
+    pub(crate) divisions: Vec<(String, String)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -135,7 +137,8 @@ pub(crate) fn single(file: &str, text: String, source: Option<String>, what: &st
     if !is_persona(&text) {
         return Err(not_persona(what));
     }
-    Ok(Gathered { found: vec![Found { file: file.to_string(), text, source }], skipped: 0 })
+    let found = Found { file: file.to_string(), text, source, division: None };
+    Ok(Gathered { found: vec![found], ..Gathered::default() })
 }
 
 pub(crate) fn gather(source: &Source, hosts: &Hosts) -> Result<Gathered, String> {
@@ -309,23 +312,31 @@ fn inner(path: &Path) -> Option<String> {
     names.filter(|names| !names.is_empty()).map(|names| names.join("/"))
 }
 
-fn divisions(text: &str) -> Option<Vec<String>> {
+fn divisions(text: &str) -> Option<Vec<(String, String)>> {
     let value: serde_json::Value = serde_json::from_str(text).ok()?;
-    Some(value.get("divisions")?.as_object()?.keys().cloned().collect())
+    let listed = value.get("divisions")?.as_object()?;
+    let label = |key: &String, value: &serde_json::Value| {
+        let named = value.get("label").and_then(serde_json::Value::as_str).map(str::trim).filter(|l| !l.is_empty());
+        named.filter(|label| !label.contains(char::is_control)).map_or_else(|| key.clone(), str::to_string)
+    };
+    Some(listed.iter().map(|(key, value)| (key.clone(), label(key, value))).collect())
 }
 
 fn picked(tree: Tree, what: &str) -> Result<Gathered, String> {
     let kept = tree.divisions.as_deref().and_then(divisions);
     let in_division = |relative: &str| {
-        kept.as_ref().is_none_or(|kept| relative.split_once('/').is_some_and(|(top, _)| kept.iter().any(|k| k == top)))
+        kept.as_ref()
+            .is_none_or(|kept| relative.split_once('/').is_some_and(|(top, _)| kept.iter().any(|(k, _)| k == top)))
     };
-    let mut gathered = Gathered { skipped: tree.skipped, ..Gathered::default() };
+    let mut gathered =
+        Gathered { skipped: tree.skipped, divisions: kept.clone().unwrap_or_default(), ..Gathered::default() };
     let mut entries = tree.entries;
     entries.sort_by(|a, b| a.relative.cmp(&b.relative));
     for entry in entries {
         if in_division(&entry.relative) {
             let file = entry.relative.rsplit('/').next().unwrap_or_default().to_string();
-            gathered.found.push(Found { file, text: entry.text, source: Some(entry.source) });
+            let division = entry.relative.split_once('/').map(|(top, _)| top.to_string());
+            gathered.found.push(Found { file, text: entry.text, source: Some(entry.source), division });
         } else {
             gathered.skipped += 1;
         }

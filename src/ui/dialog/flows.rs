@@ -96,6 +96,7 @@ pub(crate) fn flows_buttons(area: Rect, warnings: usize, labels: &[&str]) -> Vec
 pub(crate) enum FlowPreview {
     Plan(Box<Flow>),
     Note(String),
+    Persona(String),
 }
 
 pub(crate) struct Flows {
@@ -244,7 +245,8 @@ fn draw_flows_preview(f: &mut Frame, view: &View, flows: &Flows, area: Rect) {
     let Some(preview) = flows.preview_area(area) else { return };
     let shown = |flow| Previewed { flow, scroll: flows.preview_scroll, focus: flows.focus, personas: &flows.personas };
     match &flows.preview {
-        Some(FlowPreview::Note(note)) => draw_preview_note(f, view, preview, note),
+        Some(FlowPreview::Note(note)) => draw_preview_note(f, view, preview, ("Diagram", note)),
+        Some(FlowPreview::Persona(note)) => draw_preview_note(f, view, preview, ("Persona", note)),
         Some(FlowPreview::Plan(flow)) => draw_preview(f, view, preview, shown(Some(&**flow))),
         None => draw_preview(f, view, preview, shown(None)),
     }
@@ -309,9 +311,9 @@ pub(in crate::ui) fn draw_preview(f: &mut Frame, view: &View, r: Rect, shown: Pr
     }
 }
 
-fn draw_preview_note(f: &mut Frame, view: &View, r: Rect, note: &str) {
+fn draw_preview_note(f: &mut Frame, view: &View, r: Rect, (title, note): (&str, &str)) {
     f.render_widget(Clear, r);
-    f.render_widget(overlay_block(view.muted, "Diagram"), r);
+    f.render_widget(overlay_block(view.muted, title), r);
     let text = Paragraph::new(note).style(Style::default().fg(view.muted)).wrap(Wrap { trim: true });
     f.render_widget(text, preview_body(r));
 }

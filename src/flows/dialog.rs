@@ -67,6 +67,7 @@ pub(crate) enum Action {
     Share,
     ReadModels(Known),
     Fetch(registry::Source),
+    Personas,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -209,6 +210,7 @@ pub(crate) struct Dialog {
     pub(crate) importing: Option<Importing>,
     pub(crate) preview: u16,
     pub(crate) diagram: bool,
+    pub(crate) personas: Option<Box<Page>>,
 }
 
 impl Dialog {
@@ -233,6 +235,7 @@ impl Dialog {
             importing: None,
             preview: 0,
             diagram: false,
+            personas: None,
         }
     }
 
@@ -318,7 +321,7 @@ impl Dialog {
     }
 
     pub(crate) fn settings_tabs(&self) -> bool {
-        self.in_settings && self.edit.is_none() && self.importing.is_none()
+        self.in_settings && self.edit.is_none() && self.importing.is_none() && self.personas.is_none()
     }
 
     pub(crate) fn toggle_deleted(&mut self) {
@@ -611,12 +614,12 @@ impl Dialog {
         if !room.wide {
             buttons.push(if self.diagram { LIST } else { DIAGRAM });
         }
-        buttons.extend([IMPORT, NEW]);
+        buttons.extend([PERSONAS, IMPORT, NEW]);
         if self.in_settings {
             buttons.extend([crate::settings::SHARE, crate::settings::RESTART]);
         }
         buttons.push(DONE);
-        for dropped in [crate::settings::SHARE, IMPORT, EXPORT, SET_DEFAULT, DUPLICATE] {
+        for dropped in [crate::settings::SHARE, IMPORT, EXPORT, SET_DEFAULT, DUPLICATE, PERSONAS] {
             if !room.wide && room.width > 0 && row_width(&buttons) > room.width {
                 buttons.retain(|label| *label != dropped);
             }
@@ -712,6 +715,7 @@ impl Dialog {
             crate::settings::RESTART => return Action::Restart,
             crate::settings::SHARE => return Action::Share,
             NEW => self.open_new(),
+            PERSONAS => return Action::Personas,
             DONE => return Action::Close,
             _ => {}
         }
@@ -734,8 +738,9 @@ impl Dialog {
     }
 
     pub(crate) fn save(&mut self) -> Action {
+        let known: Vec<String> = self.agents.personas.iter().map(|named| named.id.clone()).collect();
         let Some(edit) = &mut self.edit else { return Action::None };
-        if !edit.flow.problems().is_empty() {
+        if !edit.flow.problems().is_empty() || !edit.flow.persona_problems(&known).is_empty() {
             self.notice = Some("fix the problems in red to save the flow".into());
             return Action::None;
         }
@@ -799,6 +804,7 @@ mod edit;
 mod import;
 mod input;
 mod order;
+pub(crate) mod personas;
 mod rows;
 
 pub(crate) use edit::Editing;
@@ -806,6 +812,7 @@ pub(crate) use edit::Editing;
 pub(crate) use edit::{Row, Tab};
 pub(crate) use import::Importing;
 pub(crate) use order::Dragging;
+pub(crate) use personas::{PERSONAS, Page, PageAction};
 
 #[cfg(test)]
 mod tests;
