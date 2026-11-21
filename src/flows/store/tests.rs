@@ -81,6 +81,33 @@ mod saving {
     }
 }
 
+mod listing {
+    use super::*;
+
+    #[test]
+    fn an_entry_that_cannot_be_read_names_the_folder_and_keeps_the_flows_it_read() {
+        let dir = TempDir::new();
+        let duo = save(dir.path(), &named("Duo"), None).expect("save Duo");
+        let entries = vec![Ok(duo.clone()), Err(std::io::Error::other("an entry went missing"))];
+        let mut listing = Listing::default();
+
+        let paths = flow_files(dir.path(), entries.into_iter(), &mut listing);
+
+        assert_eq!(paths, [duo]);
+        assert_eq!(listing.unlisted, [(dir.path().to_path_buf(), "an entry went missing".to_string())]);
+    }
+
+    #[test]
+    fn a_folder_not_made_yet_is_no_error() {
+        let dir = TempDir::new();
+        let mut listing = Listing::default();
+
+        read_dir(&dir.path().join("flows"), Origin::User, &mut listing);
+
+        assert_eq!(listing, Listing::default());
+    }
+}
+
 #[cfg(unix)]
 mod modes {
     use std::os::unix::fs::PermissionsExt;

@@ -262,7 +262,7 @@ impl App {
 
     fn unreadable_flows(&self, listing: &Listing, every: bool) -> Vec<FlowSyncFailure> {
         let dir = self.yours_flows();
-        let folder = store::unreadable(&dir).map(|why| FlowSyncFailure {
+        let folder = listing.unlisted.iter().find(|(unlisted, _)| *unlisted == dir).map(|(_, why)| FlowSyncFailure {
             name: dir.display().to_string(),
             error: format!("the folder of your flows could not be read: {why}"),
         });
