@@ -25,7 +25,8 @@ impl App {
         let project = &self.projects[self.projects.project_index(project)?];
         let listing = self.flow_listing(Some(&project.path));
         let start = Start::new(project.id, self.project_label(project), git::is_repo_root(&project.path), listing)
-            .with_run_on(self.run_on_for(project.id));
+            .with_run_on(self.run_on_for(project.id))
+            .with_personas(self.persona_labels());
         let Some(choices) = self.account_choices() else { return Some(start) };
         Some(start.with_accounts(flow_accounts(&choices)))
     }
@@ -206,6 +207,7 @@ pub(super) fn start_flow_view(start: &Start, area: Rect) -> ui::Overlay {
         hint: start.hint(),
         buttons: start.buttons(room),
         preview: start.selected().map(|saved| saved.flow.clone()),
+        personas: start.personas.clone(),
         diagram: start.diagram,
         accounts: shown
             .iter()

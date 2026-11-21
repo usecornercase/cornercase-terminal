@@ -107,6 +107,7 @@ impl App {
         let bytes: usize = incoming.iter().map(|found| found.text.len()).sum();
         log::info!("flows", "personas imported", count = incoming.len(), bytes = bytes);
         answer.saved = true;
+        self.refresh_flows();
         Ok(answer)
     }
 
@@ -116,12 +117,14 @@ impl App {
         let name = persona::read(&dir, id).map(|found| found.name).unwrap_or_default();
         let path = persona::remove(&dir, id).map_err(|e| Refusal::new(Code::NotFound, visible(&e.to_string())))?;
         log::info!("flows", "persona removed", persona = id);
+        self.refresh_flows();
         Ok(Some(json(&PersonaRemoved { id: id.to_string(), name, path })))
     }
 }
 
-fn seen(e: Refusal) -> Refusal {
-    Refusal::new(e.code, visible(&e.message))
+fn seen(mut e: Refusal) -> Refusal {
+    e.message = visible(&e.message);
+    e
 }
 
 fn unreadable(role: &Role, id: &str, reason: &str) -> String {

@@ -615,3 +615,33 @@ mod from_an_issue {
         assert_ne!(s.focus, Focus::Workspace);
     }
 }
+
+mod personas {
+    use super::*;
+
+    fn following(id: &str) -> Listing {
+        let mut listing = listing();
+        let mine = listing.flows.iter_mut().find(|saved| saved.flow.name == "Mine").expect("mine");
+        mine.flow.roles[0].persona = Some(id.into());
+        listing
+    }
+
+    fn line_of_mine(s: &Start) -> (String, bool) {
+        let item = s.items().into_iter().find(|item| item.name == "Mine").expect("mine");
+        (item.line, item.red)
+    }
+
+    #[test]
+    fn a_flow_following_a_persona_you_lack_is_red() {
+        let s = Start::new(7, "web-shop".into(), true, following("gone"));
+        let (line, red) = line_of_mine(&s);
+        assert!(red && line.contains("`gone`, which is not among your personas"), "{line}");
+    }
+
+    #[test]
+    fn a_flow_following_one_you_have_can_start() {
+        let labels = vec![("reviewer".to_string(), "👁️ Code Reviewer".to_string())];
+        let s = Start::new(7, "web-shop".into(), true, following("reviewer")).with_personas(labels);
+        assert!(!line_of_mine(&s).1);
+    }
+}

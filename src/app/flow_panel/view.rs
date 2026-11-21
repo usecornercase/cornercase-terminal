@@ -7,6 +7,7 @@ use super::{HEAD, NOTHING_SENT};
 const LOOP: &str = "loop";
 use crate::app::App;
 use crate::flows::folder::{self, Listing};
+use crate::flows::persona;
 use crate::flows::progress::Edge;
 use crate::flows::run::{Kind, Message, Run};
 use crate::flows::{ORCHESTRATOR, Role};
@@ -52,7 +53,7 @@ fn colour_of(run: &Run, role: &str) -> Color {
 impl App {
     pub(super) fn run_diagram(&self, run: &Run, now: Instant, spin: Option<u8>) -> flow::Diagram {
         let (muted, light) = (ui::muted(self.themes.host()), self.themes.light());
-        let plan = flow::Diagram::plan(&run.flow, muted, light);
+        let plan = flow::Diagram::plan(&run.flow, muted, light).named(&persona::labels(&run.personas));
         let pull = run.pull(self.pull_request(run.workspace));
         let end = flow::Ending { reached: run.reached(pull), pull: pull.map(PullRequest::mark) };
         let mut diagram = plan.live(&run.progress, |role| self.role_state(run, role), end, now);

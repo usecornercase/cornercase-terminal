@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use super::persona::Persona;
 use super::registry;
 use super::store::{self, Listing, Origin, Saved};
 use super::{Flow, builtin, share};
@@ -123,17 +124,43 @@ pub(crate) struct RowText {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct Named {
+    pub(crate) id: String,
+    pub(crate) name: String,
+    pub(crate) emoji: String,
+}
+
+impl Named {
+    pub(crate) fn of(persona: &Persona) -> Self {
+        Self { id: persona.id.clone(), name: persona.name.clone(), emoji: persona.emoji.clone() }
+    }
+
+    pub(crate) fn label(&self) -> String {
+        if self.emoji.is_empty() { self.name.clone() } else { format!("{} {}", self.emoji, self.name) }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct Agents {
     pub(crate) installed: Vec<Known>,
     pub(crate) default: Option<Known>,
     pub(crate) project: bool,
+    pub(crate) personas: Vec<Named>,
     models: Vec<(Known, Vec<String>)>,
     reading: Vec<Known>,
 }
 
 impl Agents {
     pub(crate) fn new(installed: Vec<Known>, default: Option<Known>, project: bool) -> Self {
-        Self { installed, default, project, models: Vec::new(), reading: Vec::new() }
+        Self { installed, default, project, personas: Vec::new(), models: Vec::new(), reading: Vec::new() }
+    }
+
+    pub(crate) fn persona(&self, id: &str) -> Option<&Named> {
+        self.personas.iter().find(|named| named.id == id)
+    }
+
+    pub(crate) fn persona_labels(&self) -> Vec<(String, String)> {
+        self.personas.iter().map(|named| (named.id.clone(), named.label())).collect()
     }
 
     pub(crate) fn models(&self, kind: Known) -> Vec<String> {
@@ -659,7 +686,9 @@ impl Dialog {
         let Some(edit) = &self.edit else { return Vec::new() };
         let risks = edit.is_project_flow().then(|| project_risks(&edit.flow)).flatten();
         let imported = edit.imported.then(|| share::risks(&edit.flow, "this imported flow")).flatten();
-        risks.into_iter().chain(imported).chain(edit.flow.problems().iter().map(|p| share::visible(p))).collect()
+        let known: Vec<String> = self.agents.personas.iter().map(|named| named.id.clone()).collect();
+        let problems = edit.flow.problems().into_iter().chain(edit.flow.persona_problems(&known));
+        risks.into_iter().chain(imported).chain(problems.map(|p| share::visible(&p))).collect()
     }
 
     pub(crate) fn press(&mut self, label: &str) -> Action {

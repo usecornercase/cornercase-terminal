@@ -10,6 +10,7 @@ use crate::flows::{Back, End, Stage};
 
 mod built_ins;
 mod order;
+mod personas;
 
 pub(super) const ROOM: Room = Room { pick: 10, width: 40, height: 5, wide: true };
 

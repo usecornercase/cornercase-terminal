@@ -141,6 +141,18 @@ pub(crate) fn imported(file: &str, text: &str, source: Option<&str>) -> std::res
     Ok(Persona { id, ..read })
 }
 
+pub(crate) fn label(text: &str) -> Option<String> {
+    let front = front(text.strip_prefix('\u{feff}').unwrap_or(text))?;
+    let name = field(&front, "name").map(|name| name.trim().to_string()).filter(|name| !name.is_empty())?;
+    let emoji = field(&front, "emoji").map(|emoji| emoji.trim().to_string()).unwrap_or_default();
+    let label = if emoji.is_empty() { name } else { format!("{emoji} {name}") };
+    (!label.contains(char::is_control)).then_some(label)
+}
+
+pub(crate) fn labels<'a>(texts: impl IntoIterator<Item = (&'a String, &'a String)>) -> Vec<(String, String)> {
+    texts.into_iter().filter_map(|(id, text)| Some((id.clone(), label(text)?))).collect()
+}
+
 pub(crate) fn is_persona(text: &str) -> bool {
     front(text.strip_prefix('\u{feff}').unwrap_or(text))
         .and_then(|front| field(&front, "name"))

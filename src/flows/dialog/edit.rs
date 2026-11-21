@@ -10,6 +10,7 @@ use crate::list::Search;
 pub(crate) const DEFAULT_MODEL: &str = "default";
 pub(crate) const OTHER_MODEL: &str = "other…";
 const NEVER: &str = "never";
+pub(crate) const NO_PERSONA: &str = "none";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Tab {
@@ -35,6 +36,7 @@ pub(crate) enum Row {
     Agent,
     Model,
     Effort,
+    Persona,
     Args,
     Env,
     Edits,
@@ -195,13 +197,16 @@ impl Editing {
     pub(crate) fn rows(&self) -> Vec<Row> {
         match self.tab {
             Tab::Flow => self.flow_rows(),
-            Tab::Orchestrator => vec![Row::Agent, Row::Model, Row::Effort, Row::Args, Row::Env, Row::Prompt],
+            Tab::Orchestrator => {
+                vec![Row::Agent, Row::Model, Row::Effort, Row::Persona, Row::Args, Row::Env, Row::Prompt]
+            }
             Tab::Role(_) => {
                 vec![
                     Row::RoleName,
                     Row::Agent,
                     Row::Model,
                     Row::Effort,
+                    Row::Persona,
                     Row::Args,
                     Row::Env,
                     Row::Edits,
@@ -311,6 +316,7 @@ impl Editing {
             | Row::Agent
             | Row::Model
             | Row::Effort
+            | Row::Persona
             | Row::Worktree => {
                 let items = self.choices(row, agents);
                 self.pick = Some(Pick { row, items, search: Search::default() });
@@ -641,6 +647,7 @@ impl Editing {
                 })
                 .collect(),
             Row::Model => self.model_choices(agents),
+            Row::Persona => persona_choices(agents),
             Row::Effort => self.effort_choices(),
             Row::Worktree => {
                 Worktree::ALL.iter().map(|kind| choice(kind.name().into(), kind.name().into(), kind.label())).collect()
@@ -734,6 +741,11 @@ impl Editing {
                     role.effort = (value != DEFAULT_MODEL).then_some(value);
                 }
             }
+            Row::Persona => {
+                if let Some(role) = self.role_mut() {
+                    role.persona = (value != NO_PERSONA).then_some(value);
+                }
+            }
             Row::Worktree => {
                 if let Some(role) = self.role_mut() {
                     role.worktree = Worktree::ALL.into_iter().find(|kind| kind.name() == value).unwrap_or_default();
@@ -808,4 +820,14 @@ impl Editing {
         };
         hint.into()
     }
+}
+
+fn persona_choices(agents: &Agents) -> Vec<Choice> {
+    let none = Choice { value: NO_PERSONA.into(), label: NO_PERSONA.into(), note: "only the role's prompt".into() };
+    let library = agents.personas.iter().map(|named| Choice {
+        value: named.id.clone(),
+        label: named.label(),
+        note: named.id.clone(),
+    });
+    std::iter::once(none).chain(library).collect()
 }

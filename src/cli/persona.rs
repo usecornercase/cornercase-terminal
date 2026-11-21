@@ -43,7 +43,10 @@ fn show(args: &PersonaIdArgs) -> Result<()> {
 }
 
 fn visible_text(text: &str) -> String {
-    text.lines().map(|line| format!("{}\n", visible(line))).collect()
+    text.lines().fold(String::new(), |mut out, line| {
+        let _ = writeln!(out, "{}", visible(line));
+        out
+    })
 }
 
 fn instructions(file: &Path) -> Result<String> {

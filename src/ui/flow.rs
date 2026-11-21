@@ -82,6 +82,7 @@ pub(crate) struct Node {
     pub(crate) colour: Color,
     pub(crate) state: Option<State>,
     pub(crate) own: bool,
+    pub(crate) persona: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -159,18 +160,32 @@ pub(crate) fn role_colour(index: usize) -> Color {
 }
 
 fn node_of(role: &Role, colour: Color) -> Node {
-    Node { role: role.name.clone(), text: role.summary(), colour, state: None, own: role.own_worktree() }
+    Node {
+        role: role.name.clone(),
+        text: role.summary(),
+        colour,
+        state: None,
+        own: role.own_worktree(),
+        persona: role.persona().map(str::to_string),
+    }
 }
 
 fn stage_nodes(flow: &Flow, n: usize, stage: &Stage, muted: Color) -> Vec<Node> {
     if stage.roles.is_empty() {
         let role = format!("stage {}", n + 1);
-        return vec![Node { role, text: "no roles".into(), colour: muted, state: None, own: false }];
+        return vec![Node { role, text: "no roles".into(), colour: muted, state: None, own: false, persona: None }];
     }
     let colour = |name: &str| flow.roles.iter().position(|r| r.name == name).map(|i| role_colour(i + 1));
     let found = |name: &String| match (flow.role(name), colour(name)) {
         (Some(role), Some(colour)) => node_of(role, colour),
-        _ => Node { role: name.clone(), text: "not a role".into(), colour: muted, state: None, own: false },
+        _ => Node {
+            role: name.clone(),
+            text: "not a role".into(),
+            colour: muted,
+            state: None,
+            own: false,
+            persona: None,
+        },
     };
     stage.roles.iter().map(found).collect()
 }
@@ -203,6 +218,17 @@ impl Diagram {
     #[must_use]
     pub(crate) fn focused(self, stage: Option<usize>) -> Self {
         Self { focus: stage, ..self }
+    }
+
+    #[must_use]
+    pub(crate) fn named(mut self, labels: &[(String, String)]) -> Self {
+        for node in self.stages.iter_mut().flatten().chain([&mut self.orchestrator]) {
+            let label = node.persona.as_ref().and_then(|id| labels.iter().find(|(known, _)| known == id));
+            if let Some((_, label)) = label {
+                node.persona = Some(label.clone());
+            }
+        }
+        self
     }
 
     pub(crate) fn live(mut self, progress: &Progress, of: impl Fn(&str) -> State, end: Ending, now: Instant) -> Self {

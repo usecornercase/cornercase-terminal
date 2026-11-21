@@ -924,3 +924,4 @@ mod panel {
 }
 
 mod exited;
+mod personas;
