@@ -355,6 +355,7 @@ fn listing(flows: &Flows) -> Listing {
         broken: flows.broken.iter().map(|broken| (broken.path.clone(), broken.error.clone())).collect(),
         builtins: flows.builtins.clone(),
         default: flows.flows.iter().find(|info| info.default).map(|info| info.name.clone()),
+        ..Listing::default()
     }
 }
 

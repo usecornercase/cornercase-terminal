@@ -77,7 +77,7 @@ impl App {
         self.messages.toast = Some(Toast::new(format!("{why}; {NOTHING_SENT}"), ui::ToastIcon::Bug));
     }
 
-    pub(super) fn unlinked(&self, held: &Held) -> String {
+    pub(in crate::app) fn unlinked(&self, held: &Held) -> String {
         let why = match held.status.down {
             Some(Down::Unreachable(_)) | None => format!("{} unreachable", held.name),
             Some(_) => self.machines.reason(held).unwrap_or_else(|| OLDER.into()),

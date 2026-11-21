@@ -8,7 +8,7 @@ use super::{accounts, issue, machine};
 use crate::cli::help::{
     FLOW_CLOSE_WHEN_MERGED_HELP, FLOW_DEFAULT_HELP, FLOW_DELETE_HELP, FLOW_EXPORT_HELP, FLOW_FILES_HELP,
     FLOW_HIDE_HELP, FLOW_IMPORT_HELP, FLOW_MESSAGES_HELP, FLOW_ORDER_HELP, FLOW_RESTORE_HELP, FLOW_RUN_HELP,
-    FLOW_RUNS_HELP, FLOW_SAVE_HELP,
+    FLOW_RUNS_HELP, FLOW_SAVE_HELP, FLOW_SYNC_HELP,
 };
 
 #[derive(Debug, Args)]
@@ -83,6 +83,21 @@ pub(crate) enum FlowAction {
         after_help = FLOW_ORDER_HELP
     )]
     Order(FlowOrderArgs),
+    #[command(
+        about = "Send your flows, or one of them, to your machines now, and print what each machine got",
+        after_help = FLOW_SYNC_HELP
+    )]
+    Sync(FlowSyncArgs),
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct FlowSyncArgs {
+    #[arg(value_name = "FLOW", help = "Only this flow of yours [default: every flow of yours]")]
+    pub(crate) name: Option<String>,
+    #[arg(long, value_name = "NAME", help = "Only this machine [default: every machine shown here]")]
+    pub(crate) machine: Option<String>,
+    #[command(flatten)]
+    pub(crate) print: Print,
 }
 
 impl FlowAction {
@@ -99,7 +114,7 @@ impl FlowAction {
             Self::Default(a) => &a.boot,
             Self::CloseWhenMerged(a) => &a.boot,
             Self::Order(a) => &a.boot,
-            Self::Runs(_) | Self::Hide(_) | Self::Restore(_) => return None,
+            Self::Runs(_) | Self::Hide(_) | Self::Restore(_) | Self::Sync(_) => return None,
         })
     }
 }

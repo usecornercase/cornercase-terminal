@@ -78,8 +78,9 @@ pub(crate) use flow::{BackSpec, RoleSpec, StageSpec};
 pub(crate) use flow::{
     BrokenFlow, CloseWhenMergedSet, Exported, FlowBacklog, FlowCloseWhenMerged, FlowDefault, FlowDefaultSet,
     FlowDelete, FlowExport, FlowFiles, FlowHide, FlowImport, FlowInfo, FlowList, FlowMessage, FlowMessages, FlowOrder,
-    FlowOrdered, FlowRemoved, FlowRestore, FlowRun, FlowRuns, FlowRunsWatch, FlowSave, FlowSaved, FlowSpec, Flows,
-    Imported, MemberInfo, RoleInfo, RoleState, RunEdge, RunFile, RunFiles, RunInfo, RunState, StepInfo,
+    FlowOrdered, FlowRemoved, FlowRestore, FlowRun, FlowRuns, FlowRunsWatch, FlowSave, FlowSaved, FlowSpec, FlowSync,
+    FlowSyncFailure, Flows, FlowsSynced, Imported, MachineFlows, MemberInfo, RoleInfo, RoleState, RunEdge, RunFile,
+    RunFiles, RunInfo, RunState, StepInfo,
 };
 pub(crate) use held::{HeldAction, HeldAnswer, HeldInfo, HeldRequest};
 pub(crate) use issues::{IssueList, IssuePeople, IssueRead, IssueSources};
@@ -243,6 +244,7 @@ pub(crate) enum Command {
     FlowRuns(FlowRunsWatch),
     FlowMessages(FlowMessages),
     FlowFiles(FlowFiles),
+    FlowSync(FlowSync),
     AccountList(AccountList),
     AccountAdd(AccountAdd),
     AccountRemove(AccountRemove),
@@ -450,11 +452,12 @@ impl Command {
             Self::FlowOrder(_) => 99,
             Self::FlowMessages(_) => 76,
             Self::FlowFiles(_) => 77,
-            Self::PersonaList(_) => 138,
-            Self::PersonaImport(_) => 139,
-            Self::PersonaRemove(_) => 140,
-            Self::PersonaSave(_) => 141,
-            Self::PersonaShow(_) => 142,
+            Self::FlowSync(_) => 138,
+            Self::PersonaList(_) => 139,
+            Self::PersonaImport(_) => 140,
+            Self::PersonaRemove(_) => 141,
+            Self::PersonaSave(_) => 142,
+            Self::PersonaShow(_) => 143,
             _ => return None,
         })
     }
@@ -669,6 +672,7 @@ impl Command {
         "free-merged-builds",
         "bot",
         "app-routes",
+        "flow-sync",
         "persona-list",
         "persona-import",
         "persona-remove",

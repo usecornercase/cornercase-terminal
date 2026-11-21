@@ -222,7 +222,7 @@ fn latest_commands() -> Vec<Command> {
 }
 
 fn phone_commands() -> Vec<Command> {
-    vec![Command::AppRoutes(AppRoutes::default())]
+    vec![Command::AppRoutes(AppRoutes::default()), Command::FlowSync(FlowSync::default())]
 }
 
 fn persona_commands() -> Vec<Command> {

@@ -71,6 +71,7 @@ pub(crate) enum MachineEvent {
     Relayed(relay::Relayed),
     Ignored { key: u64, result: std::result::Result<crate::git::ignored::Listing, String> },
     Packed(Box<Packed>),
+    FlowsSynced { waiter: u64, destination: String, report: Box<control::MachineFlows> },
     Tunnel(tunnels::TunnelHeard),
 }
 
@@ -114,6 +115,7 @@ pub(super) struct Machines {
     watched: Option<stream::Watched>,
     streams: u64,
     pub(super) clones: Vec<Pending>,
+    pub(super) flows: super::flow_sync::Syncing,
     pub(super) ports: ports::RemotePorts,
     pub(super) tunnels: tunnels::ThereTunnels,
 }
@@ -140,6 +142,7 @@ impl Machines {
             watched: None,
             streams: 1,
             clones: Vec::new(),
+            flows: super::flow_sync::Syncing::default(),
             ports: ports::RemotePorts::default(),
             tunnels: tunnels::ThereTunnels::default(),
         }
@@ -260,6 +263,7 @@ impl App {
     pub(super) fn follow_machines(&mut self) {
         if self.machines.synced != self.config.machines {
             self.match_machines();
+            self.follow_flow_sync_machines();
             self.clients.events.snapshots.mark_changed();
         }
     }
@@ -328,6 +332,9 @@ impl App {
             MachineEvent::Relayed(relayed) => self.relayed(relayed),
             MachineEvent::Ignored { key, result } => self.ignored_listed(key, result),
             MachineEvent::Packed(packed) => self.clone_packed(*packed),
+            MachineEvent::FlowsSynced { waiter, destination, report } => {
+                self.flows_synced(waiter, &destination, *report);
+            }
             MachineEvent::Tunnel(heard) => self.there_tunnel_heard(heard),
         }
         if streamed {

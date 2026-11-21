@@ -11,6 +11,7 @@ use link::Down;
 pub(crate) mod act;
 pub(crate) mod ask;
 pub(crate) mod clone_form;
+pub(crate) mod flows;
 pub(crate) mod follow;
 pub(crate) mod form;
 pub(crate) mod heard;

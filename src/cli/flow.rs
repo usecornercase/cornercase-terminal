@@ -20,6 +20,8 @@ use crate::flows::share;
 use crate::flows::{Flow, Worktree};
 use crate::remote::Remote;
 
+mod sync;
+
 pub(super) fn run(action: FlowAction) -> Result<()> {
     match action {
         FlowAction::List(list) => flow_list(&list),
@@ -42,6 +44,7 @@ pub(super) fn run(action: FlowAction) -> Result<()> {
         FlowAction::Default(default) => set_default(default),
         FlowAction::Order(order) => set_order(order),
         FlowAction::CloseWhenMerged(args) => close_when_merged(&args),
+        FlowAction::Sync(args) => sync::run(&args),
     }
 }
 
@@ -381,6 +384,7 @@ fn import_flow(args: FlowImportArgs) -> Result<()> {
         place: args.to.name().to_string(),
         replace: args.replace,
         check: args.check,
+        synced_from: None,
     };
     if args.check {
         return checked_import(request, &flow, &source, args.print.json);

@@ -21,6 +21,7 @@ fn listing(d: &Dialog, flows: Vec<Saved>) -> Listing {
         broken: d.broken.clone(),
         builtins: d.builtins.clone(),
         default: d.default.clone(),
+        ..Listing::default()
     }
 }
 

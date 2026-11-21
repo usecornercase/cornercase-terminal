@@ -11,7 +11,18 @@ pub(super) const FLOW_RUN: &str =
 pub(super) const CLOSED: &[(&[&str], &str)] = &[
     (&["keys", "input"], NO_KEYS),
     (&["flow-run"], FLOW_RUN),
-    (&["flow-delete", "flow-hide", "flow-restore", "flow-default", "flow-order", "flow-close-when-merged"], NO_FLOWS),
+    (
+        &[
+            "flow-delete",
+            "flow-hide",
+            "flow-restore",
+            "flow-default",
+            "flow-order",
+            "flow-close-when-merged",
+            "flow-sync",
+        ],
+        NO_FLOWS,
+    ),
     (&["persona-save", "persona-remove"], NO_FLOWS),
     (&["plugin-run", "plugin-popup-close"], NO_PLUGINS),
     (&["stop-process", "stop-port"], "a bot cannot stop a process"),

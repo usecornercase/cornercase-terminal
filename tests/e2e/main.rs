@@ -36,6 +36,7 @@ mod code_workspace;
 mod commands;
 mod context;
 mod contract;
+mod flow_sync;
 mod flows;
 mod forum;
 mod held;

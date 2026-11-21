@@ -658,6 +658,7 @@ mod events;
 mod files;
 mod flow_in_a_view;
 mod flow_sharing;
+mod flow_sync;
 #[cfg(unix)]
 mod flows;
 mod following_the_app;

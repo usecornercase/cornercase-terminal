@@ -161,6 +161,7 @@ fn every_request_is_decided_once() {
 #[case::keys("keys", "a bot cannot press keys")]
 #[case::flow_run("flow-run", "a bot cannot run a flow")]
 #[case::flows("flow-delete", "a bot cannot change cornercase's flows")]
+#[case::flow_sync("flow-sync", "a bot cannot change cornercase's flows")]
 #[case::persona_save("persona-save", "a bot cannot change cornercase's flows")]
 #[case::persona_remove("persona-remove", "a bot cannot change cornercase's flows")]
 #[case::plugins("plugin-run", "a bot cannot run or change cornercase's plugins")]
