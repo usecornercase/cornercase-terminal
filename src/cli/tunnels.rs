@@ -4,7 +4,9 @@ use std::fmt::Write as _;
 use super::args::tunnels::{EndArg, FailedArg, PortArg, TunnelAction, TunnelArgs, TunnelsArgs};
 use super::{print_json, print_out};
 use crate::client::{self, answer, ask};
-use crate::control::{Command, Direction, ListTunnels, TunnelFailed, TunnelInfo, TunnelList, TunnelPort};
+use crate::control::{
+    Command, Direction, ListTunnels, MachineTunnelInfo, TunnelFailed, TunnelInfo, TunnelList, TunnelPort,
+};
 use crate::error::Result;
 
 mod hold;
@@ -26,7 +28,8 @@ pub(super) fn run_list(args: &TunnelsArgs) -> Result<bool> {
 pub(super) fn run(args: &TunnelArgs) -> Result<bool> {
     let (name, tunnel, print, command): (_, _, _, fn(TunnelPort) -> Command) = match &args.action {
         TunnelAction::Open(arg) => {
-            ("tunnel-open", TunnelPort { port: arg.port, direction: None }, &arg.print, Command::TunnelOpen)
+            let tunnel = TunnelPort { port: arg.port, direction: None, machine: arg.machine.clone() };
+            ("tunnel-open", tunnel, &arg.print, Command::TunnelOpen)
         }
         TunnelAction::Close(arg) => ("tunnel-close", ending(arg), &arg.print, Command::TunnelClose),
         TunnelAction::Forget(arg) => ("tunnel-forget", ending(arg), &arg.print, Command::TunnelForget),
@@ -36,6 +39,9 @@ pub(super) fn run(args: &TunnelArgs) -> Result<bool> {
     };
     if tunnel.direction == Some(Direction::Reverse) {
         client::use_tunnel_reverse()?;
+    }
+    if tunnel.machine.is_some() {
+        client::use_tunnel_machine()?;
     }
     let value = ask(name, command(tunnel))?;
     let list: TunnelList = answer(value.clone())?;
@@ -48,7 +54,7 @@ pub(super) fn run(args: &TunnelArgs) -> Result<bool> {
 }
 
 fn ending(arg: &EndArg) -> TunnelPort {
-    TunnelPort { port: arg.port, direction: arg.reverse.then_some(Direction::Reverse) }
+    TunnelPort { port: arg.port, direction: arg.reverse.then_some(Direction::Reverse), machine: arg.machine.clone() }
 }
 
 fn failed(arg: &FailedArg) -> Result<bool> {
@@ -68,7 +74,14 @@ fn failed_text(port: u16) -> String {
 
 fn done_text(action: &TunnelAction, list: &TunnelList) -> String {
     match action {
+        TunnelAction::Open(PortArg { port, machine: Some(machine), .. }) => machine_opened_text(*port, machine, list),
         TunnelAction::Open(PortArg { port, .. }) => opened_text(*port, list),
+        TunnelAction::Close(EndArg { port, machine: Some(machine), .. }) => {
+            format!("closed the tunnel of port {port} of {machine}\n")
+        }
+        TunnelAction::Forget(EndArg { port, machine: Some(machine), .. }) => {
+            format!("forgot the tunnel of port {port} of {machine}\n")
+        }
         TunnelAction::Close(EndArg { port, reverse, .. }) => {
             format!("closed the {}tunnel of port {port}\n", if *reverse { "reverse " } else { "" })
         }
@@ -94,13 +107,40 @@ fn opened_text(port: u16, list: &TunnelList) -> String {
     text
 }
 
+fn machine_opened_text(port: u16, machine: &str, list: &TunnelList) -> String {
+    let found =
+        list.machine_tunnels.iter().find(|tunnel| tunnel.port == port && tunnel.machine.eq_ignore_ascii_case(machine));
+    match found {
+        Some(MachineTunnelInfo { state, local: Some(local), .. }) if state == "up" => {
+            format!("port {port} of {machine} is tunnelled to localhost:{local}\n")
+        }
+        Some(tunnel) => {
+            format!("port {port} of {machine} is not tunnelled: {}\n", tunnel.error.as_deref().unwrap_or("unknown"))
+        }
+        None => format!("port {port} of {machine} is not tunnelled\n"),
+    }
+}
+
 pub(crate) fn text(list: &TunnelList) -> String {
+    let there: String = list.machine_tunnels.iter().map(machine_line).collect();
     if list.tunnels.is_empty() {
+        if !there.is_empty() {
+            return there;
+        }
         return if list.windows == 0 && list.takers == 0 { NO_WINDOW.into() } else { "no tunnels\n".into() };
     }
     let holders = list.tunnels.iter().map(|tunnel| tunnel.holder).collect::<BTreeSet<u64>>().len();
     let several = list.windows > 1 || holders > 1;
-    list.tunnels.iter().map(|tunnel| line(tunnel, several)).collect()
+    list.tunnels.iter().map(|tunnel| line(tunnel, several)).chain(std::iter::once(there)).collect()
+}
+
+fn machine_line(tunnel: &MachineTunnelInfo) -> String {
+    let at = format!("{} of {}", tunnel.port, tunnel.machine);
+    match (tunnel.state.as_str(), tunnel.local) {
+        ("up", Some(local)) => format!("{at} → localhost:{local}  up (this server)\n"),
+        ("down", _) => format!("{at}  down: {} (this server)\n", tunnel.error.as_deref().unwrap_or("unknown")),
+        (state, _) => format!("{at}  {state} (this server)\n"),
+    }
 }
 
 fn line(tunnel: &TunnelInfo, several: bool) -> String {

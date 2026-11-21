@@ -17,8 +17,16 @@ pub(crate) struct Row {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct There {
+    pub(crate) link: u64,
+    pub(crate) boot: String,
+    pub(crate) machine: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Dialog {
     pub(crate) workspace: u64,
+    pub(crate) there: Option<There>,
     pub(crate) generation: u64,
     pub(crate) rows: Vec<Row>,
     pub(crate) loaded: bool,
@@ -57,8 +65,13 @@ pub(crate) enum Hit {
 
 impl Dialog {
     pub(crate) fn new(workspace: u64, generation: u64) -> Self {
+        Self::on(workspace, generation, None)
+    }
+
+    pub(crate) fn on(workspace: u64, generation: u64, there: Option<There>) -> Self {
         Self {
             workspace,
+            there,
             generation,
             rows: Vec::new(),
             loaded: false,

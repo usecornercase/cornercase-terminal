@@ -116,6 +116,7 @@ impl App {
             shown_remote: self.shown_remote_info(),
             shown_bot: self.shown_bot_id(),
             tunnels: self.tunnel_infos(),
+            machine_tunnels: self.there_tunnel_infos(),
         }
     }
 

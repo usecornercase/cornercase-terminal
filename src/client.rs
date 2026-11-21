@@ -50,7 +50,7 @@ pub(crate) use requests::{
     use_machine_shown, use_machine_start, use_machine_usage, use_mode_default, use_notices, use_open_into,
     use_placed_start, use_plugin_run_view, use_popup_terminal, use_queue_results, use_queue_routines, use_queue_undo,
     use_recap, use_search_settings, use_settings_search, use_surface_patches, use_todo_panel, use_tunnel_hold,
-    use_tunnel_orders, use_tunnel_reverse, use_view, use_view_bot,
+    use_tunnel_machine, use_tunnel_orders, use_tunnel_reverse, use_view, use_view_bot,
 };
 pub(crate) use requests::{check_boot, use_boot, use_machine_boot};
 pub(crate) use requests::{hinted, input_ended, reader_gone_within, use_remote, used_remote, watched};

@@ -138,6 +138,7 @@ pub(super) enum MenuAction {
     Tour(u8),
     More(MoreItem),
     RemoteRename(Aim),
+    RemotePorts(Aim),
     RemoteAgentFold(PaneAim),
     MachineNote(u64),
     Machine(MachineItem),

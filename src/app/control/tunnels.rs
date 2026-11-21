@@ -4,7 +4,7 @@ use super::{Handled, Pending, Reply, Stage, conflict, json, malformed};
 use crate::app::App;
 use crate::app::tunnels::Origin;
 use crate::control::contract::{Code, Refusal};
-use crate::control::{Direction, Done, TunnelFailed, TunnelHold, TunnelInfo, TunnelPort};
+use crate::control::{Direction, Done, TunnelFailed, TunnelHold, TunnelInfo, TunnelList, TunnelPort};
 use crate::log;
 use crate::protocol::{TunnelOrder, TunnelState};
 use crate::remote::tunnel;
@@ -15,6 +15,7 @@ const NOT_HELD: &str = "no window holds a tunnel for port";
 const NOT_HELD_REVERSE: &str = "no program holds a reverse tunnel on port";
 const REVERSE_OPEN: &str =
     "a reverse tunnel is opened by `tunnel hold --reverse` on the computer whose port it is, never by the server";
+const REVERSE_MACHINE: &str = "this server holds no reverse tunnel to a machine: `machine` takes no `reverse`";
 const BUSY_CONNECTION: &str = "this connection already holds a tunnel or takes tunnel orders; open another connection";
 const OPEN_WITHIN: u32 = 45;
 const CLOSE_WITHIN: u32 = 10;
@@ -32,14 +33,18 @@ pub(in crate::app) struct TunnelWait {
     asked: Vec<(u64, u64)>,
     takers: Vec<u64>,
     failures: Vec<String>,
+    there: Option<u64>,
 }
 
 impl TunnelWait {
     fn new(port: u16, verb: Verb, asked: Vec<(u64, u64)>) -> Self {
-        Self { port, verb, asked, takers: Vec::new(), failures: Vec::new() }
+        Self { port, verb, asked, takers: Vec::new(), failures: Vec::new(), there: None }
     }
 
     pub(in crate::app) fn waiting_for(&self) -> &'static str {
+        if self.there.is_some() {
+            return "the machine's port is not tunnelled yet";
+        }
         match (self.asked.is_empty(), self.takers.is_empty()) {
             (_, true) => "the windows have not said whether the tunnel is up",
             (true, false) => "the programs that take tunnel orders have not said whether the tunnel is up",
@@ -86,6 +91,13 @@ impl App {
         if tunnel.direction == Some(Direction::Reverse) {
             return Err(malformed(REVERSE_OPEN));
         }
+        if let Some(machine) = &tunnel.machine {
+            let link = self.machine_link_named(machine)?;
+            self.open_there_tunnel(link, port, Origin::Request).map_err(|why| Refusal::new(Code::Failed, why))?;
+            let wait = TunnelWait { there: Some(link), ..TunnelWait::new(port, Verb::Open, Vec::new()) };
+            self.pend_tunnel(client, wait, (now, OPEN_WITHIN));
+            return Ok(None);
+        }
         let windows = self.opening.tunnels.window_clients();
         let takers = self.opening.tunnels.takers();
         if windows.is_empty() && takers.is_empty() {
@@ -114,6 +126,18 @@ impl App {
 
     fn end_tunnel_request(&mut self, client: u64, tunnel: &TunnelPort, verb: Verb, now: Instant) -> Handled {
         let port = tunnel.port;
+        if let Some(machine) = &tunnel.machine {
+            if tunnel.direction == Some(Direction::Reverse) {
+                return Err(malformed(REVERSE_MACHINE));
+            }
+            let link = self.machine_link_named(machine)?;
+            if !self.close_there_tunnel(link, port) {
+                let message =
+                    format!("this server holds no tunnel to port {port} of {machine}; `cornercase tunnels` lists them");
+                return Err(Refusal::new(Code::NotFound, message));
+            }
+            return Ok(Some(json(&self.tunnel_list(None))));
+        }
         let direction = tunnel.direction.unwrap_or(Direction::Forward);
         let order = if verb == Verb::Forget { TunnelOrder::Forget(port) } else { TunnelOrder::Close(port) };
         let asked = self.end_tunnel(port, direction, order);
@@ -176,7 +200,32 @@ impl App {
         self.clients.requests.pending.push(pending);
     }
 
+    fn machine_link_named(&self, machine: &str) -> Result<u64, Refusal> {
+        self.there_link(machine).ok_or_else(|| {
+            Refusal::new(Code::NotFound, format!("no machine is named {machine}; `cornercase machines` lists them"))
+        })
+    }
+
+    fn there_tunnel_reply(&self, wait: &TunnelWait, link: u64) -> Option<Reply> {
+        let Some(info) = self.there_tunnel_info(link, wait.port) else {
+            return Some(Err(format!("the tunnel of port {} was closed before it came up", wait.port)));
+        };
+        match info.state.as_str() {
+            "up" => Some(Ok(json(&TunnelList { machine_tunnels: vec![info], ..TunnelList::default() }))),
+            "down" => Some(Err(format!(
+                "could not tunnel port {} of {}: {}",
+                wait.port,
+                info.machine,
+                info.error.as_deref().unwrap_or("unknown")
+            ))),
+            _ => None,
+        }
+    }
+
     pub(in crate::app) fn tunnel_reply(&self, wait: &TunnelWait) -> Option<Reply> {
+        if let Some(link) = wait.there {
+            return self.there_tunnel_reply(wait, link);
+        }
         if !wait.asked.iter().all(|(client, at)| self.tunnel_answered(wait, *client, *at)) {
             return None;
         }
