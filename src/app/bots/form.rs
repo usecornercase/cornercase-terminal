@@ -24,7 +24,7 @@ impl App {
         let agents = self.bot_agent_infos();
         let preferred = self.config.agent.trim().to_string();
         let found = editing.and_then(|key| self.panels.bots.by_key(key));
-        let (form, saved) = match found {
+        let (mut form, saved) = match found {
             Some(at) => {
                 let live = &self.panels.bots.live[at];
                 let (about, _) = folder::notes(&live.folder);
@@ -32,6 +32,7 @@ impl App {
             }
             None => (Form::new(agents, &preferred), None),
         };
+        form.chat_ready = self.chat_apps_ready();
         self.screen.nav = None;
         self.overlay = Some(Overlay::BotForm(Box::new(form)));
         self.bot_accounts(saved.as_deref(), found.is_some());
@@ -58,6 +59,7 @@ impl App {
             Step::Submit => self.submit_bot_form(),
             Step::Cancel => self.overlay = None,
             Step::Chose(field) => self.bot_chose(field),
+            Step::Manage => self.manage_secrets(),
             Step::None => {}
         }
     }
@@ -103,8 +105,17 @@ impl App {
                     self.bot_chose(open);
                 }
             }
+            Some(bot_form::Hit::Field(Field::Secrets, ..)) => self.manage_secrets(),
             Some(bot_form::Hit::Field(field, row, col)) => press_field(form, area, (field, row, col)),
         }
+    }
+
+    fn manage_secrets(&mut self) {
+        let Some(Overlay::BotForm(form)) = &self.overlay else { return };
+        let Some(key) = form.editing.as_deref().and_then(|id| self.panels.bots.by_id(id)) else { return };
+        let key = self.panels.bots.live[key].key;
+        let Some(form) = self.overlay.take() else { return };
+        self.open_bot_secrets(key, Some(Box::new(form)));
     }
 
     pub(in crate::app) fn bot_text(&mut self, area: Rect, field: Field) -> Option<(FieldArea, &mut Editor)> {
@@ -166,6 +177,9 @@ fn choose_in_list(form: &mut Form, i: usize) -> Option<Field> {
 }
 
 fn press_field(form: &mut Form, area: Rect, (field, row, col): (Field, usize, usize)) {
+    if field == Field::ChatApps && !form.chat_ready {
+        return;
+    }
     let r = bot_form::text(area, form, field);
     let opening = form.combo_of(field).is_some_and(|combo| !combo.is_open());
     let grey = field == Field::Agent && form.editing.is_some();

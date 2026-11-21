@@ -2,16 +2,83 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.109
+
+- **A linked machine's workspace has a Ports dialog.** ` ⋯ ` or a right-click on its row, then **ports**, lists the ports its programs listen on there, with the machine's tab that started each one. **go** shows that tab, and **stop** asks first and has the machine stop the program.
+- **Tunnel a machine's port to this computer** from that dialog: **tunnel** forwards it with your own `ssh`, on the same port when it's free here, and **open** then opens it in your browser. Cornercase's server holds the tunnel, so it stays while the window is closed, and the machine lists it too, so closing it there ends it here.
+- Scripts do the same with `cornercase tunnel open 5173 --machine vps` and `tunnel close 5173 --machine vps`; `cornercase tunnels` and `status --json` list these tunnels under `machine_tunnels`.
+- `ports --json` gives each program's `started`, and the `stop-port` request takes it back: a program that was replaced on that pid since it was listed is then left alone.
+
+## 0.13.108
+
+- **The queue has a window of its own.** Open it from **More ▴ › queue**, or with `e` in the keys menu, with or without a project open. The Issues window no longer has a `Queue` tab, and ` schedule ` still works on an issue: cancelling goes back to the issue, and saving opens the queue with the new entry selected.
+- **A routine's runs are listed under it**, indented and newest first. Click its `▾`, or press `←`, to fold them into one row that says how many there are, and `→` to unfold them. What starts next comes first, then paused routines, then what already ran, newest first.
+- The selection stays on its entry when a routine fires or a row is added above it.
+- **The schedule form's prompt takes line breaks**: `Enter` starts a new line there (and still saves from the other fields), a paste keeps its lines, the field is taller in a tall window, the wheel scrolls it, and `↑ n more` / `↓ n more` say how much is out of sight.
+
+## 0.13.107
+
+- **Bots now talk on Telegram and Discord.** With a phone paired, a bot's answers reach it titled `🤖 <name>` (and `↻ <routine>` for a routine's), with their formatting; a failure starts with `✗`. What you wrote, its steps and its notices stay in cornercase.
+- **You choose when, per bot**: `while away` (the default), `always` or `off`, in the bot form's new **Chat apps** row or with `cornercase bot new` and `bot edit --chat-apps`. The row asks you to pair a phone in **Settings › Remote** when none is.
+- **Write to a bot from the phone**: reply to one of its messages, send `/bot NAME TEXT`, or `/bots` and its **✎** button. A 👍 says the bot took it, and its answer comes back as a reply to your message, even when the bot is set to `off`.
+- **`/bots`** lists every bot with what it is doing, its unread answers and its next routine.
+- When an agent a bot started needs you and the bot is set to `always`, its question and buttons reach the phone at the desk too, once.
+- **Discord's forum mode gives each bot its own post**, `🤖 <name>`, where its answers and its routines' go and where what you write goes to it. Removing the bot closes it, and the post is kept across restarts.
+- A bot's failed routine now reaches the phone once, as the bot's own message, instead of twice while away.
+- `cornercase bot edit` and the bot form now say so when a bot's settings cannot be saved, instead of showing a change that a restart would undo.
+
+## 0.13.106
+
+- **Hide a machine without removing it.** Each machine in Settings › Machines has a toggle, `show here ✓` or `show here ·`: one click hides it, so its link ends and nothing of it shows in your sidebar, the agents section or your notifications, and another click shows it again. Its entry stays on the list, and nothing stops on the machine: its server, shells and agents keep running there.
+- In the machine button, a machine opens a submenu: **show its work here** hides or shows it, and **open the window there** moves the window to it. **only this computer** hides every machine and **show all** shows them all.
+- `cornercase machines hide NAME|all` and `cornercase machines show NAME|all` do the same from a terminal or a script.
+- A hidden machine reads `hidden` (it read `not shown`).
+
+## 0.13.105
+
+- **A link in a bot's answer now opens in your browser, after you confirm it.** A click on an `http://` or `https://` address shows **Open link**: who wrote it, the address (found whole in the answer you clicked even when the chat cut it across rows, and shown on up to three rows, ending in `…` past them) and where it goes, such as `goes to example.com`, with **copy**, **open** and **cancel**. **open** (or `Enter`) opens it in the browser of the window you clicked in. A bot's answer is text an agent wrote, so a click alone never opens it.
+- **It opens only on the computer that runs cornercase.** In a remote window (`cornercase remote`), the browser or over ssh, the click still copies the address, so a server on another machine can never make your laptop open a page.
+- **Some addresses are always copied, never opened**: one that is not plain ASCII, that carries a user name before the host (`https://good.com@evil.example/` goes to `evil.example`), that spells an IP address in a form a browser reads as another one (`http://0x7f000001/` is `127.0.0.1`), that holds a character a web address cannot have, or that is over 2,048 characters. The toast says why.
+
+## 0.13.104
+
+- **One list of machines.** A machine is added once, in Settings › Machines or with `cornercase remote`, and the machine button offers it to open the window there. **show its work here** decides whether its workspaces and agents show next to yours; a machine that is not shown reads `not shown` in Settings. The button shows as soon as you have a machine, its menu adds one (**add machine…**) or opens Settings › Machines (**manage machines…**), and a machine is removed in Settings, so **forget…** is gone. Its label is `this computer ▴`, or `on vps ▴` once you moved.
+- The machines a window reached are moved into Settings › Machines once, not shown, and the old `machines.json` is removed. The form gains **command**, for a cornercase that is not on the `PATH` there, and `cornercase machines add` gains `--command` and `--hidden`.
+- The local computer is called "this computer" everywhere.
+- A bot cannot add or remove a machine with `cornercase remote --remember` or `--forget` either: they are refused as `cornercase machines add`, `edit` and `remove` are.
+
+## 0.13.103
+
+- **GitHub Copilot CLI and opencode can write the Recap.** Pick them in **Settings → Agents → Recap**, or with `cornercase recap --agent copilot` or `--agent opencode`; `auto` takes one when it is your default agent. Both run read-only and read the dossier only (Claude Code and Codex can also read transcripts and run `cornercase search`), and each recap leaves a session in the agent's own history, since neither can run without keeping one.
+- **An opencode bot no longer answers with opencode's own summary.** When opencode compacted a long conversation before answering, the bot's answer was the compaction summary and the real answer was cut off; the bot now waits for opencode to finish and answers with what it said last.
+- **A Gemini CLI bot on macOS can no longer reach its protected files through a look-alike letter.** macOS' disk treats `ſ` as `s` and `K` (the Kelvin sign) as `k`, so `bot.jſon` was `bot.json`; the bot's write rules now refuse those spellings too.
+
+## 0.13.102
+
+- **A bot with `cornercase` access now writes only prompts to agents.** It writes to an agent with `cornercase send --pane ID --enter`, but it can no longer press keys (`keys`, `input`), answer an agent that asks you something or shows a dialog, a panel or its shell mode (even with `--force`), or send a text that starts with `/` or `!`, an agent's own command or its shell, or one that holds a control character other than a line break or a tab. If the agent starts asking, or shows a dialog, between the bot's prompt and its Enter, the Enter is not pressed. Your own commands are unchanged.
+- **It no longer starts agents that never ask.** `cornercase start` in a mode such as `skip permissions (dangerous)` (or Claude Code's `--permission-mode bypassPermissions`), named with `--mode` or set in Settings, is refused with a hint to pass `--mode default`, and so is `flow run`, whose agents never ask.
+- **It closes only what it started.** It can close the tabs and panes it started, but not your tabs, panes, workspaces, projects or groups, and it can no longer stop processes or ports, discard changes, remove worktrees or their builds, or close and forget agents. It cannot reopen closed agents that would come back in a mode that never asks, or a flow's roles.
+- **It no longer changes what cornercase runs**: flows (it can still preview an import and check a flow), plugins, accounts and profiles, machines, tunnels, pairing a device and the Discord server. It cannot act on another machine (`--machine`, `--remote`, `CORNERCASE_REMOTE`), open a bot's folder as a project, or open a `.code-workspace` file.
+- **A pasted text can no longer end its own paste.** Text that held an escape sequence which, once cleaned, turned into the paste's end could reach the program after it as typed keys; cornercase now cleans it until none is left, for your pastes too.
+- **The bot is told.** Its brief says what it can and cannot do, and each refusal says why, with exit 1 from the server or 2 from the command line. Bots with `full` access are unchanged on the server; the command line refuses them the same `plugin`, `machines`, `tunnel` and `--remote` commands, and their brief says so.
+- **What is still not a boundary**: a question an agent asks that cornercase does not see (opencode never says it waits), which a bot's prompt can answer; a prompt sent in the instant an agent exits, which can land on its shell's line (its Enter is not pressed); and on macOS, a command a bot sends to the background whose shell exits. The [bots guide](https://usecornercase.dev/docs/guides/bots/) lists the rest.
+
+## 0.13.101
+
+- **A bot asks you for a password or a token it lacks, and you type it in a dialog, never in the chat.** A bot that needs a secret you have not saved runs `cornercase bot secret ask campus-user campus-password --about 'to read your grades'`, tells you what it asked for and ends its answer. Its chat shows `asks for a secret: campus-user, campus-password` with **give…**, its row says `asks for a secret` (`asks` when the sidebar is narrow) and its card has an `asks` row. If you are looking at its chat, the dialog opens by itself (not while you type a message); elsewhere a toast with **go** and a desktop notification tell you, and Telegram and Discord say so while you are away.
+- **The dialog says who asks and why.** It shows the bot's agent and access (`full access` in red), the bot's own reason under `It says:`, one field per name that shows dots, and **never**, **not now** and **save**. **save** keeps every value or none, encrypted as any secret; `Enter` moves to an empty field before it saves. Once saved, the chat says `secret saved: …` and the bot is written to at once, so it carries on (an ask from a routine's run waits for your next message); **never** writes `secret not given: …`, and the bot is told at your next message. Saving one of the names with **secrets…** or `bot secret set` counts too.
+- **For programs**: `cornercase bot secret give BOT ASK` reads the values as one JSON object from standard input and `cornercase bot secret decline BOT ASK` turns an ask down; neither works from a bot. `bot list --json` and `status --app` list each bot's waiting `asks`, with the names each still `missing`, chat lines carry `ask`, and `cornercase contract` lists `bot-asks`. A bot asks only for itself, from its own turn, for 1 to 4 names at a time, with at most 4 asks waiting; a restart forgets the asks. The value is never in the chat, an event, the log or `status --app`.
+
+## 0.13.100
+
+- **A bot keeps the passwords and tokens it needs, encrypted, and reads them itself.** A bot that works behind a login no longer needs its password in `bot.md`, `memory.md` or the chat. Save a secret with **secrets…** in the bot's menu (or **manage…** in its edit form), or from the command line with `printf '%s' "$PASSWORD" | cornercase bot secret set prs campus-password` (the value comes from standard input, never from an argument; `list`, `remove` and `--all` do the rest). The bot's brief teaches it `cornercase bot secret list` and `cornercase bot secret get NAME`, which prints a value only to that bot's own turn: your shell, a program and another bot are refused. Each bot keeps up to 20, as `name` (`a-z`, `0-9`, `-`, `_`) and a value of up to 8,192 bytes. They are in an encrypted file in the bot's folder, with the key in `bots.key` next to `session.json`; a file that cannot be read is said and never emptied, and only `bot secret remove prs --all` starts again.
+- **cornercase never writes a secret's value to the chat.** In a bot's steps, answers and errors (and its lines about agents it started), every value of 6 bytes or more is replaced by `[secret NAME]` before the line is saved, shown, sent to `cornercase events` or a chat app, or kept as a routine's result. It is a convenience: a value the bot encodes or splits passes.
+- **The limits are said plainly.** The bot reads the value, so it goes to the agent's provider and stays in plain text in the agent's own session file on this computer; a page the bot reads can tell it to send the value elsewhere; and the encryption protects copies of the folder, not another program of yours that reads the key beside it. `cornercase contract` lists `bot-secrets`, and `bot list --json` and `status --app` show how many secrets each bot has, and `secrets_unreadable: true` when its file cannot be read. A name that is not a secret's name, or that equals its value, is never written to the log or echoed in a refusal. A secret you replace or remove while a turn is answering stays redacted in that answer, and a connection kept past its turn is refused. A file that stops opening, or a key that appears, after cornercase started is never saved over; **remove all** refuses a stale list; a paste with a tab is refused rather than changed; and a Claude bot whose folder path has a comma does not start, since its permission rules cannot hold it.
+- **The bot's edit form grew a row**, **Secrets**, and the bot's card says `2 secrets`.
+
 ## 0.13.99
 
-- **Personas for a flow's roles.** A persona is how an agent works, written in Markdown with a front matter that gives its `name`, such as the ones in [agency-agents](https://github.com/msitarzewski/agency-agents). Import some with `cornercase persona import`, then give one to any role of a flow with `persona = "ID"`, on any agent: the same Code Reviewer can run on Claude Code or Codex.
-  - `persona import` takes a `.md` file, a folder, `-`, an `https://` address, or a GitHub repository as `OWNER/REPO`, `OWNER/REPO/FOLDER` or `OWNER/REPO/PATH/FILE.md`, with no GitHub token. A folder or a repository imports every persona in it, in one download; a `divisions.json` that lists its folders limits it to those.
-  - Personas are prompt text that agents follow without asking, so `--check` lists what would be imported and saves nothing, and an import from the web asks first (`--yes` without a terminal).
-  - They live in `personas/` next to `config.json`, each with a `source:` saying where it came from, so importing it again with `--replace` refreshes it. `persona list` and `persona remove ID` manage them.
-  - When a run starts, each persona its roles name is copied into the run's folder (`personas/ID.md`), and the role's prompt tells the agent to read and follow it before its first work. The run keeps its copy, so changing a persona later never changes a running team.
-  - A flow that names a persona you don't have cannot run: `flow list` says which, and saving or importing such a flow is refused until you import it.
-  - Picking a persona in the Flows dialog comes later; for now, set it in the flow's file or with `flow save`.
-- **For programs**: the requests `persona-list`, `persona-import` (with `check`) and `persona-remove`, `persona` on the roles of `flow list --json`, `flow save` and `flow runs`, and the feature `flow-personas` in `cornercase contract`.
+- **Each routine on a bot's card has a menu.** Its ` ⋯ `, which shows while you hover the routine, or a right click on it offers **run now**, **pause** or **resume**, **edit…** and **remove** (with ` undo `), the buttons of the bot's routines dialog without opening it. A click elsewhere on the routine still opens the dialog with it selected.
 
 ## 0.13.98
 

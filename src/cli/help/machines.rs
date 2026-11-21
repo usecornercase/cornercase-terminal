@@ -11,25 +11,32 @@ forwards nothing, so connect once by hand to accept the host key.
 
 The states are connecting, linked (with the version there), unreachable (since when, and why) and
 older. With --json it prints {\"here\": {\"icon\", \"version\"}, \"machines\": [{\"name\", \"icon\",
-\"destination\", \"folder\", \"state\", \"version\", \"server_version\", \"seen\", \"retry_at\", \"error\",
+\"destination\", \"folder\", \"shown\", \"command\", \"state\", \"version\", \"server_version\", \"seen\", \"retry_at\", \"error\",
 \"updating\", \"problem\"}]}: version is the cornercase installed there and server_version the one
 its server runs, seen when the link was last up (UTC), retry_at when a link that fell tries next
 (UTC; a time that has passed means that try is under way; left out while the link is up or
 connecting, and while a person has to act there), error why it is down, and problem what is wrong
-with an entry of config.json, which then gets no link. Every subcommand prints the list the same way.
+with an entry of config.json, which then gets no link (shown is written only when false: such an
+entry gets no link either, and command only when set). `hide` keeps a machine on the list and ends
+its link, so nothing of it shows here and its server keeps running there; `show` links it again, and
+`all` hides or shows every machine at once. Every subcommand prints the list the same way.
 
 Examples:
   cornercase machines
   cornercase machines add vps miguel@vps.example.com --icon server
   cornercase machines edit vps --folder '~/src'
   cornercase machines retry vps
+  cornercase machines hide vps
+  cornercase machines show all
   cornercase machines remove vps";
 
 pub(in crate::cli) const MACHINES_ADD_HELP: &str =
     "A name is 1 to 20 letters, digits, `.`, `_` and `-`, unique ignoring case. The destination is what
 ssh takes: user@host, host or a Host of ~/.ssh/config, unique, with no spaces and not starting with
 `-`. The folder is absolute or starts with ~/, and is the machine's: nothing is made there yet. A
-refused value exits with 1 and says why, and config.json is left as it was.";
+refused value exits with 1 and says why, and config.json is left as it was. --command is what runs
+cornercase there for a window opened there (`edit --command \"\"` clears it); --hidden adds a machine
+whose work is not shown here: it gets no link, and the machine button still offers it.";
 
 pub(in crate::cli) const MACHINES_UPDATE_HELP: &str =
     "Runs `cornercase update` on a machine whose cornercase is older than this one, through ssh with no

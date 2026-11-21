@@ -3,9 +3,10 @@ use ratatui::layout::{Position, Rect};
 
 use super::App;
 use super::closed_agents::forgotten;
+use super::flow_panel::COPY;
 use super::menus::{PaneAction, Target};
 use super::new_workspace_there::{Asked, run_on_row};
-use super::overlay::{CLOSE_SUBMIT, CREATE_SUBMIT, Overlay, RENAME_SUBMIT};
+use super::overlay::{CLOSE_SUBMIT, CREATE_SUBMIT, OPEN_SUBMIT, Overlay, RENAME_SUBMIT};
 use super::text_fields::FieldArea;
 use crate::editor::Editor;
 use crate::error::Result;
@@ -27,7 +28,6 @@ impl App {
     pub(super) fn name_view(overlay: &Overlay) -> Option<ui::Overlay> {
         match overlay {
             Overlay::NewGroup { input } => Some(Self::new_group_view(input)),
-            Overlay::NewMachine { input, error } => Some(Self::new_machine_view(input, error.as_deref())),
             _ => None,
         }
     }
@@ -132,14 +132,19 @@ impl App {
                 (KEEP_PROJECTS_SUBMIT, Some(CLOSE_PROJECTS_SUBMIT))
             }
             Overlay::RemoveBot { bot } => (self.remove_bot_label(*bot), None),
+            Overlay::OpenLink { .. } => (OPEN_SUBMIT, Some(COPY)),
             _ => (overlay.submit_label(), None),
         }
     }
 
     pub(super) fn submit_extra(&mut self) {
-        if let Some(Overlay::DeleteGroup { group }) = self.overlay {
-            self.overlay = None;
-            self.delete_group_and_projects(group);
+        match self.overlay {
+            Some(Overlay::DeleteGroup { group }) => {
+                self.overlay = None;
+                self.delete_group_and_projects(group);
+            }
+            Some(Overlay::OpenLink { .. }) => self.copy_open_link(),
+            _ => {}
         }
     }
 
@@ -173,6 +178,7 @@ impl App {
             Some(Overlay::Machine(_)) => self.machine_form_key(key, area),
             Some(Overlay::CloneOnMachine(_)) => self.clone_on_machine_key(key, area),
             Some(Overlay::ProjectSettings(_)) => self.project_settings_key(key, area),
+            Some(Overlay::BotAsk(_)) => self.bot_ask_key(key, area),
             _ => {}
         }
     }
@@ -186,6 +192,7 @@ impl App {
             Some(Overlay::Machine(_)) => self.machine_form_mouse(ev, pos, area),
             Some(Overlay::CloneOnMachine(_)) => self.clone_on_machine_mouse(ev, pos, area),
             Some(Overlay::ProjectSettings(_)) => self.project_settings_mouse(ev, pos, area),
+            Some(Overlay::BotAsk(_)) => self.bot_ask_mouse(ev, pos, area),
             _ => {}
         }
     }
@@ -211,8 +218,12 @@ impl App {
     }
 
     pub(super) fn name_paste(&mut self, text: &str, area: Rect) {
+        if self.overlay.as_mut().is_some_and(|overlay| overlay.refuses_paste(text)) {
+            return;
+        }
+        let hidden = self.overlay.as_ref().is_some_and(Overlay::hides_text);
         let Some((_, input)) = self.name_text(area) else { return };
-        input.insert(text);
+        input.insert(if hidden { super::bots::pasted(text) } else { text });
         self.clear_form_error();
     }
 
@@ -269,12 +280,13 @@ impl App {
     pub(super) fn cancel_form(&mut self) {
         match &self.overlay {
             Some(overlay) if overlay.busy() => {}
-            Some(Overlay::Queue(_)) => self.close_queue_form(false),
+            Some(Overlay::Queue(_)) => self.close_queue_form(None),
             Some(Overlay::QueueResult(_)) => self.close_queue_result_dialog(),
             Some(Overlay::Flows { .. }) => self.close_flows(),
             Some(Overlay::Star) => self.answer_star(None),
             Some(Overlay::RemoveAccount { .. }) => self.open_settings(),
             Some(Overlay::CloneOnMachine(_)) => self.clone_back(),
+            Some(Overlay::BotSecrets(_)) => self.secrets_back(),
             _ => self.overlay = None,
         }
     }
@@ -286,11 +298,10 @@ impl App {
                 self.submit_new_workspace(Asked { project, input, worktree, run_on }, area)?
             }
             Overlay::Rename { target, input } => self.submit_rename(target, &input.text()),
-            Overlay::NewGroup { input } if input.text().trim().is_empty() => Some(Overlay::NewGroup { input }),
-            Overlay::NewGroup { input } => self.submit_new_group(&input.text()),
-            Overlay::NewMachine { input, .. } => self.submit_new_machine(input),
+            Overlay::NewGroup { input } => self.submit_new_group(input),
             Overlay::RenameBot { bot, input, .. } => self.submit_rename_bot(bot, input),
-            Overlay::RemoveBot { bot } => self.submit_remove_bot(bot),
+            bot @ (Overlay::RemoveBot { .. } | Overlay::OpenLink { .. }) => self.submit_bot_dialog(bot),
+            Overlay::BotSecrets(secrets) => Some(self.submit_secrets(*secrets)),
             Overlay::GroupStyle { .. }
             | Overlay::Usage
             | Overlay::Remote
@@ -332,6 +343,14 @@ impl App {
         }
     }
 
+    fn submit_bot_dialog(&mut self, overlay: Overlay) -> Option<Overlay> {
+        match overlay {
+            Overlay::RemoveBot { bot } => self.submit_remove_bot(bot),
+            Overlay::OpenLink { url, .. } => self.submit_open_link(url),
+            other => Some(other),
+        }
+    }
+
     fn submit_again(&mut self, overlay: Overlay) -> Overlay {
         match overlay {
             Overlay::MergeCheck { workspace, .. } => self.check_merges(workspace),
@@ -349,8 +368,11 @@ impl App {
         None
     }
 
-    fn submit_new_group(&mut self, input: &str) -> Option<Overlay> {
-        self.add_group(input.trim().to_string());
+    fn submit_new_group(&mut self, input: Editor) -> Option<Overlay> {
+        if input.text().trim().is_empty() {
+            return Some(Overlay::NewGroup { input });
+        }
+        self.add_group(input.text().trim().to_string());
         None
     }
 

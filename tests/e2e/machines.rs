@@ -189,6 +189,7 @@ fn a_machine_that_is_down_does_not_hold_up_another() {
 
 #[rstest]
 #[case::removing_the_machine(&["machines", "remove", "vps"])]
+#[case::hiding_the_machine(&["machines", "hide", "vps"])]
 #[case::changing_its_destination(&["machines", "edit", "vps", "--destination", "pi"])]
 #[case::stopping_the_server_here(&["kill-server"])]
 fn ending_a_link_leaves_the_server_there_running(#[case] ending: &[&str]) {
@@ -199,6 +200,23 @@ fn ending_a_link_leaves_the_server_there_running(#[case] ending: &[&str]) {
 
     wait_until("the link's ssh ends", || gone(&ssh));
     assert_eq!((boot(&machine), machine.servers()), (kept, 1));
+}
+
+#[test]
+fn a_hidden_machine_leaves_the_status_and_shows_again_with_the_same_server() {
+    let (_machine, here) = linked_to_one();
+    wait_until("the machine sends what it has", || status(&here)["machines"][0]["boot"].is_string());
+    let kept = status(&here)["machines"][0]["boot"].clone();
+
+    here.says(&["machines", "hide", VPS]);
+
+    let hidden = wait_for_machine(&here, VPS, "the machine is hidden", |machine| machine["shown"] == false);
+    assert!(here.says(&["machines"]).contains("hidden"));
+    wait_until("the status leaves it out", || status(&here)["machines"].as_array().is_none_or(Vec::is_empty));
+    here.says(&["machines", "show", VPS]);
+    wait_for_machine(&here, VPS, "the machine is linked again", in_state("linked"));
+    wait_until("the machine sends what it has again", || status(&here)["machines"][0]["boot"].is_string());
+    assert_eq!((hidden["state"].as_str(), &status(&here)["machines"][0]["boot"]), (Some("unreachable"), &kept));
 }
 
 #[test]
@@ -353,6 +371,19 @@ fn claude_working_there(machine: &Session, workspace: &str) -> PathBuf {
     machine.says(&["new-tab", "--workspace", workspace, "--", &command]);
     machine.wait_for_working();
     sessions
+}
+
+#[test]
+fn a_machine_added_with_the_command_line_shows_the_machine_button() {
+    let here = Session::new();
+    let mut app = Harness::open(Arc::clone(&here), ROWS, COLS);
+    app.wait_for("the window is up", |s| s.contains("Worktrees"));
+    assert!(!app.text().contains("this computer ▴"));
+
+    let added = here.cli(&["machines", "add", "box", "box.lan", "--hidden"]);
+    assert!(added.status.success(), "{added:?}");
+
+    app.wait_for("the machine button shows without reconnecting", |s| s.contains("this computer ▴"));
 }
 
 #[test]

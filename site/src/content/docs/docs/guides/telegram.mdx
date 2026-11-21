@@ -43,6 +43,10 @@ The bot then sends the list of your agents, and **`More ▴`** shows a green **`
 - **An agent needs you** (a permission prompt, a question): `! claude needs you · web-shop › dark-mode`, the last lines of its screen, and a button for each option it shows (`1 · Yes`, `2 · Yes, and don't ask again`…), plus **esc** and **screen**. A tap presses that key in its pane, as if you had typed it, and the option buttons go away. When the agent asks again right after (the next part of a question in several parts, another permission prompt), that next question comes as a new message with its own buttons.
 - **An agent finishes its turn**: `✓ claude finished · web-shop › dark-mode` and the last thing it wrote, read from its own conversation (not its screen), with its bold, lists, code and links. A long message comes in several, at most four; the rest stays in cornercase. When a Claude Code turn ends with a command still running in the background (a dev server), it says `ended its turn · a background shell still runs`. An agent whose subagents still run is normally not finished: the message comes once, after the last of them ends (a subagent silent for 10 minutes stops counting, which can send it early and again at the real end).
 
+- **A [bot](../bots/#on-telegram-and-discord) answers**: `🤖 PRs` (and `· ↻ Review PRs` for a routine's answer) and its answer, with its bold, lists, code and links; a failure starts with `✗`. By default only while you are away; a bot set to `always` sends them at the desk too, and one set to `off` never does. What you write to a bot from the chat is answered there either way.
+
+- **A [bot](../bots/#a-bot-asks-for-a-secret) asks for a secret**: `Campus asks for a secret: campus-password; open cornercase to give it`. The value is given in cornercase only, never in the chat.
+
 - **An agent reports a failure** through [OSC 7501](../../reference/agents/#program-status-protocol), or a Claude Code turn ends on an API error: `! claude failed · web-shop › dark-mode`, with its last message or its screen when no message reader exists.
 
 An OSC 7501 `idle` report cancels work without a finished message; `done` reports completion even if the tab is visible or no working state was observed.
@@ -54,6 +58,8 @@ With **settings → UI → notices for subagents** off, agents started by anothe
 ## Answer
 
 **Reply** to one of the bot's messages (swipe it, or long-press and **Reply**) and what you write goes to that agent, with `Enter`. A 👍 on your message says the agent took it; otherwise the bot answers why not.
+
+A reply to a bot's message goes to that bot, as if you had written it in its chat; its answer comes back as a reply to yours.
 
 A message that replies to nothing goes to your only agent, or, with several, the bot asks **Which agent is this for?** with a button per agent.
 
@@ -71,6 +77,8 @@ The bot doesn't type a message where it would do something else:
 | `/new` | Starts an agent: the bot asks for the project, then the workspace or **+ new worktree** (and the branch's name), then the agent if the [default one](../../reference/agents/) is `auto`, then the prompt. The agent opens in a new tab, as with [`cornercase start`](../scripts-and-agents/), and the window stays where it was. |
 | `/away` | Turns away on from the phone. |
 | `/back` | Turns it off: the bot stops messaging you. |
+| `/bots` | Every [bot](../bots/), with what it is doing, its unread answers and its next routine. **✎** writes to it (the bot asks for the message). |
+| `/bot NAME TEXT` | Writes `TEXT` to the bot called `NAME` (its id, or its name in any case). With the name alone it asks for the text; with a name no bot has it lists them. |
 
 Telegram shows them in its menu (the `/` button). A button from before the server restarted is refused, since the ids it carries may name other panes now: send `/status` for fresh ones.
 

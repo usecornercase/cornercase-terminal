@@ -467,6 +467,7 @@ export function drawCard(p: Painter, areas: Areas): void {
   interface CardRow {
     label: string;
     text: string;
+    value: string;
     style?: Style;
     y: number;
     id?: number;
@@ -479,18 +480,30 @@ export function drawCard(p: Painter, areas: Areas): void {
     if (label === 'routine' && y + 2 > bottom(list)) cut = true;
     const rows = label === 'folder' || label === 'routine' || label === '' ? [truncateRight(value, room)] : wrapText(value, room);
     rows.forEach((text, i) => {
-      if (!cut && y < bottom(list)) laid.push({ label, text, style, y, id: ids[at], head: i === 0 });
+      if (!cut && y < bottom(list)) laid.push({ label, text, value, style, y, id: ids[at], head: i === 0 });
       y += 1;
     });
   });
   const over = (r: CardRow): Rect => rect(list.x + 1, r.y, Math.max(1, list.w - 1), 1);
   const hot = laid.find((r) => r.id !== undefined && p.hovered(over(r)))?.id;
+  const head = laid.find((r) => r.id !== undefined && r.id === hot);
+  const span = head && rect(list.x + 1, head.y, Math.max(1, list.w - 1), laid.filter((r) => r.id === hot).length);
+  const menu = head && span && p.sidebarHovered(span) ? menuButton(over(head), 1) : undefined;
   p.span(list.x + 1, list.y, bot.name, { fg: DEFAULT, add: BOLD }, list.w - 1);
   for (const r of laid) {
     if (r.head) p.span(list.x + 1, r.y, r.label, DARK, LABEL);
-    p.span(list.x + 1 + LABEL, r.y, r.text, r.id !== undefined && r.id === hot ? CYAN : r.style ?? {}, room);
+    const shown = menu && menu.w > 0 && r === head ? truncateRight(r.value, Math.max(0, menu.x - 1 - (list.x + 1 + LABEL))) : r.text;
+    p.span(list.x + 1 + LABEL, r.y, shown, r.id !== undefined && r.id === hot ? CYAN : r.style ?? {}, room);
     const id = r.id;
-    if (id !== undefined) p.region({ r: over(r), click: () => app.openBotRoutines(bot.id, id), cursor: 'pointer' });
+    if (id !== undefined) {
+      const menuAt = (x: number, y: number): void => app.openRoutineMenu({ x, y }, bot.id, id);
+      p.region({ r: over(r), click: () => app.openBotRoutines(bot.id, id), right: menuAt, cursor: 'pointer' });
+    }
     if (r.label === 'folder') p.region({ r: rect(list.x + 1 + LABEL, r.y, room, 1), click: () => app.notify('copied to clipboard'), cursor: 'pointer' });
+  }
+  if (menu && menu.w > 0) {
+    const open = (x: number, y: number): void => app.openRoutineMenu({ x, y }, bot.id, hot as number);
+    p.band(menu, [seg('⋯'.padStart(menu.w))], p.hovered(menu) ? { fg: 6, add: BOLD } : { fg: 8 });
+    p.region({ r: menu, click: open, right: open, cursor: 'pointer' });
   }
 }

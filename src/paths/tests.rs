@@ -243,3 +243,11 @@ mod on_windows {
         assert_eq!(log_in(&env, None), PathBuf::from("/s/dev.log"));
     }
 }
+
+#[rstest::rstest]
+#[case::default("/c/cornercase/session.json", "/c/cornercase/bots.key")]
+#[case::custom("/c/server.json", "/c/server.bots.key")]
+fn the_bots_key_follows_the_session_without_colliding(#[case] session: &str, #[case] expected: &str) {
+    let key = crate::bots::secrets::key_path(&bots(Path::new(session)));
+    assert_eq!(key, PathBuf::from(expected));
+}

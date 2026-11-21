@@ -127,3 +127,54 @@ fn a_mode_named_default_in_the_config_is_ignored() {
     c.agent_args.insert("claude".into(), strings(&["--foo"]));
     assert_eq!(start_line(&c, "claude", Some("default"), None, None).as_deref(), Ok("claude --foo"));
 }
+
+mod never_asking {
+    use super::*;
+
+    fn claude_with(args: &[&str]) -> Config {
+        let mut c = config();
+        c.agent_args.insert("claude".into(), strings(args));
+        c
+    }
+
+    #[rstest]
+    #[case::named(&[], Some("skip permissions (dangerous)"), true)]
+    #[case::an_asking_mode(&[], Some("plan"), false)]
+    #[case::the_default(&[], None, false)]
+    #[case::from_the_settings(&["--dangerously-skip-permissions"], None, true)]
+    #[case::the_default_over_the_settings(&["--dangerously-skip-permissions"], Some("default"), false)]
+    #[case::bypass_permissions(&["--permission-mode", "bypassPermissions"], None, true)]
+    #[case::bypass_permissions_with_equals(&["--permission-mode=bypassPermissions"], None, true)]
+    #[case::bypass_permissions_under_the_default(&["--permission-mode", "bypassPermissions"], Some("default"), true)]
+    #[case::a_flag_beside_another_mode(&["--permission-mode", "plan", "--dangerously-skip-permissions"], None, true)]
+    fn claude_is_caught(#[case] args: &[&str], #[case] mode: Option<&str>, #[case] caught: bool) {
+        assert_eq!(never_asks(&claude_with(args), "claude", mode).is_some(), caught);
+    }
+
+    #[test]
+    fn a_renamed_mode_with_the_dangerous_run_is_caught() {
+        let mut c = config();
+        c.agent_modes
+            .insert("claude".into(), [("fast".to_string(), strings(&["--dangerously-skip-permissions"]))].into());
+        assert_eq!(never_asks(&c, "claude", Some("fast")).as_deref(), Some("skip permissions (dangerous)"));
+    }
+
+    #[test]
+    fn an_unknown_agents_mode_named_dangerous_is_caught() {
+        let mut c = config();
+        c.agent_commands.insert("mine".into(), "mine".into());
+        c.agent_modes.insert("mine".into(), [("danger zone".to_string(), strings(&["--wild"]))].into());
+        assert_eq!(never_asks(&c, "mine", Some("danger zone")).as_deref(), Some("danger zone"));
+        assert_eq!(never_asks(&c, "mine", None), None);
+    }
+
+    #[test]
+    fn every_agents_unattended_run_never_asks() {
+        for known in Known::ALL {
+            let mut c = config();
+            c.agent_args.insert(known.name().into(), known.unattended().iter().map(ToString::to_string).collect());
+            assert!(never_asks(&c, known.name(), None).is_some(), "{}", known.name());
+            assert_eq!(never_asks(&config(), known.name(), Some(DEFAULT_MODE)), None, "{}", known.name());
+        }
+    }
+}

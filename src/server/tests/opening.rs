@@ -1,7 +1,7 @@
 use super::a_bug::{Attached, LISTEN, hello};
 use super::*;
 use crate::graphics::Support;
-use crate::host::open::{Failed, Opener};
+use crate::host::open::{Failed, Link, Opener};
 
 fn can_open() -> Hello {
     Hello { openers: vec![Opener::Files, Opener::Vscode], ..hello(HostTheme::default()) }
@@ -82,4 +82,27 @@ fn only_a_window_that_can_open_is_told_to_open_a_port_in_the_browser() {
         plain.shows("copied http://localhost:");
         assert!(!plain.received(|_| true).iter().any(|m| matches!(m, ServerMessage::Browse(_))));
     });
+}
+
+#[test]
+fn a_link_goes_only_to_its_window_when_that_window_can_browse_and_is_no_browser() {
+    let mut attached = Attached::new();
+    let local = || Hello { openers: vec![Opener::Default], ..hello(HostTheme::default()) };
+    let opener = attached.join_hello(local());
+    let browser = attached.join_hello(Hello { terminal: Some(protocol::BROWSER.into()), ..local() });
+    let plain = attached.join_hello(hello(HostTheme::default()));
+    let link = Link { url: "https://example.com/docs".into() };
+    for id in [opener.id, browser.id, plain.id] {
+        attached.server.app.set_window(id, &[Opener::Default]);
+        attached.server.app.send_link(link.clone());
+    }
+    attached.server.flush_links();
+    for client in &attached.server.clients {
+        client.send(ServerMessage::Response("done".into()));
+    }
+    let done = |m: &ServerMessage| matches!(m, ServerMessage::Response(_));
+    let links = |got: Vec<ServerMessage>| got.into_iter().filter(|m| matches!(m, ServerMessage::Link(_))).count();
+    assert_eq!(links(opener.received(done)), 1);
+    assert_eq!(links(browser.received(done)), 0);
+    assert_eq!(links(plain.received(done)), 0);
 }

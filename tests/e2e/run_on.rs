@@ -238,7 +238,7 @@ fn an_issue_started_on_a_machine_shows_its_tab_in_this_window() {
     let repo = shop(&vps.here.dir);
     let mut app = vps.window_on(&repo);
 
-    app.click(areas().issues.as_position());
+    app.click(app.position_of("Issues"));
     app.wait_for("the issues show", |s| s.contains("#7") && s.contains("Fix the login"));
     app.send(b"\r");
     app.wait_for("the issue shows", |s| s.contains("It breaks") && s.contains("run on…"));

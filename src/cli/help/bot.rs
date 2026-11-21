@@ -34,8 +34,10 @@ GitHub Copilot CLI bot with cornercase access reads only its own folder and runs
 full access only.
 
 A bot works only while the server runs. With --follow on (the default) it is told when an agent it
-started finishes, and answers in its chat; --follow off tells it nothing. With --json it prints the bot
-as `bot list --json` does; its state is `thinking` while it sets itself up.
+started finishes, and answers in its chat; --follow off tells it nothing. --chat-apps away (the default)
+sends its answers to a paired Telegram or Discord only while you are away, always sends them, off
+never; a message you write to it from there is answered there either way. With --json it prints the
+bot as `bot list --json` does; its state is `thinking` while it sets itself up.
 
 Example:
   cornercase bot new prs --agent claude --about \"Review my open pull requests and tell me which are blocked\"";
@@ -51,7 +53,8 @@ edit` only when the person changed it.";
 pub(in crate::cli) const BOT_EDIT_HELP: &str =
     "Changes what the bot uses from its next message on; a running answer is not changed. An empty
 --model, --effort or --account goes back to the agent's own; --about writes bot.md (`bot about` prints
-it); --follow on|off sets whether the bot is told when an agent it started finishes. The agent cannot
+it); --follow on|off sets whether the bot is told when an agent it started finishes; --chat-apps
+away|always|off sets when its answers reach Telegram and Discord, at once. The agent cannot
 change, because another agent cannot continue the conversation: make another bot instead.";
 
 pub(in crate::cli) const BOT_SAY_HELP: &str =
@@ -104,3 +107,60 @@ was stopped, or after changing bot.md with `bot edit --about`, which runs nothin
 
 It answers at once with the id of the `setting up` line. It is refused while the bot answers, and
 when bot.md is empty. With --json it prints {\"bot\", \"line\"}.";
+
+pub(in crate::cli) const BOT_SECRET_HELP: &str =
+    "A bot's secrets are named values, a password or a token, that cornercase keeps encrypted for that bot
+and that only that bot's own turn reads, with `cornercase bot secret get NAME`. A name takes 1 to 40
+characters of a-z, 0-9, - and _; a value 1 to 8,192 bytes; a bot keeps at most 20. A bot that lacks one
+asks the user for it with `cornercase bot secret ask NAME --about TEXT`.";
+
+pub(in crate::cli) const BOT_SECRET_SET_HELP: &str =
+    "The bot reads this value: it reaches the bot's agent and stays in that agent's own records on this computer.
+
+Reads the value from standard input, never from an argument, and replaces a saved one; one line break at
+the end is dropped, the rest is kept as given. On a terminal it asks for the value without showing it.
+It prints the name. With --json it prints {\"bot\", \"name\", \"saved\"}. A bot cannot run it.
+
+Example:
+  printf '%s' \"$PASSWORD\" | cornercase bot secret set campus campus-password";
+
+pub(in crate::cli) const BOT_SECRET_LIST_HELP: &str =
+    "Prints the names and when each was saved, never a value, and where the key is kept (`key: file`).
+Inside a bot, BOT is that bot by default, and a bot lists only its own.
+
+With --json it prints {\"bot\", \"key\", \"secrets\": [{\"name\", \"saved\"}]}. When the file does not
+open (another key, a damaged file) it says so and changes nothing: only `bot secret remove BOT --all`
+starts again.";
+
+pub(in crate::cli) const BOT_SECRET_REMOVE_HELP: &str =
+    "Removes one secret, or with --all every secret of the bot, even a file that does not open. A bot
+cannot run it. With --json it prints {\"bot\", \"removed\"}.";
+
+pub(in crate::cli) const BOT_SECRET_GET_HELP: &str =
+    "Prints the value and a line break. Only the bot itself may run it, from its own turn: every other
+client, the user's own shell too, is refused. Never write the value in an answer, in bot.md or in
+memory.md. With --json it prints {\"bot\", \"name\", \"value\"}.";
+
+pub(in crate::cli) const BOT_SECRET_ASK_HELP: &str =
+    "Only the bot itself may run it, from its own turn. It never waits: the user sees `asks for a secret` in
+the bot's chat, a dialog with a masked field for each name (or a notice with ` go `), and types the
+values there; the bot is written to once they are saved. A value never goes through the chat.
+
+1 to 4 names; --about is why, in one line of 1 to 200 characters, shown to the user as the bot's words.
+A name already saved is refused without --replace, the same names asked again answer `already`, and a
+bot has at most 4 asks waiting. A restart forgets the asks. With --json it prints
+{\"bot\", \"ask\", \"names\", \"already\"}.
+
+Example:
+  cornercase bot secret ask campus-user campus-password --about 'to read your grades on the campus site'";
+
+pub(in crate::cli) const BOT_SECRET_GIVE_HELP: &str =
+    "Reads one JSON object from standard input, each name the bot asked for to its value, and saves them all
+or none. A bot cannot run it. It prints the saved names. With --json it prints {\"bot\", \"ask\", \"saved\"}.
+
+Example:
+  printf '%s' '{\"campus-user\":\"…\",\"campus-password\":\"…\"}' | cornercase bot secret give campus 3";
+
+pub(in crate::cli) const BOT_SECRET_DECLINE_HELP: &str =
+    "Ends the ask without saving anything; the bot is told at the next message in its chat. A bot cannot run it.
+With --json it prints {\"bot\", \"ask\"}.";

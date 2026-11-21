@@ -180,6 +180,39 @@ mod acting {
     }
 }
 
+mod the_toggle {
+    use super::*;
+
+    fn three() -> Settings {
+        let mut s = with(&[
+            (machine("vps", "vps.lan"), State::Older),
+            (Machine { shown: false, ..machine("pi", "pi.lan") }, State::Connecting),
+        ]);
+        s.config.machines.push(machine("bad name", "bad.lan"));
+        s
+    }
+
+    #[test]
+    fn is_ticked_for_a_shown_machine_and_not_for_a_hidden_one_and_absent_elsewhere() {
+        let s = three();
+
+        let toggles: Vec<Option<bool>> = s.rows().iter().map(|row| s.row_text(row).toggle).collect();
+
+        assert_eq!(toggles, [None, Some(true), None, Some(false), None, None]);
+    }
+
+    #[test]
+    fn flips_what_the_machine_shows() {
+        let s = three();
+
+        let flips: Vec<Option<Action>> = (0..s.rows().len()).map(|i| s.toggling(i)).collect();
+
+        let expected =
+            [None, Some(Action::ShowMachine(0, false)), None, Some(Action::ShowMachine(1, true)), None, None];
+        assert_eq!(flips, expected);
+    }
+}
+
 mod selection {
     use super::*;
 
@@ -222,10 +255,60 @@ mod the_hint {
     }
 
     #[test]
-    fn otherwise_says_what_enter_and_the_cross_do() {
+    fn otherwise_says_what_enter_the_toggle_and_the_cross_do() {
         let mut s = with(&[(machine("vps", "vps.lan"), State::Linked)]);
         go_to(&mut s, &Row::Machine(0));
 
+        assert_eq!(s.hint(), "enter edits a machine · ✓ hides it here · × removes it; its server keeps running there");
+    }
+
+    #[test]
+    fn leaves_the_toggle_out_on_an_update_row_which_has_none() {
+        let mut s = with(&[(machine("pi", "pi.lan"), State::Older)]);
+        go_to(&mut s, &Row::UpdateMachine(0));
+
         assert_eq!(s.hint(), "enter edits a machine · × removes it, and its server keeps running there");
+    }
+}
+
+mod a_machine_that_is_not_shown {
+    use super::*;
+
+    fn hidden() -> Machine {
+        Machine { shown: false, ..machine("devbox", "me@10.0.0.5") }
+    }
+
+    #[test]
+    fn is_grey_says_so_and_has_no_update_row() {
+        let s = with(&[(hidden(), State::Connecting)]);
+
+        assert_eq!(s.rows(), [Row::Here, Row::Machine(0), Row::AddMachine]);
+        let row = s.row_text(&Row::Machine(0));
+        assert_eq!((row.note.as_str(), row.mark, row.dangerous), ("hidden", Some(State::Connecting), false));
+    }
+
+    #[test]
+    fn has_a_hint_that_says_how_to_link_it() {
+        let mut s = with(&[(hidden(), State::Connecting)]);
+        go_to(&mut s, &Row::Machine(0));
+
+        assert_eq!(
+            s.hint(),
+            "hidden: nothing is linked and its server keeps running there; its toggle shows it here again"
+        );
+    }
+}
+
+mod the_first_row_while_the_window_is_on_another_machine {
+    use super::*;
+
+    #[test]
+    fn names_the_machine_and_says_whose_list_this_is() {
+        let mut s = with(&[]);
+        s.on = Some("vps".into());
+
+        assert_eq!(text(&s, &Row::Here).0, "  ▭ vps");
+        go_to(&mut s, &Row::Here);
+        assert!(s.hint().starts_with("vps runs the server this window is on"), "{}", s.hint());
     }
 }

@@ -84,8 +84,8 @@ impl App {
     pub(in crate::app) fn post_info(&self, workspace: u64) -> Option<PostInfo> {
         let messenger = self.messenger(Via::Discord);
         let guild = messenger.saved.forum.as_ref()?.guild;
-        let posts = &messenger.forum.posts;
-        let thread = posts.thread(workspace)?;
-        Some(PostInfo { url: format!("{CHANNELS}/{guild}/{thread}"), archived: posts.archived(workspace) })
+        let (posts, owner) = (&messenger.forum.posts, super::Owner::Workspace(workspace));
+        let thread = posts.thread(owner)?;
+        Some(PostInfo { url: format!("{CHANNELS}/{guild}/{thread}"), archived: posts.archived(owner) })
     }
 }

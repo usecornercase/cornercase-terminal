@@ -37,6 +37,8 @@ pub(crate) struct PortInfo {
     pub(crate) pane: Option<u64>,
     pub(crate) via: Option<String>,
     pub(crate) agent: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) started: Option<u64>,
 }
 
 impl PortInfo {
@@ -53,6 +55,7 @@ impl PortInfo {
             pane: port.place.pane,
             via: port.place.via.map(|via| via.name().to_string()),
             agent: port.place.agent.clone(),
+            started: port.started,
         }
     }
 }
@@ -62,12 +65,15 @@ impl PortInfo {
 pub(crate) struct StopPort {
     pub(crate) port: u16,
     pub(crate) pid: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) started: Option<u64>,
 }
 
 impl StopPort {
     pub(super) fn fields(&self, fields: &mut Fields) {
         fields.add("port", self.port);
         fields.maybe("pid", self.pid);
+        fields.add("started", self.started.is_some());
     }
 }
 

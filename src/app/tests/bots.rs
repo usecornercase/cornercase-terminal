@@ -11,7 +11,7 @@ use crate::bots::sample as bot;
 use crate::test_util::{BotSleepers, fake_program, fixture, wait_until};
 use crate::ui::{ChatHit, RowHit};
 
-fn chat_of(dir: &Path, id: &str) -> Vec<Line> {
+pub(in crate::app::tests) fn chat_of(dir: &Path, id: &str) -> Vec<Line> {
     chat::read(&folder::of(dir, id).join(folder::CHAT_FILE))
 }
 
@@ -55,7 +55,16 @@ fn a_finished_chat_gets_no_notice() {
     assert_eq!(chat_of(dir.path(), "prs").len(), 2);
 }
 
-const ANSWER: &str = fixture!("claude/2.1.325/bot-new.jsonl");
+fn system_shell_app() -> (App, Receiver<AppEvent>) {
+    let shell = if cfg!(windows) { "cmd.exe" } else { "/bin/sh" };
+    let (mut app, rx) = new_app_with_shell(shell, no_config());
+    if cfg!(windows) {
+        app.config.shell.args = vec![String::from("/d")];
+    }
+    (app, rx)
+}
+
+pub(in crate::app::tests) const ANSWER: &str = fixture!("claude/2.1.325/bot-new.jsonl");
 const FAILED: &str = fixture!("claude/2.1.318/recap-failed.jsonl");
 
 struct Chat {
@@ -64,6 +73,15 @@ struct Chat {
     dir: TempDir,
     claude: PathBuf,
     bin: TempDir,
+}
+
+fn questions(c: &mut Chat, count: usize) {
+    let path = c.app.panels.bots.live[0].folder.join(folder::CHAT_FILE);
+    for n in 0..count {
+        let id = c.app.panels.bots.live[0].next_line;
+        chat::append(&path, &Line::you(id, 100, &format!("question {n}"), false)).expect("append");
+        c.app.panels.bots.live[0].next_line += 1;
+    }
 }
 
 fn chat(out: &str) -> Chat {
@@ -93,6 +111,11 @@ fn chat_with(out: &str, access: Access) -> Chat {
     Chat { app, rx, dir, claude, bin }
 }
 
+pub(in crate::app::tests) fn argvs(program: &Path) -> Vec<String> {
+    let text = std::fs::read_to_string(program.with_extension("argv")).unwrap_or_default();
+    text.lines().map(str::to_string).collect()
+}
+
 pub(in crate::app::tests) fn settle(app: &mut App, rx: &Receiver<AppEvent>) {
     wait_until("the turn ends", || {
         drain(app, rx);
@@ -100,19 +123,17 @@ pub(in crate::app::tests) fn settle(app: &mut App, rx: &Receiver<AppEvent>) {
     });
 }
 
-fn retry_at(app: &mut App) -> Position {
+fn chat_spot(app: &mut App, wanted: impl Fn(&ChatHit) -> bool) -> Option<(Position, ChatHit)> {
     render(app, AREA);
     let areas = app.chat_geometry(AREA);
     let shown = app.shown_chat(AREA).expect("a chat");
-    for y in areas.lines.y..areas.lines.bottom() {
-        for x in areas.lines.x..areas.lines.right() {
-            let pos = Position::new(x, y);
-            if matches!(ui::chat_hit(&areas, &shown.view, pos), Some(ChatHit::Row(RowHit::Retry(_)))) {
-                return pos;
-            }
-        }
-    }
-    panic!("no retry button");
+    let spots = (areas.lines.y..areas.lines.bottom())
+        .flat_map(|y| (areas.lines.x..areas.lines.right()).map(move |x| Position::new(x, y)));
+    spots.into_iter().find_map(|pos| ui::chat_hit(&areas, &shown.view, pos).filter(&wanted).map(|hit| (pos, hit)))
+}
+
+fn retry_at(app: &mut App) -> Position {
+    chat_spot(app, |hit| matches!(hit, ChatHit::Row(RowHit::Retry(_)))).expect("a retry button").0
 }
 
 impl Chat {
@@ -137,8 +158,7 @@ impl Chat {
     }
 
     fn argvs(&self) -> Vec<String> {
-        let text = std::fs::read_to_string(self.claude.with_extension("argv")).unwrap_or_default();
-        text.lines().map(str::to_string).collect()
+        argvs(&self.claude)
     }
 
     fn say(&mut self, text: &str) -> Line {
@@ -405,13 +425,19 @@ fn what_a_bot_is_for_is_read_when_asked_and_never_given_empty_in_place_of_a_text
     assert_eq!(c.app.bot_about("nobody").expect_err("no bot").code, Code::NotFound);
 }
 
+mod ask_window;
+mod asks;
 mod boundary;
+mod card_menu;
 mod compact;
 mod form;
 mod git;
+mod links;
 mod menu;
-mod routines;
+pub(in crate::app::tests) mod routines;
 mod routines_dialog;
+pub(in crate::app::tests) mod secrets;
+mod secrets_window;
 mod setup;
 mod views;
 mod window;

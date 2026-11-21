@@ -78,6 +78,7 @@ fn every_state() -> Rig {
         Machine { icon: "◫".into(), ..machine("pi", "pi.lan") },
         machine("new", "new.lan"),
         machine("my vps", "box.lan"),
+        Machine { shown: false, ..machine("devbox", "devbox.lan") },
     ];
     let mut rig = Rig::new(machines, There::Missing);
     let states = [State::Linked, State::Unreachable, State::Older, State::Connecting];
@@ -220,7 +221,7 @@ mod the_page {
         let shown = rig.shown(NARROW);
 
         let row = shown.lines().find(|line| line.contains("vps")).expect("the machine's row");
-        assert!(row.contains("linked · 0.12.200  │"), "{row}");
+        assert!(row.contains("linked · 0.12.200  ✓"), "{row}");
     }
 
     #[test]
@@ -269,10 +270,13 @@ mod the_form {
         type_text(&mut rig.app, "me@vps.lan");
         rig.press_button(ADD);
 
-        let added =
-            Machine {
-                name: "vps".into(), icon: "☁".into(), destination: "me@vps.lan".into(), folder: "~/code".into()
-            };
+        let added = Machine {
+            name: "vps".into(),
+            icon: "☁".into(),
+            destination: "me@vps.lan".into(),
+            folder: "~/code".into(),
+            ..Machine::default()
+        };
         assert_eq!(rig.saved(), [added]);
         assert_eq!((rig.selected(), rig.page().notice.as_deref()), (Row::Machine(0), Some("vps added")));
     }
@@ -366,6 +370,20 @@ mod the_form {
     }
 
     #[test]
+    fn a_refusal_on_a_short_window_is_said_in_the_hint_row() {
+        let mut rig = on_the_page(vec![machine("vps", "vps.lan")]);
+        rig.click_row(&Row::AddMachine);
+        type_text(&mut rig.app, "pi");
+        rig.click_field(Field::Destination);
+        type_text(&mut rig.app, "vps.lan");
+
+        rig.press_button(ADD);
+
+        let drawn = rig.shown(Rect { x: 0, y: 0, width: 120, height: 18 });
+        assert!(drawn.contains("the machine `vps` already uses this destination"), "{drawn}");
+    }
+
+    #[test]
     fn keeps_every_field_on_a_short_window() {
         let short = Rect { x: 0, y: 0, width: 80, height: 18 };
 
@@ -373,6 +391,36 @@ mod the_form {
 
         assert!(fields.iter().all(|field| field.height == 1), "{fields:?}");
         assert!(fields.windows(2).all(|pair| pair[0].y < pair[1].y), "{fields:?}");
+    }
+
+    #[test]
+    fn the_box_is_drawn_ticked_and_unticked() {
+        let mut rig = on_the_page(Vec::new());
+        rig.click_row(&Row::AddMachine);
+        let ticked = rig.shown(WIDE);
+
+        rig.click_field(Field::Shown);
+
+        assert!(ticked.contains("[x] show its work here") && !rig.form().shown);
+        insta::assert_snapshot!(rig.shown(WIDE));
+    }
+
+    #[test]
+    fn saving_keeps_what_the_box_and_the_command_say() {
+        let mut rig = on_the_page(Vec::new());
+        rig.click_row(&Row::AddMachine);
+        rig.click_field(Field::Name);
+        type_text(&mut rig.app, "vps");
+        rig.click_field(Field::Destination);
+        type_text(&mut rig.app, "me@vps.lan");
+        rig.click_field(Field::Command);
+        type_text(&mut rig.app, "~/bin/cc");
+        rig.click_field(Field::Shown);
+
+        rig.press_button(ADD);
+
+        let saved = rig.saved();
+        assert_eq!((saved[0].command.as_deref(), saved[0].shown, saved[0].unreached), (Some("~/bin/cc"), false, false));
     }
 
     #[test]
@@ -429,6 +477,62 @@ mod removing {
 
         let read = config::load(&rig.dir.path().join("config.json"));
         assert_eq!((read.machines, read.sidebar.as_str()), (Vec::new(), "tree"));
+    }
+}
+
+mod hiding {
+    use super::*;
+
+    fn toggle(rig: &mut Rig, row: &Row) {
+        let at = ui::settings_toggle(rig.row_at(row)).as_position();
+        click(&mut rig.app, at);
+    }
+
+    #[test]
+    fn a_shown_machine_s_toggle_hides_it_ends_its_link_and_opens_no_form() {
+        let mut rig = on_the_page(vec![machine("vps", "vps.lan")]);
+        assert_eq!(rig.links().len(), 1);
+
+        toggle(&mut rig, &Row::Machine(0));
+
+        assert_eq!(rig.saved(), [Machine { shown: false, ..machine("vps", "vps.lan") }]);
+        assert_eq!(rig.page().notice.as_deref(), Some("vps hidden: its server keeps running there"));
+        assert_eq!((rig.links(), rig.selected()), (Vec::<u64>::new(), Row::Machine(0)));
+        wait_until("its link ends", || rig.seen("end vps.lan") == 1);
+    }
+
+    #[test]
+    fn a_second_click_shows_it_and_links_it_again() {
+        let mut rig = on_the_page(vec![machine("vps", "vps.lan")]);
+        toggle(&mut rig, &Row::Machine(0));
+
+        toggle(&mut rig, &Row::Machine(0));
+
+        assert_eq!(rig.saved(), [machine("vps", "vps.lan")]);
+        assert_eq!(rig.page().notice.as_deref(), Some("vps shown here"));
+        assert_eq!((rig.links().len(), rig.seen("start vps.lan")), (1, 2));
+    }
+
+    #[test]
+    fn of_a_machine_removed_outside_writes_nothing_and_says_so() {
+        let mut rig = on_the_page(vec![machine("vps", "vps.lan")]);
+        let at = ui::settings_toggle(rig.row_at(&Row::Machine(0))).as_position();
+        write_config(rig.dir.path(), &Config { machines: vec![machine("pi", "pi.lan")], ..Config::default() });
+
+        click(&mut rig.app, at);
+
+        assert_eq!(rig.saved(), [machine("pi", "pi.lan")]);
+        assert_eq!(rig.page().notice.as_deref(), Some("vps is no longer on the list"));
+    }
+
+    #[test]
+    fn a_click_there_on_a_row_with_a_problem_opens_the_form() {
+        let mut rig = on_the_page(vec![machine("my vps", "vps.lan")]);
+
+        toggle(&mut rig, &Row::Machine(0));
+
+        assert!(matches!(rig.app.overlay, Some(Overlay::Machine(_))));
+        assert_eq!(rig.saved(), [machine("my vps", "vps.lan")]);
     }
 }
 

@@ -4,12 +4,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::agents::headless::Access;
 
+pub(crate) mod asks;
 pub(crate) mod brief;
 pub(crate) mod chat;
 pub(crate) mod folder;
 pub(crate) mod follow;
 pub(crate) mod form;
 pub(crate) mod routines;
+pub(crate) mod secrets;
 pub(crate) mod turn;
 
 pub(crate) const MAX_BOTS: usize = 50;
@@ -24,6 +26,10 @@ pub(crate) const LAST_CHARS: usize = 200;
 pub(crate) const BOT_ENV: &str = "CORNERCASE_BOT";
 pub(crate) const BOT_RUN_ENV: &str = "CORNERCASE_BOT_RUN";
 pub(crate) const ACCESS_CHANGE: &str = "a bot cannot change a bot's access";
+pub(crate) const ELSEWHERE: &str = "a bot works on this computer only: it cannot act on another machine";
+pub(crate) const NO_PLUGINS: &str = "a bot cannot run or change cornercase's plugins";
+pub(crate) const NO_MACHINES: &str = "a bot cannot change cornercase's machines";
+pub(crate) const NO_TUNNELS: &str = "a bot cannot open or close a tunnel";
 
 pub(crate) struct ServerStop {
     pub(crate) command: &'static str,
@@ -61,6 +67,38 @@ pub(crate) struct Bot {
     pub(crate) conversation: Option<String>,
     #[serde(default = "yes", skip_serializing_if = "is_on")]
     pub(crate) follow: bool,
+    #[serde(default, skip_serializing_if = "ChatApps::is_away")]
+    pub(crate) chat_apps: ChatApps,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum ChatApps {
+    #[default]
+    Away,
+    Always,
+    Off,
+}
+
+impl ChatApps {
+    pub(crate) const NAMES: [&str; 3] = ["away", "always", "off"];
+
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Self::Away => "away",
+            Self::Always => "always",
+            Self::Off => "off",
+        }
+    }
+
+    pub(crate) fn parse(text: &str) -> Option<Self> {
+        [Self::Away, Self::Always, Self::Off].into_iter().find(|choice| choice.name() == text.trim())
+    }
+
+    #[expect(clippy::trivially_copy_pass_by_ref, reason = "serde's skip_serializing_if takes a reference")]
+    fn is_away(&self) -> bool {
+        *self == Self::Away
+    }
 }
 
 fn yes() -> bool {
@@ -147,6 +185,7 @@ pub(crate) fn sample(id: &str, name: &str) -> Bot {
         created: 100,
         conversation: None,
         follow: true,
+        chat_apps: ChatApps::Away,
     }
 }
 

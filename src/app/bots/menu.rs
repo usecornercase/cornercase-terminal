@@ -6,6 +6,7 @@ use crate::app::menus::MenuAction;
 use crate::app::opening::Subject;
 use crate::app::overlay::{Overlay, REMOVE_SUBMIT, RENAME_SUBMIT};
 use crate::app::toast::Toast;
+use crate::bots::routines::{Button, buttons};
 use crate::control::bots::EditBot;
 use crate::editor::Editor;
 use crate::ui;
@@ -19,9 +20,11 @@ pub(in crate::app) enum BotItem {
     Rename,
     Edit,
     Routines,
+    Secrets,
     NewConversation,
     OpenFolder,
     Remove,
+    Routine(u64, Button),
 }
 
 impl App {
@@ -29,9 +32,11 @@ impl App {
         let MenuAction::Bot(_, item) = action else { return None };
         Some(
             match item {
+                BotItem::Routine(_, button) => button.label(),
                 BotItem::Rename => "rename",
                 BotItem::Edit => "edit…",
                 BotItem::Routines => "routines…",
+                BotItem::Secrets => "secrets…",
                 BotItem::NewConversation => "new conversation",
                 BotItem::OpenFolder => "open folder",
                 BotItem::Remove => "remove…",
@@ -52,14 +57,33 @@ impl App {
             BotItem::Rename => self.ask_rename_bot(key),
             BotItem::Edit => self.open_bot_form(Some(key)),
             BotItem::Routines => self.open_bot_routines(key, None),
+            BotItem::Secrets => self.open_bot_secrets(key, None),
             BotItem::NewConversation => {
                 let id = self.panels.bots.live[bot].bot.id.clone();
                 self.new_conversation(&id);
             }
             BotItem::OpenFolder => self.open_menu_or_copy(Subject::Bot(key), at),
             BotItem::Remove => self.overlay = Some(Overlay::RemoveBot { bot: key }),
+            BotItem::Routine(entry, button) => self.press_card_routine(bot, entry, button),
         }
         None
+    }
+
+    fn press_card_routine(&mut self, at: usize, entry: u64, button: Button) {
+        let id = &self.panels.bots.live[at].bot.id;
+        let yours = self.panels.queued.queue().entry(entry).is_some_and(|found| {
+            found.is_routine() && found.bot() == Some(id.as_str()) && buttons(found).contains(&button)
+        });
+        if yours {
+            self.press_routine(entry, button);
+        }
+    }
+
+    pub(in crate::app) fn open_routine_menu(&mut self, key: u64, routine: u64, pos: Position) {
+        let Some(entry) = self.panels.queued.queue().entry(routine) else { return };
+        let actions =
+            buttons(entry).into_iter().map(|button| MenuAction::Bot(key, BotItem::Routine(routine, button))).collect();
+        self.overlay = Some(Overlay::Menu { at: pos, actions });
     }
 
     fn ask_rename_bot(&mut self, key: u64) {
@@ -79,7 +103,7 @@ impl App {
 
     pub(in crate::app) fn bot_view(&self, overlay: &Overlay) -> Option<ui::Overlay> {
         match overlay {
-            Overlay::BotForm(form) => Some(ui::Overlay::BotForm(form.clone())),
+            Overlay::BotForm(form) => Some(ui::Overlay::BotForm(self.form_with_secrets(form))),
             Overlay::RenameBot { input, error, .. } => Some(Self::rename_bot_view(input, error.as_deref())),
             Overlay::RemoveBot { bot } => self.remove_bot_view(*bot),
             _ => None,
@@ -160,9 +184,11 @@ impl App {
 impl Overlay {
     pub(in crate::app) fn names_bot(&self, key: u64, id: &str) -> bool {
         match self {
-            Self::RenameBot { bot, .. } | Self::RemoveBot { bot } => *bot == key,
+            Self::RenameBot { bot, .. } | Self::RemoveBot { bot } | Self::OpenLink { bot, .. } => *bot == key,
             Self::BotForm(form) => form.editing.as_deref() == Some(id),
             Self::BotRoutines(dialog) => dialog.bot == key,
+            Self::BotSecrets(secrets) => secrets.bot() == key,
+            Self::BotAsk(form) => form.bot == key,
             Self::Queue(form) => form.bot() == Some(id),
             Self::Menu { actions, .. } => {
                 actions.iter().any(|action| matches!(action, MenuAction::Bot(found, _) if *found == key))

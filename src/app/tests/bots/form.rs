@@ -179,3 +179,22 @@ fn a_click_on_follow_toggles_it() {
     click(&mut c.app, Position::new(at.x + 2, at.y));
     assert!(bot_form(&c.app).follow);
 }
+
+#[test]
+fn a_paired_chat_app_makes_the_chat_apps_row_a_list_and_its_choice_is_saved() {
+    let mut c = chat(ANSWER);
+    from_more(&mut c.app, "new bot…");
+    assert!(!bot_form(&c.app).chat_ready);
+    assert!(drawn(&mut c.app).contains("pair Telegram or Discord in Settings › Remote"));
+    c.app.overlay = None;
+    let paired = crate::messenger::Chat { id: 42, user: 9, name: "@ada".into(), paired: 1 };
+    messenger::set_up(&mut c.app, crate::messenger::Via::Telegram, "1:t", "cornercase_bot", Some(paired));
+    c.app.open_bot_form(Some(c.app.panels.bots.live[0].key));
+    assert!(bot_form(&c.app).chat_ready);
+    assert!(drawn(&mut c.app).contains("Chat apps while away"));
+    let Some(Overlay::BotForm(form)) = &mut c.app.overlay else { panic!("form") };
+    form.chat_apps.choose(1);
+    send_key(&mut c.app, KeyCode::Enter, KeyModifiers::NONE);
+    assert!(c.app.overlay.is_none());
+    assert_eq!(c.app.panels.bots.live[0].bot.chat_apps, crate::bots::ChatApps::Always);
+}

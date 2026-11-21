@@ -152,6 +152,7 @@ mod processes_dialog;
 mod project_settings_dialog;
 mod pull_requests;
 mod queue_dialog;
+mod queue_list_dialog;
 mod queue_panel;
 mod queue_result_dialog;
 mod queue_results;
@@ -796,7 +797,11 @@ impl App {
         let view =
             ui::View { remote_card, remote_tab, tab, overlay, files, chat, bot_card, ..self.lists_view(area, now) }
                 .with_icons(self.icons_in(sight));
+        let areas = self.layout(area).shown(self.screen.nav);
+        let buttons = ui::card_buttons(&view, areas.workspaces_list, areas.pitch);
+        let card = view.bot_card.clone();
         ui::draw(f, &view);
+        self.note_drawn_card(card, areas.workspaces_list, buttons);
         placed.map(|placed| images::owned(f.buffer_mut(), placed))
     }
 }

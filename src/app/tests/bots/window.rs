@@ -285,12 +285,7 @@ fn a_key_while_a_bot_shows_but_the_chat_has_no_keys_reaches_no_pane() {
 fn the_text_read_stays_put_when_steps_arrive_while_scrolled_up() {
     let mut c = chat(ANSWER);
     c.app.window_attached();
-    for n in 0..30 {
-        let id = c.app.panels.bots.live[0].next_line;
-        let path = c.app.panels.bots.live[0].folder.join(folder::CHAT_FILE);
-        chat::append(&path, &Line::you(id, 100, &format!("question {n}"), false)).expect("append");
-        c.app.panels.bots.live[0].next_line += 1;
-    }
+    questions(&mut c, 30);
     c.app.show_bot(0);
     c.hold();
     c.say("long job");

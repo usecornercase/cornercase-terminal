@@ -1,5 +1,6 @@
 ---
 source: src/app/tests/machine_links/settings.rs
+assertion_line: 107
 expression: every_state().shown(WIDE)
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                                                      "
@@ -7,14 +8,14 @@ expression: every_state().shown(WIDE)
 " P│  Worktrees   Agents   Accounts   Flows   Issues   UI   Remote   Plugins   Machines                                                       │  "
 "  │  ⌕ search settings                                                                                                                       │  "
 "  │ ▌   ▭ this computer         <version>                                                                                                    │  "
-"  │   ● ☁ vps                   miguel@vps.example.com   ~/code     linked · 0.12.200                                                        │  "
-"  │   ○ ▣ mini                  mac-mini.local           /srv/code  unreachable · not seen yet                                               │  "
-"  │   ◐ ◫ pi                    pi.lan                   ~/code     older · 0.12.200                                                         │  "
+"  │   ● ☁ vps                   miguel@vps.example.com   ~/code     linked · 0.12.200                                         show here ✓    │  "
+"  │   ○ ▣ mini                  mac-mini.local           /srv/code  unreachable · not seen yet                                show here ✓    │  "
+"  │   ◐ ◫ pi                    pi.lan                   ~/code     older · 0.12.200                                          show here ✓    │  "
 "  │       update…               installs this version there with cornercase update; nothing restarts                                         │  "
-"  │   ◌ ☁ new                   new.lan                  ~/code     connecting…                                                              │  "
+"  │   ◌ ☁ new                   new.lan                  ~/code     connecting…                                               show here ✓    │  "
 "  │   ○ ☁ my vps                box.lan                  ~/code     use letters, digits, `.`, `_` and `-`, at most 20 characters             │  "
+"  │   ◌ ☁ devbox                devbox.lan               ~/code     hidden                                                    show here ·    │  "
 "  │   + add machine             another computer you reach with ssh                                                                          │  "
-"  │                                                                                                                                          │  "
 "  │                                                                                                                                          │  "
 "  │                                                                                                                                          │  "
 "  │                                                                                                                                          │  "

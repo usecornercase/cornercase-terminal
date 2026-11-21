@@ -121,6 +121,7 @@ impl App {
         settings.plugins = self.plugin_rows();
         settings.accounts = self.accounts_listed();
         settings.machines = self.machine_infos();
+        settings.on = self.window_on();
         settings.shells = self.shells_here();
         settings.now = SystemTime::now();
         settings
@@ -297,7 +298,8 @@ impl App {
             action @ (settings::Action::AddMachine
             | settings::Action::EditMachine(_)
             | settings::Action::RemoveMachine(_)
-            | settings::Action::UpdateMachine(_)) => self.machine_row_action(&action),
+            | settings::Action::UpdateMachine(_)
+            | settings::Action::ShowMachine(..)) => self.machine_row_action(&action),
         }
         self.watch_accounts_page(Instant::now());
         self.refresh_machines_page();
@@ -316,6 +318,7 @@ fn place_find(s: &mut Settings, area: Rect, pos: Position) {
 struct ClickRows {
     sections: Vec<&'static str>,
     removable: Vec<bool>,
+    toggles: Vec<bool>,
     movable: Vec<bool>,
     cursor: usize,
 }
@@ -327,6 +330,7 @@ fn click_rows(s: &Settings, hits: &[Hit]) -> ClickRows {
         return ClickRows {
             sections: vec![""; count],
             removable: vec![false; count],
+            toggles: vec![false; count],
             movable: vec![false; count],
             cursor,
         };
@@ -335,6 +339,7 @@ fn click_rows(s: &Settings, hits: &[Hit]) -> ClickRows {
     ClickRows {
         sections: rows.iter().map(settings::Row::section).collect(),
         removable: (0..rows.len()).map(|i| s.removal(i).is_some()).collect(),
+        toggles: (0..rows.len()).map(|i| s.toggling(i).is_some()).collect(),
         movable: rows.iter().map(settings::Row::movable).collect(),
         cursor: s.cursor,
     }
@@ -350,6 +355,7 @@ fn settings_click(s: &mut Settings, area: Rect, pos: Position) -> settings::Acti
         tabs: &tabs,
         sections: &rows.sections,
         removable: &rows.removable,
+        toggles: &rows.toggles,
         movable: &rows.movable,
         cursor: rows.cursor,
         pick,
@@ -369,6 +375,7 @@ fn settings_click(s: &mut Settings, area: Rect, pos: Position) -> settings::Acti
         }
         Some(ui::SettingsHit::Pick(i)) => s.choose(Some(i)),
         Some(ui::SettingsHit::Remove(i)) => s.removal(i).unwrap_or(settings::Action::None),
+        Some(ui::SettingsHit::Toggle(i)) => toggle(s, i),
         Some(ui::SettingsHit::MoveUp(i)) => s.move_tab(i, settings::Move::Up),
         Some(ui::SettingsHit::MoveDown(i)) => s.move_tab(i, settings::Move::Down),
         Some(ui::SettingsHit::Row(i)) => {
@@ -378,6 +385,11 @@ fn settings_click(s: &mut Settings, area: Rect, pos: Position) -> settings::Acti
         }
         None => settings::Action::None,
     }
+}
+
+fn toggle(s: &mut Settings, i: usize) -> settings::Action {
+    s.select(i);
+    s.toggling(i).unwrap_or(settings::Action::None)
 }
 
 fn tab_labels(settings: &Settings, hits: &[Hit]) -> Vec<(String, bool)> {
@@ -402,6 +414,7 @@ fn hit_view(hit: &Hit) -> ui::SettingsRow {
         movable: false,
         mark: None,
         tail: String::new(),
+        toggle: None,
     }
 }
 
@@ -418,6 +431,7 @@ fn row_view(settings: &Settings, i: usize, row: &settings::Row) -> ui::SettingsR
         movable: row.movable(),
         mark: text.mark,
         tail: text.tail,
+        toggle: text.toggle,
     }
 }
 

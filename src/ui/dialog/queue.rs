@@ -13,6 +13,9 @@ use crate::ui::widgets::{EditorField, draw_editor};
 
 const LABEL: u16 = 9;
 const HEIGHT: u16 = 23;
+const PROMPT: u16 = 3;
+const PROMPT_MOST: u16 = 8;
+const PROMPT_HINT: &str = "enter breaks the line · tab moves on";
 const WHERE: u16 = 8;
 const OPEN_IN: u16 = 10;
 const AGENT: u16 = 12;
@@ -37,8 +40,16 @@ pub(crate) enum Hit {
     Cancel,
 }
 
+fn extra(screen: Rect) -> u16 {
+    screen.height.saturating_sub(2).saturating_sub(HEIGHT).min(PROMPT_MOST - PROMPT)
+}
+
+fn at(screen: Rect, row: u16) -> u16 {
+    if row > PROMPT { row + extra(screen) } else { row }
+}
+
 pub(crate) fn area(screen: Rect) -> Rect {
-    centred_in(screen, 72, HEIGHT)
+    centred_in(screen, 72, HEIGHT + extra(screen))
 }
 
 pub(crate) fn area_with_list(screen: Rect, form: &Form) -> Rect {
@@ -49,8 +60,8 @@ fn inner(screen: Rect) -> Rect {
     padded(area(screen))
 }
 
-fn row(screen: Rect, at: u16, height: u16) -> Rect {
-    row_in(inner(screen), at, height)
+fn row(screen: Rect, row: u16, height: u16) -> Rect {
+    row_in(inner(screen), at(screen, row), height)
 }
 
 fn cell(screen: Rect, at: u16, x: u16, width: u16) -> Rect {
@@ -65,7 +76,7 @@ fn rest(screen: Rect, x: u16) -> u16 {
 pub(crate) fn rect(screen: Rect, form: &Form, control: Control) -> Rect {
     let on = form.kind() == When::On;
     match control {
-        Control::Prompt => row(screen, 1, 3),
+        Control::Prompt => row(screen, 1, PROMPT + extra(screen)),
         Control::When => cell(screen, 5, LABEL, COMBO),
         Control::Date => cell(screen, 6, LABEL, DATE),
         Control::Day => cell(screen, 6, LABEL, DAY),
@@ -97,6 +108,12 @@ pub(crate) fn text(screen: Rect, form: &Form, control: Control) -> Rect {
     if control == Control::Prompt { r } else { inset(r) }
 }
 
+pub(crate) fn top(screen: Rect, form: &Form) -> usize {
+    let r = text(screen, form, Control::Prompt);
+    let lines = form.prompt.lines(usize::from(r.width.max(1))).len();
+    form.prompt.scroll().min(lines.saturating_sub(usize::from(r.height.max(1))))
+}
+
 pub(crate) fn list(screen: Rect, form: &Form) -> Option<Rect> {
     let open = form.opened()?;
     Some(combo::list(rect(screen, form, open), form.combo_of(open)?, screen))
@@ -106,10 +123,15 @@ fn buttons(screen: Rect) -> [Rect; 2] {
     bottom_buttons(inner(screen), "schedule")
 }
 
+#[cfg(test)]
+pub(crate) fn schedule_button(screen: Rect) -> Rect {
+    buttons(screen)[0]
+}
+
 fn note(screen: Rect) -> Rect {
     let r = inner(screen);
     let buttons = r.bottom().saturating_sub(1);
-    let y = buttons.saturating_sub(2).max(r.y.saturating_add(NOTICE)).min(buttons);
+    let y = buttons.saturating_sub(2).max(r.y.saturating_add(at(screen, NOTICE))).min(buttons);
     Rect::new(r.x, y, r.width, buttons - y)
 }
 
@@ -208,7 +230,8 @@ fn draw_controls(f: &mut Frame, view: &View, screen: Rect, form: &Form) {
         let focused = typing && form.focus == *control;
         if let Some(editor) = form.editor_of(*control) {
             let placeholder = if *control == Control::Branch { "branch name" } else { "" };
-            let at = EditorField { field: r, text: text(screen, form, *control), focused, placeholder };
+            let top = (*control == Control::Prompt).then(|| top(screen, form));
+            let at = EditorField { field: r, text: text(screen, form, *control), focused, placeholder, top };
             draw_editor(f, view, editor, at);
         } else if let Some(choices) = form.combo_of(*control) {
             let gone = form.account.as_ref().and_then(|account| account.missing()).map(|name| format!("{name} (gone)"));
@@ -219,6 +242,27 @@ fn draw_controls(f: &mut Frame, view: &View, screen: Rect, form: &Form) {
             };
             let focused = form.focus == *control && !form.busy;
             combo::draw_field(f, view, r, combo::Field { combo: choices, placeholder: empty, focused });
+        }
+    }
+}
+
+fn draw_prompt_marks(f: &mut Frame, view: &View, screen: Rect, form: &Form) {
+    let dim = Style::default().fg(view.muted);
+    let field = text(screen, form, Control::Prompt);
+    if form.focus == Control::Prompt && !form.busy && form.opened().is_none() {
+        let hint = cell(screen, 0, LABEL, rest(screen, LABEL));
+        f.render_widget(Paragraph::new(Span::styled(PROMPT_HINT, dim)), hint);
+    }
+    let lines = form.prompt.lines(usize::from(field.width.max(1))).len();
+    let above = top(screen, form);
+    let below = lines.saturating_sub(above + usize::from(field.height));
+    for (count, arrow, y) in [(above, "↑", 0), (below, "↓", PROMPT + 1)] {
+        if count > 0 {
+            let mark = combo::more(arrow, count);
+            let width = u16::try_from(mark.chars().count()).unwrap_or_default();
+            let r = cell(screen, y, rest(screen, 0).saturating_sub(width), width);
+            f.render_widget(Clear, r);
+            f.render_widget(Paragraph::new(Span::styled(mark, dim)), r);
         }
     }
 }
@@ -263,6 +307,7 @@ pub(in crate::ui) fn draw(f: &mut Frame, view: &View, form: &Form) {
     f.render_widget(overlay_block(view.muted, "Schedule an agent"), area);
     draw_labels(f, view, screen, form);
     draw_controls(f, view, screen, form);
+    draw_prompt_marks(f, view, screen, form);
     draw_cleanup(f, view, screen, form);
     draw_notes(f, view, screen, form);
     draw_dialog_buttons(f, view, buttons(screen), "schedule", "cancel");

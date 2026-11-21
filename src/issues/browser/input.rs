@@ -2,7 +2,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEventK
 
 use crate::issues::Source;
 
-use super::{Action, After, Browser, IssuesHit, Pick, Room, Screen, Tab, naming};
+use super::{Action, After, Browser, IssuesHit, Pick, Room, Screen, naming};
 
 const WHEEL_ROWS: isize = 3;
 
@@ -81,9 +81,6 @@ impl Browser {
         let rows = room.list_rows;
         let shown = self.list_len();
         match key.code {
-            KeyCode::Enter if self.current() == Tab::Queue => {
-                return self.selected_queued().map_or(Action::None, |queued| Action::QueueOpen(queued.id));
-            }
             KeyCode::Enter => return self.selected().map_or(Action::None, |issue| self.read(issue)),
             KeyCode::Up => self.search.move_selection(-1, shown, rows),
             KeyCode::Down => self.search.move_selection(1, shown, rows),
@@ -210,15 +207,10 @@ impl Browser {
     }
 
     fn open_item(&mut self, i: usize) -> Action {
-        if self.current() == Tab::Queue {
-            if let Some(id) = self.shown_queue().get(i).map(|queued| queued.id) {
-                self.search.select(i);
-                return Action::QueueOpen(id);
-            }
-        } else if let Some(issue) = self.shown().get(i).map(|issue| (*issue).clone()) {
-            return self.read(issue);
+        match self.shown().get(i).map(|issue| (*issue).clone()) {
+            Some(issue) => self.read(issue),
+            None => Action::None,
         }
-        Action::None
     }
 
     fn scroll_detail(&mut self, delta: isize, room: Room) {

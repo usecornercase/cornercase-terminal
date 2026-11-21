@@ -14,6 +14,13 @@ use super::menu::BotItem;
 
 const NO_MODEL: &str = "the agent's own";
 
+pub(super) fn access_words(access: Access) -> (&'static str, bool) {
+    match access {
+        Access::Full => ("full access", true),
+        Access::Cornercase => ("through cornercase", false),
+    }
+}
+
 impl App {
     pub(in crate::app) fn bots_view(&self) -> Option<ui::BotsView> {
         let live = &self.panels.bots.live;
@@ -31,12 +38,16 @@ impl App {
                 thinking: state.answering(),
                 unread: state.unread,
                 active: shown == Some(i),
+                asking: !state.asks.is_empty(),
             })
             .collect();
         Some(ui::BotsView { entries, scroll: self.scroll.of(List::Bots), folded: self.panels.bots.collapsed })
     }
 
     fn bot_detail_short(&self, at: usize) -> String {
+        if !self.panels.bots.live[at].asks.is_empty() {
+            return String::from("asks for a secret");
+        }
         let idle = !self.panels.bots.live[at].answering();
         let next = self.bot_next_run(&self.panels.bots.live[at].bot.id).filter(|_| idle);
         match next {
@@ -75,10 +86,13 @@ impl App {
         if let Some(account) = account {
             rows.push(ui::CardRow::new("account", account));
         }
-        rows.push(match bot.access {
-            Access::Full => ui::CardRow { red: true, ..ui::CardRow::new("access", "full access") },
-            Access::Cornercase => ui::CardRow::new("access", "through cornercase"),
-        });
+        let (access, red) = access_words(bot.access);
+        rows.push(ui::CardRow { red, ..ui::CardRow::new("access", access) });
+        rows.extend(Self::secrets_row(&live.secrets));
+        rows.extend(live.asks.iter().map(|ask| ui::CardRow {
+            status: Some(crate::agents::activity::Status::Waiting),
+            ..ui::CardRow::new("asks", format!("for a secret: {}", ask.joined()))
+        }));
         rows.push(ui::CardRow::new("made", crate::queue::clock::day(bot.created, &self.window_zone())));
         rows.extend(self.started_rows(&bot.id));
         rows.extend(self.routine_rows(&bot.id));
@@ -167,6 +181,7 @@ impl App {
             BotItem::Rename,
             BotItem::Edit,
             BotItem::Routines,
+            BotItem::Secrets,
             BotItem::NewConversation,
             BotItem::OpenFolder,
             BotItem::Remove,

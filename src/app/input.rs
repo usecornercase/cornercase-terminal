@@ -62,8 +62,11 @@ impl App {
             Some(Overlay::Issues(_)) => return self.issues_key(key, area),
             Some(Overlay::Flows { .. }) => self.flows_key(key, area),
             Some(Overlay::StartFlow { .. }) => self.start_flow_key(key, area),
-            Some(Overlay::Worktrees(_) | Overlay::Ports(_) | Overlay::Processes(_)) => self.listing_key(key, area),
-            Some(Overlay::BotRoutines(_)) => self.bot_routines_key(key, area),
+            Some(Overlay::Worktrees(_) | Overlay::Ports(_) | Overlay::Processes(_) | Overlay::QueueList(_)) => {
+                self.listing_key(key, area);
+            }
+            Some(Overlay::BotRoutines(_)) => self.bot_list_key(key, area),
+            Some(Overlay::BotSecrets(secrets)) if secrets.list().is_some() => self.bot_list_key(key, area),
             Some(Overlay::CloseAgent(_)) => self.close_agent_key(key, area),
             Some(Overlay::CloseAgents(_)) => self.close_agents_key(key, area),
             Some(Overlay::Usage) => self.usage_key(key),
@@ -248,7 +251,7 @@ impl App {
             return ControlFlow::Break(self.issues_column_mouse(left, area));
         }
         if areas.workspaces.contains(pos) && self.bot_shown() {
-            self.bot_card_mouse(ev, pos, areas);
+            self.bot_card_mouse(ev, pos);
             return ControlFlow::Break(Ok(()));
         }
         if areas.workspaces.contains(pos) {
@@ -499,12 +502,7 @@ impl App {
                 self.ask_sessions(Instant::now());
             }
             Some(Overlay::BotForm(_)) => self.bot_form_paste(text, area),
-            Some(Overlay::Queue(form)) => {
-                let (focus, idle) = (form.focus, !form.busy && form.opened().is_none());
-                if let Some(editor) = form.editor(focus).filter(|_| idle) {
-                    editor.insert(text);
-                }
-            }
+            Some(Overlay::Queue(_)) => self.queue_form_paste(text, area),
             Some(Overlay::Issues(b)) => b.paste(text),
             Some(Overlay::Settings(s)) => s.paste(text),
             Some(Overlay::ShareSettings(_)) => self.share_settings_paste(text, area),
@@ -515,6 +513,8 @@ impl App {
             Some(Overlay::ProjectSettings(_)) => self.project_settings_paste(text, area),
             Some(Overlay::Worktrees(_)) => self.worktrees_paste(text),
             Some(Overlay::Processes(dialog)) => dialog.paste(text),
+            Some(Overlay::QueueList(dialog)) => dialog.paste(text),
+            Some(Overlay::BotAsk(_)) => self.bot_ask_paste(text, area),
             Some(_) => self.name_paste(text, area),
             None => {}
         }

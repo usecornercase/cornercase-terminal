@@ -35,6 +35,7 @@ export type KeysAction =
   | { kind: 'closeAgents' }
   | { kind: 'reopenAgents' }
   | { kind: 'issues' }
+  | { kind: 'queue' }
   | { kind: 'todo' }
   | { kind: 'recap' }
   | { kind: 'newBot' }
@@ -77,6 +78,7 @@ const ROOT: KeysItem[] = [
   open('g', 'git'),
   open('w', 'workspace'),
   run('i', 'issues', { kind: 'issues' }),
+  run('e', 'queue', { kind: 'queue' }),
   run('t', 'todo', { kind: 'todo' }),
   run('s', 'recap', { kind: 'recap' }),
   run('b', 'new bot', { kind: 'newBot' }),

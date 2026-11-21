@@ -150,12 +150,12 @@ pub enum Error {
     #[error("the cornercase on `{0}` is too old to attach to from another machine. Run `cornercase update` there")]
     RemoteTooOld(String),
     #[error(
-        "`{host}` runs cornercase {there} and this machine {}. Run `cornercase update` there",
+        "`{host}` runs cornercase {there} and this computer {}. Run `cornercase update` there",
         crate::version::CURRENT
     )]
     RemoteOlder { host: String, there: String },
     #[error(
-        "`{}` runs cornercase {} and this machine {}. Update it from here with `{}`",
+        "`{}` runs cornercase {} and this computer {}. Update it from here with `{}`",
         .0.host,
         .0.there,
         crate::version::CURRENT,
@@ -163,7 +163,7 @@ pub enum Error {
     )]
     RemoteBehind(Box<Behind>),
     #[error(
-        "`{host}` runs cornercase {there} and this machine {}. Run `cornercase update` here",
+        "`{host}` runs cornercase {there} and this computer {}. Run `cornercase update` here",
         crate::version::CURRENT
     )]
     RemoteNewer { host: String, there: String },

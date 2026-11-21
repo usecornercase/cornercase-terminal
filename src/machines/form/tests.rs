@@ -36,10 +36,13 @@ mod a_new_machine {
     fn is_added_with_what_was_typed_trimmed() {
         let mut form = filled(" vps ", " me@vps.lan ", " ~/src ");
 
-        let added =
-            Machine {
-                name: "vps".into(), icon: "☁".into(), destination: "me@vps.lan".into(), folder: "~/src".into()
-            };
+        let added = Machine {
+            name: "vps".into(),
+            icon: "☁".into(),
+            destination: "me@vps.lan".into(),
+            folder: "~/src".into(),
+            ..Machine::default()
+        };
         assert_eq!(form.checked(&listed()), Some((None, added)));
     }
 }
@@ -178,14 +181,14 @@ mod keys {
     fn tab_goes_through_the_fields_and_around() {
         let mut form = Form::new();
         let mut seen = Vec::new();
-        for _ in 0..4 {
+        for _ in 0..6 {
             press(&mut form, KeyCode::Tab);
             seen.push(form.focus);
         }
         press(&mut form, KeyCode::BackTab);
 
-        assert_eq!(seen, [Field::Icon, Field::Destination, Field::Folder, Field::Name]);
-        assert_eq!(form.focus, Field::Folder);
+        assert_eq!(seen, [Field::Icon, Field::Destination, Field::Folder, Field::Command, Field::Shown, Field::Name]);
+        assert_eq!(form.focus, Field::Shown);
     }
 
     #[test]
@@ -272,5 +275,102 @@ mod clicks {
     #[case::save(SAVE, Step::Submit)]
     fn on_a_button_do_what_it_says(#[case] label: &'static str, #[case] step: Step) {
         assert_eq!(Form::new().hit(Hit::Button(label), WIDTH), step);
+    }
+}
+
+mod the_command_and_the_box {
+    use super::*;
+
+    fn on(field: Field) -> Form {
+        Form { focus: field, ..filled("vps", "vps.lan", "~/code") }
+    }
+
+    #[test]
+    fn a_new_form_shows_the_machine_with_no_command_and_goes_back_to_settings() {
+        let form = Form::new();
+
+        assert_eq!((form.shown, form.command.text(), form.back_to_settings), (true, String::new(), true));
+        assert!(!Form::from_button().back_to_settings);
+    }
+
+    #[test]
+    fn an_edited_machine_fills_both() {
+        let hidden = Machine { command: Some("~/bin/cc".into()), shown: false, ..machine("vps", "vps.lan") };
+
+        let form = Form::editing(&hidden);
+
+        assert_eq!((form.command.text().as_str(), form.shown), ("~/bin/cc", false));
+    }
+
+    #[test]
+    fn space_toggles_the_box_and_other_characters_do_nothing() {
+        let mut form = on(Field::Shown);
+
+        press(&mut form, KeyCode::Char('x'));
+        assert!(form.shown);
+        press(&mut form, KeyCode::Char(' '));
+        assert!(!form.shown);
+        press(&mut form, KeyCode::Char(' '));
+        assert!(form.shown);
+    }
+
+    #[test]
+    fn enter_on_the_box_saves() {
+        assert_eq!(press(&mut on(Field::Shown), KeyCode::Enter), Step::Submit);
+    }
+
+    #[test]
+    fn a_click_on_the_box_focuses_and_toggles_it() {
+        let mut form = Form::new();
+
+        form.hit(Hit::Field { field: Field::Shown, line: 0, col: 1 }, WIDTH);
+
+        assert_eq!((form.focus, form.shown), (Field::Shown, false));
+    }
+
+    #[test]
+    fn an_empty_command_is_built_as_none_and_the_box_as_it_is() {
+        let mut form = on(Field::Command);
+        form.shown = false;
+
+        let (_, built) = form.checked(&[]).expect("valid");
+
+        assert_eq!((built.command, built.shown), (None, false));
+    }
+
+    #[test]
+    fn a_command_is_trimmed() {
+        let mut form = filled("vps", "vps.lan", "~/code");
+        form.command = Editor::new("  ~/bin/cc ");
+
+        let (_, built) = form.checked(&[]).expect("valid");
+
+        assert_eq!(built.command.as_deref(), Some("~/bin/cc"));
+    }
+
+    #[test]
+    fn a_command_with_a_control_character_is_refused_under_its_field() {
+        let mut form = filled("vps", "vps.lan", "~/code");
+        form.command = Editor::new("cc\u{1b}[2J");
+
+        assert_eq!(form.checked(&[]), None);
+
+        assert_eq!(
+            (form.error(Field::Command), form.focus),
+            (Some("a command cannot hold control or invisible characters"), Field::Command)
+        );
+    }
+
+    #[rstest]
+    #[case::the_same_destination("vps.lan", true)]
+    #[case::another_one("other.lan", false)]
+    fn the_mark_of_a_program_survives_only_while_the_destination_does(#[case] destination: &str, #[case] kept: bool) {
+        let marked = Machine { unreached: true, ..machine("vps", "vps.lan") };
+        let mut form = Form::editing(&marked);
+        form.destination = Editor::new(destination);
+
+        let (_, built) = form.checked(&[marked]).expect("valid");
+
+        assert_eq!(built.unreached, kept);
     }
 }

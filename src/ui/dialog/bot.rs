@@ -12,12 +12,13 @@ use crate::ui::combo;
 use crate::ui::widgets::{EditorField, draw_editor, overlay_block};
 
 const LABEL: u16 = 9;
-const HEIGHT: u16 = 20;
+const HEIGHT: u16 = 21;
 const WIDE: u16 = 46;
 const ABOUT_ROWS: u16 = 4;
 const CORNERCASE_NOTE: &str = "through cornercase: reads anything, writes only in its folder";
 const FOLDER_NOTE: &str = "through cornercase: reads and writes only in its folder";
 const FULL_NOTE: &str = "full access: can change any file and run anything, unattended";
+const UNPAIRED: &str = "pair Telegram or Discord in Settings › Remote";
 
 pub(crate) enum Hit {
     Field(Field, usize, usize),
@@ -41,7 +42,7 @@ fn inner(screen: Rect) -> Rect {
 
 fn row_of(form: &Form, field: Field) -> u16 {
     let at = form.fields().iter().position(|shown| *shown == field).unwrap_or_default();
-    let notes = if matches!(field, Field::Follow | Field::About) { 2 } else { 0 };
+    let notes = if matches!(field, Field::Follow | Field::ChatApps | Field::Secrets | Field::About) { 2 } else { 0 };
     u16::try_from(at).unwrap_or_default() + notes
 }
 
@@ -120,6 +121,8 @@ fn draw_labels(f: &mut Frame, view: &View, screen: Rect, form: &Form) {
         (Field::Account, "Account"),
         (Field::Access, "Access"),
         (Field::Follow, "Follow"),
+        (Field::ChatApps, "Chat apps"),
+        (Field::Secrets, "Secrets"),
         (Field::About, "For"),
     ];
     for (field, label) in labels {
@@ -132,14 +135,16 @@ fn draw_labels(f: &mut Frame, view: &View, screen: Rect, form: &Form) {
 
 fn draw_fields(f: &mut Frame, view: &View, screen: Rect, form: &Form) {
     let typing = form.opened().is_none();
-    for field in form.fields() {
+    for field in form.fields().into_iter().filter(|field| *field != Field::ChatApps || form.chat_ready) {
         let r = rect(screen, form, field);
         let focused = typing && form.focus == field;
         if field == Field::Follow {
             draw_follow(f, r, form.follow, focused);
+        } else if field == Field::Secrets {
+            draw_secrets(f, view, r, (&form.secrets, focused));
         } else if let Some(editor) = form.editor_of(field) {
             let placeholder = if field == Field::About { "optional: what the bot is for" } else { "" };
-            let at = EditorField { field: r, text: text(screen, form, field), focused, placeholder };
+            let at = EditorField { field: r, text: text(screen, form, field), focused, placeholder, top: None };
             draw_editor(f, view, editor, at);
         } else if let Some(choices) = form.combo_of(field) {
             let grey = field == Field::Agent && form.editing.is_some();
@@ -153,6 +158,17 @@ fn draw_follow(f: &mut Frame, r: Rect, follow: bool, focused: bool) {
     let style = if focused { Style::default().add_modifier(Modifier::BOLD) } else { Style::default() };
     let text = format!("{mark} tell it when an agent it starts finishes");
     f.render_widget(Paragraph::new(Span::styled(text, style)), Rect { x: r.x + 1, ..r }.intersection(r));
+}
+
+fn draw_secrets(f: &mut Frame, view: &View, r: Rect, (summary, focused): (&str, bool)) {
+    let button = " manage… ";
+    let room = usize::from(r.width).saturating_sub(button.chars().count() + 2);
+    let style = if focused { Style::default().add_modifier(Modifier::BOLD) } else { Style::default() };
+    let text = Span::styled(truncate_right(summary, room), style);
+    f.render_widget(Paragraph::new(text), Rect { x: r.x + 1, ..r }.intersection(r));
+    let width = u16::try_from(button.chars().count()).unwrap_or_default().min(r.width);
+    let at = Rect { x: r.right().saturating_sub(width), width, ..r };
+    f.render_widget(Paragraph::new(Span::styled(button, Style::default().fg(view.muted))), at);
 }
 
 fn draw_combo(
@@ -186,6 +202,17 @@ fn draw_notes(f: &mut Frame, view: &View, screen: Rect, form: &Form) {
     }
 }
 
+fn draw_unpaired(f: &mut Frame, view: &View, screen: Rect, form: &Form) {
+    if form.chat_ready {
+        return;
+    }
+    let at = row(screen, row_of(form, Field::ChatApps), 1);
+    let width = at.width.saturating_sub(LABEL + 1);
+    let r = Rect::new(at.x + LABEL + 1, at.y, width, 1);
+    let line = truncate_right(UNPAIRED, usize::from(width));
+    f.render_widget(Paragraph::new(Span::styled(line, Style::default().fg(view.muted))), r);
+}
+
 fn draw_error(f: &mut Frame, screen: Rect, form: &Form) {
     if let Some(error) = &form.error {
         let r = error_row(screen);
@@ -205,6 +232,7 @@ pub(in crate::ui) fn draw(f: &mut Frame, view: &View, form: &Form) {
     draw_labels(f, view, screen, form);
     draw_fields(f, view, screen, form);
     draw_notes(f, view, screen, form);
+    draw_unpaired(f, view, screen, form);
     draw_error(f, screen, form);
     draw_dialog_buttons(f, view, buttons(screen, form), submit_label(form), "cancel");
     let open = form.opened().and_then(|open| form.combo_of(open));

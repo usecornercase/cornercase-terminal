@@ -8,7 +8,7 @@ pub(crate) use imp::process_uid;
 pub(crate) use imp::{
     DirBuilderExt, MetadataExt, NOFOLLOW, NONBLOCK, OpenOptionsExt, PermissionsExt, create_private_dir_all,
     file_owner_and_mode, gid, link_to, links_to, make_private, owner_and_mode, reparse_point, set_file_mode, set_mode,
-    simplified, stat, stat_file, truncate, try_lock, uid, writable,
+    simplified, stat, stat_file, sync_dir, truncate, try_lock, uid, writable,
 };
 #[cfg(test)]
 #[cfg(windows)]
@@ -200,6 +200,10 @@ mod imp {
 
     pub(crate) fn make_private(dir: &Path) -> io::Result<()> {
         set_mode(dir, 0o700)
+    }
+
+    pub(crate) fn sync_dir(dir: &Path) -> io::Result<()> {
+        File::open(dir)?.sync_all()
     }
 
     pub(crate) fn truncate(file: &File, _path: &Path) -> io::Result<()> {

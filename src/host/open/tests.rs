@@ -267,6 +267,55 @@ mod running {
         assert!(rx.recv().is_err());
     }
 
+    #[cfg(unix)]
+    fn with_launcher(launcher: PathBuf) -> Openers {
+        Openers { found: vec![(Opener::Default, Reach::Launcher)], launcher: Some(launcher), ..Openers::default() }
+    }
+
+    fn link(url: &str) -> Link {
+        Link { url: url.into() }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_runs_the_launcher_with_the_address_alone() {
+        let tmp = TempDir::new();
+        let launcher = tmp.path().join("xdg-open");
+        write_executable(
+            &launcher,
+            "#!/bin/sh\nprintf '%s\\n' \"$#\" \"$@\" > \"$0.tmp\"\nmv \"$0.tmp\" \"$0.args\"\n",
+        );
+        with_launcher(launcher).link(&link("https://example.com/a?b=c&d#e"), |_| {});
+        let args = tmp.path().join("xdg-open.args");
+        crate::test_util::wait_until("the launcher ran", || args.exists());
+        let said = std::fs::read_to_string(&args).expect("args");
+        assert_eq!(said, "1\nhttps://example.com/a?b=c&d#e\n");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_refused_link_runs_nothing_and_says_why() {
+        let tmp = TempDir::new();
+        let launcher = tmp.path().join("xdg-open");
+        write_executable(&launcher, "#!/bin/sh\ntouch \"$0.ran\"\n");
+        let (tx, rx) = mpsc::channel();
+        with_launcher(launcher).link(&link("file:///etc/passwd"), move |failed| {
+            let _ = tx.send(failed);
+        });
+        let failed = rx.recv_timeout(Duration::from_secs(5)).expect("failed");
+        assert_eq!(failed, Failed { opener: Opener::Default, reason: "it is not an http or https address".into() });
+        assert!(!tmp.path().join("xdg-open.ran").exists());
+    }
+
+    #[test]
+    fn a_window_without_openers_ignores_a_link() {
+        let (tx, rx) = mpsc::channel();
+        Openers::default().link(&link("https://example.com"), move |failed| {
+            let _ = tx.send(failed);
+        });
+        assert!(rx.recv().is_err());
+    }
+
     #[test]
     fn a_relative_path_is_refused_by_the_client() {
         let (tx, rx) = mpsc::channel();
@@ -415,6 +464,14 @@ mod for_windows {
             assert_eq!(
                 every().openers(vec![]).default_app(url.into()),
                 Some(shell(None, "http://localhost:3000", None))
+            );
+        }
+
+        #[test]
+        fn a_link_opens_in_the_browser_through_the_shell() {
+            assert_eq!(
+                every().openers(vec![]).default_app("https://example.com/a?b".into()),
+                Some(shell(None, "https://example.com/a?b", None))
             );
         }
     }

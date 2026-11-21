@@ -228,8 +228,10 @@ impl App {
         if self.focused_field() != Some(field) {
             return;
         }
+        let hidden = self.overlay.as_ref().is_some_and(Overlay::hides_text);
         let Some((_, editor)) = self.text_field(field, area) else { return };
         let (selected, filled) = (editor.selection().is_some(), !editor.is_empty());
+        let selected = selected && !hidden;
         let actions =
             vec![(FieldAction::Copy, selected), (FieldAction::Cut, selected), (FieldAction::SelectAll, filled)];
         self.screen.field_menu = Some(FieldMenu { at, field, actions });
@@ -251,6 +253,9 @@ impl App {
 
     fn run_field_action(&mut self, field: TextField, action: FieldAction, area: Rect) {
         if self.focused_field() != Some(field) {
+            return;
+        }
+        if self.overlay.as_ref().is_some_and(Overlay::hides_text) && action != FieldAction::SelectAll {
             return;
         }
         let Some((at, editor)) = self.text_field(field, area) else { return };

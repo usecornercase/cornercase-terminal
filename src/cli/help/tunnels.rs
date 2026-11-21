@@ -15,7 +15,9 @@ holder's connection, kind is window or hold, direction is \"reverse\" for a reve
 out for the others, windows is how many windows hold tunnels for this server, 0 when none is
 attached from another computer, and takers is how many programs take tunnel orders
 (`tunnel orders`). `status --json` has the same entries, and under each of its `machines` the
-tunnels that machine lists.
+tunnels that machine lists. Tunnels this server holds to a linked machine's ports (`tunnel open
+PORT --machine NAME`) follow, as `5173 of vps → localhost:5174  up (this server)`, and with --json
+under \"machine_tunnels\".
 
 Examples:
   cornercase tunnels
@@ -33,10 +35,18 @@ holder and exits with 1 when none came up, or when neither is attached (tunnels 
 windows opened with `cornercase remote`, or by programs that run `tunnel orders`).
 `tunnel close PORT` closes it but keeps it remembered, as closed. `tunnel forget PORT` removes it.
 A window remembers its tunnels per machine on its own computer, in tunnels.json beside
-machines.json: the next window to that machine brings back the ones that are not closed, on the
+session.json: the next window to that machine brings back the ones that are not closed, on the
 same port when it is free. Windows of one computer share a tunnel: one runs the ssh and the others
 take it over when it ends. With --json they print {\"tunnels\": [...], \"windows\": N, \"takers\": N}, as
 `cornercase tunnels --json` does.
+
+`tunnel open PORT --machine NAME` tunnels port PORT of the linked machine NAME (`cornercase
+machines`) to this server's computer instead: the server holds it with its own ssh, no window
+is needed, the machine lists it as a hold, and it ends when the server stops or the machine is
+removed. It prints `port 5173 of vps is tunnelled to localhost:5174` once up and exits with 1 when
+it cannot come up. `tunnel close PORT --machine NAME` ends it (forget does the same). `tunnels`
+lists them after the windows' as `5173 of vps → localhost:5174  up (this server)`, and --json under
+\"machine_tunnels\": [{\"machine\", \"port\", \"local\", \"state\", \"error\", \"registered\"}].
 
 `cornercase --remote vps tunnel hold PORT` is for a program with no window: it starts its own ssh
 from this computer, waits until it is up and prints one line, {\"port\", \"local\", \"url\"}, then
@@ -77,6 +87,8 @@ Examples:
   cornercase tunnel close 5173
   cornercase tunnel forget 5173
   cornercase --remote vps tunnel open 5173 --json
+  cornercase tunnel open 5173 --machine vps
+  cornercase tunnel close 5173 --machine vps
   cornercase --remote vps tunnel hold 5173
   cornercase --remote vps tunnel hold 5173 --local 5174
   cornercase --remote vps tunnel hold --reverse 9222

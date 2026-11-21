@@ -381,6 +381,7 @@ pub(crate) enum Action {
     EditMachine(usize),
     RemoveMachine(usize),
     UpdateMachine(usize),
+    ShowMachine(usize, bool),
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -445,6 +446,7 @@ pub(crate) struct RowText {
     pub(crate) dangerous: bool,
     pub(crate) mark: Option<State>,
     pub(crate) tail: String,
+    pub(crate) toggle: Option<bool>,
 }
 
 #[derive(Debug)]
@@ -471,6 +473,7 @@ pub(crate) struct Settings {
     pub(crate) plugins: Vec<PluginRow>,
     pub(crate) accounts: Listed,
     pub(crate) machines: Vec<Info>,
+    pub(crate) on: Option<String>,
     pub(crate) shells: ShellsHere,
     pub(crate) now: SystemTime,
     pub(crate) find: Finder,
@@ -501,6 +504,7 @@ impl Settings {
             plugins: Vec::new(),
             accounts: Listed::default(),
             machines: Vec::new(),
+            on: None,
             shells: ShellsHere::default(),
             now: UNIX_EPOCH,
             find: Finder::default(),

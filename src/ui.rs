@@ -13,9 +13,13 @@ mod code;
 pub(crate) mod combo;
 mod dialog;
 pub(crate) use dialog::bot as bot_form;
+pub(crate) use dialog::bot_ask;
 pub(crate) use dialog::clone_on_machine;
 pub(crate) use dialog::machine as machine_form;
 pub(crate) use dialog::queue as queue_form;
+pub(crate) use dialog::queue_list::{QueueList, QueueRow, queue_list_hit, queue_list_room};
+#[cfg(test)]
+pub(crate) use dialog::queue_list::{queue_list_buttons, queue_list_rows};
 mod drop;
 pub(crate) mod files;
 pub(crate) mod flow;
@@ -51,12 +55,12 @@ pub(crate) use activity::{Item as ActivityItem, Shown as ActivityShown, hit as a
 pub(crate) use agents_section::{AgentEntry, AgentsView, agent_close, agent_fold, agent_hit, agent_row, agent_rows};
 pub(crate) use bots::agent::{ChatAgentKind, ChatAgentLine};
 #[cfg(test)]
-pub(crate) use bots::card::card_routine;
-pub(crate) use bots::card::{BotCard, CardRow, card_folder, card_row_at};
+pub(crate) use bots::card::card_menu;
+pub(crate) use bots::card::{BotCard, CardRow, card_buttons, card_folder, card_routine, card_row_at};
 pub(crate) use bots::chat::body as chat_body;
 pub(crate) use bots::chat::{
     ChatAreas, ChatEntry, ChatHit, ChatRow, ChatView, EXAMPLES, RowHit, Thinking, Tone, chat_areas, chat_hit,
-    chat_rows, empty_rows, entry_rows, input_rows,
+    chat_rows, empty_rows, entry_rows, input_rows, whole_address,
 };
 #[cfg(test)]
 pub(crate) use bots::chat::{row_y, stop_button, thinking_row};
@@ -75,7 +79,7 @@ pub(crate) use dialog::flows::{flows_body, flows_buttons, flows_tabs};
 #[cfg(test)]
 #[cfg(unix)]
 pub(crate) use dialog::form::form_run_on;
-pub(crate) use dialog::form::{Confirm, Form, FormHit, Toggle, form_hit, form_run_on_hit, form_text};
+pub(crate) use dialog::form::{Confirm, Form, FormHit, Toggle, confirm_width, form_hit, form_run_on_hit, form_text};
 pub use dialog::form::{form_area, form_buttons};
 #[cfg(test)]
 pub(crate) use dialog::form::{form_extra_button, form_toggle};
@@ -119,7 +123,7 @@ pub(crate) use dialog::settings::{
 #[cfg(test)]
 pub(crate) use dialog::settings::{
     SettingsLine, line_rect, settings_body, settings_done, settings_edit, settings_lines, settings_moves,
-    settings_remove, settings_restart, settings_row, settings_scroll, settings_share, settings_tabs,
+    settings_remove, settings_restart, settings_row, settings_scroll, settings_share, settings_tabs, settings_toggle,
 };
 #[cfg(test)]
 pub(crate) use dialog::share_settings::share_settings_buttons;
@@ -541,7 +545,9 @@ fn draw_overlay(f: &mut Frame, view: &View, areas: &Areas) {
         Some(Overlay::Form(form)) => draw_form(f, view, form, None),
         Some(Overlay::RunOnForm(form, run_on)) => draw_form(f, view, form, Some(run_on)),
         Some(Overlay::Queue(form)) => dialog::queue::draw(f, view, form),
+        Some(Overlay::QueueList(queue)) => dialog::queue_list::draw(f, view, queue),
         Some(Overlay::BotForm(form)) => dialog::bot::draw(f, view, form),
+        Some(Overlay::BotAsk(ask)) => bot_ask::draw(f, view, ask),
         Some(Overlay::GroupStyle(group)) => draw_group_style(f, view, group),
         Some(Overlay::Confirm(confirm)) => draw_confirm(f, view, confirm),
         Some(Overlay::Update(update)) => draw_update(f, view, update),
@@ -560,7 +566,7 @@ fn draw_overlay(f: &mut Frame, view: &View, areas: &Areas) {
         Some(Overlay::ProjectSettings(settings)) => draw_project_settings(f, view, settings),
         Some(Overlay::Worktrees(worktrees)) => draw_worktrees(f, view, worktrees),
         Some(Overlay::Ports(ports)) => draw_ports(f, view, ports),
-        Some(Overlay::BotRoutines(routines)) => draw_routines(f, view, routines),
+        Some(Overlay::BotRoutines(routines) | Overlay::BotSecrets(routines)) => draw_routines(f, view, routines),
         Some(Overlay::Processes(processes)) => draw_processes(f, view, processes),
         Some(Overlay::Popup(popup)) => dialog::popup::draw(f, view, popup),
         Some(Overlay::Search(search)) if search.showing_results() => draw_results(f, view, search, areas.results),

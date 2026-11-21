@@ -536,6 +536,7 @@ pub(super) fn settings_row(text: &RowText) -> ui::SettingsRow {
         movable: text.movable,
         mark: None,
         tail: String::new(),
+        toggle: None,
     }
 }
 

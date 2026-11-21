@@ -1,0 +1,14 @@
+---
+source: src/app/tests/bots/links.rs
+expression: drawn_dialog(&mut c.app)
+---
+╭─ Open link ──────────────────────────────────────────────────╮
+│ PRs wrote this address. Open it in your browser?             │
+│ https://example.com/segment/segment/segment/segment/segment/ │
+│ segment/segment/segment/segment/segment/segment/segment/segm │
+│ ent/segment/segment/segment/segment/segment/segment/segment… │
+│ goes to example.com                                          │
+│                                                              │
+│                                                              │
+│                                        copy   open   cancel  │
+╰──────────────────────────────────────────────────────────────╯

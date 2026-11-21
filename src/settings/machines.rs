@@ -6,7 +6,10 @@ use super::{Action, Row, Settings};
 
 const FOLDER_WIDTH: usize = 24;
 const HINT: &str = "enter edits a machine · × removes it, and its server keeps running there";
+const SHOWN_HINT: &str = "enter edits a machine · ✓ hides it here · × removes it; its server keeps running there";
 const HERE_HINT: &str = "this computer runs the server you are using; it links to each machine below";
+const HIDDEN_HINT: &str =
+    "hidden: nothing is linked and its server keeps running there; its toggle shows it here again";
 const UPDATE_NOTE: &str = "installs this version there with cornercase update; nothing restarts";
 const ADD_NOTE: &str = "another computer you reach with ssh";
 
@@ -45,8 +48,9 @@ impl Settings {
             Picked::Add => Row::AddMachine,
             Picked::Machine { at, machine, update } => {
                 let machines = &self.config.machines;
-                let kept = (machines.get(at) == Some(&machine)).then_some(at);
-                match kept.or_else(|| machines.iter().position(|listed| *listed == machine)) {
+                let same = |listed: &Machine| Machine { shown: machine.shown, ..listed.clone() } == machine;
+                let kept = machines.get(at).is_some_and(same).then_some(at);
+                match kept.or_else(|| machines.iter().position(same)) {
                     Some(at) if update => Row::UpdateMachine(at),
                     Some(at) => Row::Machine(at),
                     None => Row::Here,
@@ -91,7 +95,10 @@ impl Settings {
 
     pub(super) fn machine_row(&self, row: &Row) -> (String, String, String, bool) {
         match row {
-            Row::Here => (format!("  {HERE_ICON} this computer"), String::new(), version::CURRENT.into(), false),
+            Row::Here => {
+                let name = self.on.as_deref().unwrap_or(machines::HERE);
+                (format!("  {HERE_ICON} {name}"), String::new(), version::CURRENT.into(), false)
+            }
             Row::Machine(at) => self.machine_text(*at),
             Row::UpdateMachine(at) => {
                 let updating = self.machine_info(*at).is_some_and(|info| info.updating);
@@ -132,7 +139,24 @@ impl Settings {
 
     pub(super) fn machine_mark(&self, row: &Row) -> Option<State> {
         let Row::Machine(at) = row else { return None };
-        self.machine_info(*at).map(|info| if info.problem.is_some() { State::Unreachable } else { info.state })
+        self.machine_info(*at).map(|info| match (info.problem.is_some(), info.shown) {
+            (true, _) => State::Unreachable,
+            (false, false) => State::Connecting,
+            (false, true) => info.state,
+        })
+    }
+
+    pub(super) fn machine_toggle(&self, row: &Row) -> Option<bool> {
+        let Row::Machine(at) = row else { return None };
+        let accepted = self.machine_info(*at).is_some_and(|info| info.problem.is_none());
+        self.config.machines.get(*at).filter(|_| accepted).map(|machine| machine.shown)
+    }
+
+    pub(crate) fn toggling(&self, row: usize) -> Option<Action> {
+        let row = self.rows().get(row)?.clone();
+        let shown = self.machine_toggle(&row)?;
+        let Row::Machine(at) = row else { return None };
+        Some(Action::ShowMachine(at, !shown))
     }
 
     pub(super) fn activate_machine(row: &Row) -> Action {
@@ -153,10 +177,20 @@ impl Settings {
 
     pub(super) fn machine_hint(&self) -> String {
         match self.row() {
-            Some(Row::Machine(at) | Row::UpdateMachine(at)) => {
-                self.machine_info(at).and_then(|info| info.error).unwrap_or_else(|| HINT.into())
+            Some(row @ (Row::Machine(at) | Row::UpdateMachine(at))) => {
+                let Some(info) = self.machine_info(at) else { return HINT.into() };
+                if !info.shown && info.problem.is_none() {
+                    return HIDDEN_HINT.into();
+                }
+                let hint = if self.machine_toggle(&row) == Some(true) { SHOWN_HINT } else { HINT };
+                info.error.unwrap_or_else(|| hint.into())
             }
-            Some(Row::Here) => HERE_HINT.into(),
+            Some(Row::Here) => match &self.on {
+                Some(on) => format!(
+                    "{on} runs the server this window is on: these are its machines; the machine button lists your computer's"
+                ),
+                None => HERE_HINT.into(),
+            },
             _ => HINT.into(),
         }
     }

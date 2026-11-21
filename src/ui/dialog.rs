@@ -1,4 +1,5 @@
 pub(crate) mod bot;
+pub(crate) mod bot_ask;
 pub(crate) mod clone_on_machine;
 pub(crate) mod context;
 pub(super) mod flows;
@@ -13,6 +14,7 @@ pub(super) mod ports;
 pub(super) mod processes;
 pub(super) mod project_settings;
 pub(crate) mod queue;
+pub(super) mod queue_list;
 pub(super) mod routines;
 pub(super) mod run_on;
 pub(super) mod search;
@@ -201,7 +203,9 @@ pub(crate) enum Overlay {
     Form(Form),
     RunOnForm(Form, RunOnRow),
     Queue(Box<crate::queue::form::Form>),
+    QueueList(Box<queue_list::QueueList>),
     BotForm(Box<crate::bots::form::Form>),
+    BotAsk(Box<bot_ask::BotAsk>),
     Machine(Box<crate::machines::form::Form>),
     CloneOnMachine(Box<crate::machines::clone_form::CloneForm>),
     GroupStyle(GroupEntry),
@@ -222,6 +226,7 @@ pub(crate) enum Overlay {
     Worktrees(Box<Worktrees>),
     Ports(Box<Ports>),
     BotRoutines(Box<BotRoutines>),
+    BotSecrets(Box<BotRoutines>),
     Processes(Box<Processes>),
     Popup(Box<popup::Popup>),
     Star,
@@ -242,13 +247,15 @@ impl Overlay {
             Self::Usage(usage) => Some(usage_area(area, usage)),
             Self::Remote(remote) => Some(remote_access::area(area, remote)),
             Self::Forum(setup) => Some(super::forum::area(area, setup)),
-            Self::Issues(_) => Some(issues_area(area)),
-            Self::Settings(_) | Self::ShareSettings(_) | Self::CloneOnMachine(_) => Some(settings_area(area)),
+            Self::Issues(_) | Self::QueueList(_) => Some(issues_area(area)),
+            Self::Settings(_) | Self::ShareSettings(_) | Self::CloneOnMachine(_) | Self::BotAsk(_) => {
+                Some(settings_area(area))
+            }
             Self::Flows(_) | Self::StartFlow(_) => Some(flows_area(area)),
             Self::ProjectSettings(_) => Some(project_settings::project_settings_area(area)),
             Self::Worktrees(w) => Some(worktrees_area(area, w.compact)),
             Self::Ports(p) => Some(ports_area(area, p.compact)),
-            Self::BotRoutines(r) => Some(routines_area(area, r.compact)),
+            Self::BotRoutines(r) | Self::BotSecrets(r) => Some(routines_area(area, r.compact)),
             Self::Processes(p) => Some(processes_area(area, p.compact)),
             Self::Popup(p) => Some(popup::popup_area(area, p.wanted)),
             Self::Star => Some(super::star_area(area)),

@@ -179,7 +179,7 @@ Plugins run as you, with your rights: what they ask for is shown, not enforced. 
   crop={[2, 1, 106, 10]}
 />
 
-The other computers your work can run on, and the link your cornercase server keeps to the server on each: see [Machines](../../guides/machines/). **this computer** comes first, with its version, and can't be changed. Then a row per machine: its state's mark, icon and name, its destination and folder, and its state, `linked` with the version there, `unreachable` with how long since it was up, `older`, or `connecting…`. Select one and the line at the bottom says why it is not linked. `Enter` or a click opens the machine in a form to change it, `×` or `Backspace` removes it at once (its server keeps running there), **`update…`** under an `older` machine installs your release there, and **`+ add machine`** opens the form for a new one: a name, an icon, the `ssh` destination and a folder for clones, `~/code` unless you change it. What you set is kept in [`machines`](#machines-1).
+The other computers your work can run on, and the link your cornercase server keeps to the server on each: see [Machines](../../guides/machines/). **this computer** comes first, with its version, and can't be changed. Then a row per machine: its state's mark, icon and name, its destination and folder, and its state, `linked` with the version there, `unreachable` with how long since it was up, `older`, `connecting…`, or `hidden` (the machine is on the list and the machine button, but its **show its work here** is off). Each machine's row ends with a toggle, `show here ✓` or `show here ·`, that hides or shows it at once without opening the form. While the window is on another machine, the first row names that machine, whose list the page is. Select one and the line at the bottom says why it is not linked. `Enter` or a click opens the machine in a form to change it, `×` or `Backspace` removes it at once (its server keeps running there), **`update…`** under an `older` machine installs your release there, and **`+ add machine`** opens the form for a new one: a name, an icon, the `ssh` destination, a folder for clones (`~/code` unless you change it), an optional command for a window opened there and the **show its work here** box. What you set is kept in [`machines`](#machines-1).
 
 ### Search the settings
 
@@ -508,7 +508,7 @@ Whether the computer stays awake while an agent is working. Off by default. See 
 
 #### `recap_agent`
 
-The agent that writes the [Recap](../../guides/recap/): `claude` or `codex`. Empty or `auto` is the default agent when it can write a recap, else Claude Code.
+The agent that writes the [Recap](../../guides/recap/): `claude`, `codex`, `copilot` or `opencode`. Empty or `auto` is the default agent when it can write a recap, else Claude Code.
 
 #### `recap_account`
 
@@ -741,12 +741,13 @@ Each agent's default account while no [profile](#profile) is active: what a new 
 
 #### `machines`
 
-The other computers your work can run on, in the order **Settings › Machines** lists them: each with its `name` (letters, digits, `.`, `_` and `-`, at most 20, different from the others' ignoring case, and not `all`), its `icon` (`☁`, `▭`, `▣`, `◫`, `⌂` or `◆`; another one shows as `☁`), its `destination` for `ssh` (a `Host` of `~/.ssh/config` or `user@host`, different from the others') and its `folder` for clones there (an absolute path, `~`, or one starting with `~/`). Your server keeps a link to the server on each one: see [Machines](../../guides/machines/). Left out of the file while you have none. An entry the rules refuse shows in the list with what is wrong and gets no link. `cornercase machines` changes it, and it isn't part of the settings you [share](#share-your-setup).
+The other computers your work can run on, in the order **Settings › Machines** lists them: each with its `name` (letters, digits, `.`, `_` and `-`, at most 20, different from the others' ignoring case, and not `all`), its `icon` (`☁`, `▭`, `▣`, `◫`, `⌂` or `◆`; another one shows as `☁`), its `destination` for `ssh` (a `Host` of `~/.ssh/config` or `user@host`, different from the others'), its `folder` for clones there (an absolute path, `~`, or one starting with `~/`), an optional `command` (what runs cornercase there, for a window you open there with the machine button) and `shown` (`true` unless written: `false` keeps the machine on the list and the button without a link). Your server keeps a link to the server on each shown one: see [Machines](../../guides/machines/). A program that adds a machine also writes `unreached: true`, until a window has reached it, so the window asks once before it first connects. Left out of the file while you have none. An entry the rules refuse shows in the list with what is wrong and gets no link. `cornercase machines` changes it, and it isn't part of the settings you [share](#share-your-setup).
 
 ```json
 "machines": [
   { "name": "vps", "icon": "☁", "destination": "ana@vps.example.com", "folder": "~/code" },
-  { "name": "mini", "icon": "◫", "destination": "mac-mini.local", "folder": "~/code" }
+  { "name": "mini", "icon": "◫", "destination": "mac-mini.local", "folder": "~/code", "command": "~/bin/cornercase" },
+  { "name": "devbox", "icon": "▣", "destination": "me@10.0.0.5", "folder": "~", "shown": false }
 ]
 ```
 

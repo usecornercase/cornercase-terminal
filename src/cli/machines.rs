@@ -8,6 +8,7 @@ use crate::client::{answer, ask};
 use crate::control::usage::MachineRead;
 use crate::control::{Command, MachineList, MachineSet, Machines};
 use crate::error::Result;
+use crate::machines;
 use crate::text;
 use crate::time::{self, Stamp};
 
@@ -15,9 +16,27 @@ const NOT_READ: &str = "not read yet";
 
 pub(super) fn run(args: &MachinesArgs) -> Result<()> {
     let (request, print) = request(args);
+    if needs_shown(&request) {
+        crate::client::use_machine_shown()?;
+    }
+    if needs_hide(&request) {
+        crate::client::use_machine_hide()?;
+    }
     let value = ask("machines", Command::Machines(request))?;
     let list: MachineList = answer(value.clone())?;
     if print.json { print_json(&value) } else { print_out(&list_text(&list, SystemTime::now())) }
+}
+
+fn needs_shown(request: &Machines) -> bool {
+    matches!(request, Machines::Set(set) if set.command.is_some() || set.shown.is_some())
+}
+
+fn needs_hide(request: &Machines) -> bool {
+    matches!(request, Machines::Hide(_) | Machines::Show(_))
+}
+
+fn target(target: &str) -> Option<String> {
+    (!target.trim().eq_ignore_ascii_case(machines::EVERY)).then(|| target.to_string())
 }
 
 pub(crate) fn request(args: &MachinesArgs) -> (Machines, &Print) {
@@ -29,6 +48,8 @@ pub(crate) fn request(args: &MachinesArgs) -> (Machines, &Print) {
                 icon: add.icon.clone(),
                 destination: Some(add.destination.clone()),
                 folder: add.folder.clone(),
+                command: add.command.clone(),
+                shown: add.hidden.then_some(false),
                 create: Some(true),
                 ..MachineSet::default()
             };
@@ -41,19 +62,23 @@ pub(crate) fn request(args: &MachinesArgs) -> (Machines, &Print) {
                 icon: edit.icon.clone(),
                 destination: edit.destination.clone(),
                 folder: edit.folder.clone(),
+                command: edit.command.clone(),
                 create: Some(false),
+                ..MachineSet::default()
             };
             (Machines::Set(set), &edit.print)
         }
         Some(MachinesAction::Remove(remove)) => (Machines::Remove(remove.name.clone()), &remove.print),
         Some(MachinesAction::Update(update)) => (Machines::Update(update.name.clone()), &update.print),
         Some(MachinesAction::Retry(retry)) => (Machines::Retry(retry.name.clone()), &retry.print),
+        Some(MachinesAction::Hide(hide)) => (Machines::Hide(target(&hide.target)), &hide.print),
+        Some(MachinesAction::Show(show)) => (Machines::Show(target(&show.target)), &show.print),
     }
 }
 
 pub(crate) fn list_text(list: &MachineList, now: SystemTime) -> String {
     let mut text = format!("{} this computer  {}\n", list.here.icon, list.here.version);
-    let width = |cells: fn(&crate::machines::Info) -> &str| {
+    let width = |cells: fn(&machines::Info) -> &str| {
         list.machines.iter().map(|machine| text::cells(cells(machine))).max().unwrap_or_default()
     };
     let (names, destinations) = (width(|m| &m.name), width(|m| &m.destination));

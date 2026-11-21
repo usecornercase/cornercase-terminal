@@ -98,6 +98,12 @@ pub(crate) const FEATURES: &[&str] = &[
     "bot-setup",
     "bot-about-read",
     "view-bot",
+    "bot-secrets",
+    "bot-asks",
+    "machine-shown",
+    "machine-hide",
+    "bot-chat-apps",
+    "tunnel-machine",
     "flow-personas",
 ];
 

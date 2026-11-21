@@ -9,7 +9,7 @@ use super::{Connect, Ends, Line};
 use crate::control::start_server::Started;
 use crate::control::{Report, Response, Snapshot};
 use crate::error::{Error, Result};
-use crate::host::open::{Browse, Open, Opener};
+use crate::host::open::{Browse, Link, Open, Opener};
 use crate::host::sound::{Cue, Kind};
 use crate::os::socket::UnixStream;
 use crate::protocol::{self, ClientMessage, ServerMessage};
@@ -100,5 +100,6 @@ pub(crate) fn window_messages() -> Vec<ServerMessage> {
         ServerMessage::Sound(Cue { kind: Kind::NeedsYou, path: "/tmp/ding.wav".into() }),
         ServerMessage::Open(Open { opener: Opener::Default, path: "/etc/passwd".into(), line: None }),
         ServerMessage::Browse(Browse { ip: None, port: 80 }),
+        ServerMessage::Link(Link { url: "https://example.com".into() }),
     ]
 }

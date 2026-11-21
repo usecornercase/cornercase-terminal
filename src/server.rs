@@ -323,7 +323,7 @@ pub(crate) fn run() -> Result<()> {
     let (app_tx, app_rx) = mpsc::channel();
     spawn_forwarder(app_rx, tx.clone());
 
-    let mut app = App::new(shell::default(), HostTheme::default(), &paths::config(), app_tx);
+    let mut app = App::new(shell::default(), HostTheme::default(), &startup::config_file(), app_tx);
     let session = paths::session();
     log_started(&path, &session, level);
     let todo_saver = prepare_app(&mut app, &path, &session);
@@ -340,6 +340,10 @@ fn bind(path: &Path) -> Result<(UnixListener, File)> {
         |cause| Error::Listen { path: path.to_path_buf(), cause, custom: Folder::current() == Folder::Given };
     protocol::check_socket_dir(path, Folder::current())?;
     let lock = lock(path)?;
+    if protocol::holds_a_file(path) {
+        let cause = io::Error::other("a file that is not a socket is there; it is not removed");
+        return Err(listen_error(cause));
+    }
     let _ = std::fs::remove_file(path);
     Ok((UnixListener::bind(path).map_err(listen_error)?, lock))
 }
@@ -635,6 +639,7 @@ impl Server {
         self.flush_notifications();
         self.flush_sounds();
         self.flush_opens();
+        self.flush_links();
         self.flush_tunnel_orders();
     }
 

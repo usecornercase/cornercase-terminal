@@ -49,8 +49,8 @@ If your hands would rather stay on the keyboard, or your terminal can't send cli
 | Click | `Bots ›` in the compact projects menu | Shows the [bots](../../guides/bots/#the-bots-section). |
 | Click | `Issues` | Opens the issue browser. |
 | Click | `Worktrees` (its slot in the icon bar, or the projects menu in compact mode) | Opens the [Worktrees dialog](../../guides/worktrees/#clean-up-worktrees) for every project: each worktree on disk, when it last changed and what makes it safe to remove, and removing several at once. |
-| Click | The machine on its own row under `Worktrees`, such as `devbox ▴` (its icon above `Help` in the icon bar), once a window has reached another machine or a program has added one | Opens a menu to move the window to **this machine** or another one on its list, **add machine…** or **forget…** one; see [Switch machines from the window](../../guides/remote/#switch-machines-from-the-window). |
-| Click | `More ▴` (the gear in the icon bar) | Opens a menu: **update to x.y.z** when a new version is out (see [Update](../../installation/#update)), **settings**, **usage** (your [Usage and stats](../../guides/projects-workspaces-tabs/#usage-and-stats)), **processes** (the [Processes](../../guides/projects-workspaces-tabs/#processes) dialog), **remote…** once remote access or a chat bot is set up, and **quit**, which detaches. It turns cyan while an update waits and shows a green `●` while a browser is attached or you are away. |
+| Click | Where the window is, on its own row under `Worktrees`, such as `this computer ▴` or `on devbox ▴` (its icon above `Help` in the icon bar), once your list holds a machine | Opens a menu to move the window to **this computer** or a machine of your list, and on this computer **add machine…** or **manage machines…**; see [Switch machines from the window](../../guides/remote/#switch-machines-from-the-window). |
+| Click | `More ▴` (the gear in the icon bar) | Opens a menu: **update to x.y.z** when a new version is out (see [Update](../../installation/#update)), **new bot…**, **queue** (the [Queue](../../guides/queue/) window), **settings**, **usage** (your [Usage and stats](../../guides/projects-workspaces-tabs/#usage-and-stats)), **processes** (the [Processes](../../guides/projects-workspaces-tabs/#processes) dialog), **remote…** once remote access or a chat bot is set up, and **quit**, which detaches. It turns cyan while an update waits and shows a green `●` while a browser is attached or you are away. |
 | Click | `Help` | Opens a menu: the [guided tour](../../first-steps/#the-guided-tour-and-help), the catalogue of short tours, the docs, the keys menu (with a prefix key) and the link to report a bug. |
 | Click | The tour's card | Its buttons move the tour: **back**, **skip**, **next**, **docs** (copies the tour's page), **end tour**. Keys still go to the pane. |
 | Click | **remote…** in the `More ▴` menu | Opens a menu to open cornercase [in your phone's browser](../../guides/phone/) or to have agents message you [on Telegram](../../guides/telegram/) or [on Discord](../../guides/discord/), or to stop. |
@@ -184,7 +184,7 @@ See [Flows](../../guides/flows/#the-flow-panel).
 | Click | ` send ` | Sends the text of the field. |
 | Click | One of the three examples of an empty chat | Fills the field with it and sends nothing. |
 | Click | ` ↓ new ` | Goes back to the bottom of the chat. |
-| Click | A link in a bot's answer | Copies it: it is never opened. |
+| Click | A link in a bot's answer | Asks, then opens it in your browser; copies it in a remote window, the browser or over ssh. |
 | Click | The folder on a bot's card | Opens it through **open in…**, or copies its path. |
 | `Enter`, `Esc` | The chat's field | `Enter` sends; a paste keeps its line breaks. `Esc` clears the field, and does nothing when it is empty. Every key goes to this field, never to a pane, while a chat shows. |
 
@@ -217,7 +217,7 @@ Press the prefix and a menu opens at the bottom of the screen with what each nex
 
 <Screen
   name="keys-menu"
-  alt="The web-shop project with git log in the pane, and the Keys menu at the bottom of the pane: n next tab, p previous tab, 1-9 go to tab, ] next workspace, [ previous workspace, } next project, { previous project, arrows pane on that side, a agent that needs you, m mark for review, / search, c new tab, | split right, - split down, x close pane, r rename tab, f find…, g git…, w workspace…, i issues, t todo, comma settings, u usage, k processes, h help, o away on chat apps, q quit, and a note that esc closes and ctrl+] twice types it in the pane"
+  alt="The web-shop project with git log in the pane, and the Keys menu at the bottom of the pane: n next tab, p previous tab, 1-9 go to tab, ] next workspace, [ previous workspace, } next project, { previous project, arrows pane on that side, a agent that needs you, m mark for review, / search, c new tab, | split right, - split down, x close pane, r rename tab, f find…, g git…, w workspace…, i issues, e queue, t todo, comma settings, u usage, k processes, h help, o away on chat apps, q quit, and a note that esc closes and ctrl+] twice types it in the pane"
   caption="The menu the prefix key opens, here Ctrl+]."
 />
 
@@ -248,6 +248,7 @@ Press the prefix and a menu opens at the bottom of the screen with what each nex
 | `w` `s` | [Starts a flow](../../guides/flows/#start-a-flow) in the project on screen. |
 | `w` `f` | Opens or closes the [Flow panel](../../guides/flows/#the-flow-panel) of the workspace's run, or says it runs no flow. |
 | `i`, `t`, `,`, `u` | Opens the issues, the [TODO list](../../guides/todo/) (on a new item), the settings, Usage and stats. |
+| `e` | Opens the [Queue](../../guides/queue/) window. |
 | `s` | Opens or closes the [Recap panel](../../guides/recap/). |
 | `b` | Opens the [new bot](../../guides/bots/#make-a-bot-in-the-window) form. |
 | `k` | Opens the [Processes](../../guides/projects-workspaces-tabs/#processes) dialog: what every pane runs, with its CPU and memory, and a way to stop a program. |
@@ -282,6 +283,8 @@ While a dialog, the search, the settings, the issue browser, the changes panel's
 | Folder picker | Type to filter. `↑` `↓` select. `→` or `Tab` go into the selected folder, `←` goes up. `Enter` goes into the selected folder, or opens the folder you are in. `~` goes home and `/` to the root when the filter is empty. `Backspace` on an empty filter goes up. |
 | Search | Type to search. `Tab` switches between names and what was said in sessions. `↑` `↓` select. `Enter` goes to the result, or opens Settings on a setting. `Esc` closes. |
 | Issue list | Type to filter. `↑` `↓` `PgUp` `PgDn` select. `Enter` reads the issue. `Tab` / `Shift+Tab` switch sources. `Esc` closes. |
+| Queue | Type to filter. `↑` `↓` `PgUp` `PgDn` `Home` `End` select. `Enter` edits the entry, opens its pane or shows what it did. `←` folds a routine's runs (on the routine or one of its runs), `→` unfolds them. `Esc` closes. |
+| Schedule form | `Tab` / `Shift+Tab` move between its fields; a list opens with `Space`, `↑` or `↓` and `Esc` closes it first. In the prompt `Enter` starts a new line and the wheel scrolls it; in another field `Enter` saves. `Esc` closes. |
 | Issue | `Enter` starts it. `↑` `↓` `PgUp` `PgDn` `Space` `Home` `End` scroll. `Esc` or `←` go back. |
 | Agent, place and person pickers | Type to filter. `↑` `↓` select. `Enter` picks. `Esc` goes back. |
 | Changes panel filter | Type a piece of a path or a pattern: `*.test.js` keeps only those files, `!*.snap` leaves them out. `Enter` keeps the filter and gives the keys back to your program, `Esc` clears it, or closes the panel when the field is empty. A click in a pane gives the keys back too. |

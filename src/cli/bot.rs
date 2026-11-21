@@ -6,7 +6,9 @@ use super::args::bot::{BotAction, BotNameArgs, EditArgs, HistoryArgs, NewArgs, S
 use super::{line, note, partial_unless, print_json, print_out};
 use crate::bots::MESSAGE_MAX;
 use crate::bots::chat::{Kind, Line};
-use crate::client::{answer, ask, use_bot_about, use_bot_about_read, use_bot_follow, use_bot_setup, use_bots};
+use crate::client::{
+    answer, ask, use_bot_about, use_bot_about_read, use_bot_chat_apps, use_bot_follow, use_bot_setup, use_bots,
+};
 use crate::control::Command;
 use crate::control::bots::{AgentInfo, BotHistory, BotInfo, BotRequest, BotSay, BotTarget, EditBot, NewBot};
 use crate::error::{Error, Result};
@@ -14,6 +16,7 @@ use crate::queue::clock;
 
 pub(super) use text::event_text;
 
+mod secret;
 mod text;
 
 fn target(bot: String) -> BotTarget {
@@ -39,6 +42,7 @@ pub(super) fn run(action: BotAction) -> Result<bool> {
         BotAction::Reset(args) => quiet(BotRequest::Reset(target(args.bot))),
         BotAction::Stop(args) => stopped(args.bot),
         BotAction::Seen(args) => quiet(BotRequest::Seen(target(args.bot))),
+        BotAction::Secret(args) => secret::run(args.action),
     }
 }
 
@@ -109,8 +113,16 @@ fn follow_of(given: Option<&str>) -> Result<Option<bool>> {
     Ok(follow_value(given))
 }
 
+fn chat_apps_of(given: Option<&String>) -> Result<Option<String>> {
+    if given.is_some() {
+        use_bot_chat_apps()?;
+    }
+    Ok(given.cloned())
+}
+
 fn made(args: &NewArgs) -> Result<bool> {
     let follow = follow_of(args.follow.as_deref())?;
+    let chat_apps = chat_apps_of(args.chat_apps.as_ref())?;
     let new = NewBot {
         name: args.name.clone(),
         agent: args.agent.clone(),
@@ -119,6 +131,7 @@ fn made(args: &NewArgs) -> Result<bool> {
         account: args.account.clone(),
         access: args.access.clone(),
         follow,
+        chat_apps,
         about: args.about.clone().unwrap_or_default(),
     };
     let value = send(BotRequest::New(new))?;
@@ -132,6 +145,7 @@ fn made(args: &NewArgs) -> Result<bool> {
 
 fn edited(args: &EditArgs) -> Result<bool> {
     let follow = follow_of(args.follow.as_deref())?;
+    let chat_apps = chat_apps_of(args.chat_apps.as_ref())?;
     let edit = EditBot {
         bot: args.bot.clone(),
         name: args.name.clone(),
@@ -141,6 +155,7 @@ fn edited(args: &EditArgs) -> Result<bool> {
         account: args.account.clone(),
         access: args.access.clone(),
         follow,
+        chat_apps,
         about: args.about.clone(),
     };
     if edit.about.is_some() {

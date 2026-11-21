@@ -17,6 +17,7 @@ fn rows() -> Vec<RoutineRow> {
             at: "Fri 14 Nov 09:00".into(),
             paused: false,
             buttons: vec![Button::RunNow, Button::Pause, Button::Edit, Button::Remove],
+            detail: None,
         },
         RoutineRow {
             name: "Digest".into(),
@@ -26,6 +27,7 @@ fn rows() -> Vec<RoutineRow> {
             at: "Thu 13 Nov 18:00".into(),
             paused: true,
             buttons: vec![Button::RunNow, Button::Resume, Button::Edit, Button::Remove],
+            detail: None,
         },
         RoutineRow {
             name: "Check #482".into(),
@@ -35,6 +37,7 @@ fn rows() -> Vec<RoutineRow> {
             at: String::new(),
             paused: false,
             buttons: vec![Button::RunNow, Button::Edit, Button::Remove],
+            detail: None,
         },
     ]
 }
@@ -48,6 +51,7 @@ fn routines(rows: Vec<RoutineRow>, compact: bool) -> BotRoutines {
         hint: "enter shows its last run in the chat".into(),
         empty: "prs has no routines yet. + routine schedules one, or ask prs in its chat.".into(),
         compact,
+        new: "+ routine",
     }
 }
 
@@ -163,4 +167,75 @@ fn a_wide_name_keeps_the_schedule_inside_the_row() {
     let line = (0..BIG.1).map(|y| row_text(&t, Rect::new(0, y, BIG.0, 1))).find(|l| l.contains("界")).expect("the row");
     assert!(line.contains("next Mon 09:00"), "{line}");
     assert!(line.contains('…'), "{line}");
+}
+
+mod secrets {
+    use super::*;
+
+    fn secret_rows() -> Vec<RoutineRow> {
+        ["campus-user", "campus-password"]
+            .map(|name| RoutineRow {
+                name: name.into(),
+                when: "saved Fri 14 Nov 09:00".into(),
+                state: None,
+                colour: None,
+                at: String::new(),
+                paused: false,
+                buttons: vec![Button::Replace, Button::Remove],
+                detail: Some(String::new()),
+            })
+            .into()
+    }
+
+    fn secrets(rows: Vec<RoutineRow>, compact: bool) -> BotRoutines {
+        BotRoutines {
+            title: "Secrets › Campus".into(),
+            selected: (!rows.is_empty()).then_some(0),
+            rows,
+            scroll: 0,
+            hint: "key: file · The bot reads this value: it reaches the bot's agent and stays in that agent's own records on this computer.".into(),
+            empty: "Campus has no secrets yet. + secret saves a password or a token only Campus can read.".into(),
+            compact,
+            new: "+ secret",
+        }
+    }
+
+    fn drawn(r: BotRoutines, (width, height): (u16, u16)) -> Terminal<TestBackend> {
+        let shown = View { overlay: Some(Overlay::BotSecrets(Box::new(r))), ..view(&["web-shop"]) };
+        render_sized(&shown, width, height)
+    }
+
+    #[test]
+    fn the_dialog_lists_names_and_dates_and_never_a_value() {
+        let t = drawn(secrets(secret_rows(), false), BIG);
+        insta::assert_snapshot!(t.backend());
+        let text = format!("{}", t.backend());
+        assert_eq!(text.matches("replace…").count(), 1, "only the selected row has buttons: {text}");
+    }
+
+    #[test]
+    fn the_empty_dialog_says_what_a_secret_is_for() {
+        insta::assert_snapshot!(drawn(secrets(Vec::new(), false), BIG).backend());
+    }
+
+    #[test]
+    fn a_file_that_does_not_open_offers_only_remove_all() {
+        let row = RoutineRow {
+            name: "the secrets cannot be read".into(),
+            when: String::new(),
+            state: None,
+            colour: None,
+            at: String::new(),
+            paused: false,
+            buttons: vec![Button::RemoveAll],
+            detail: Some("another key or a damaged file: remove all starts again".into()),
+        };
+        insta::assert_snapshot!(drawn(secrets(vec![row], false), BIG).backend());
+    }
+
+    #[test]
+    fn compact_fills_the_screen() {
+        let t = drawn(secrets(secret_rows(), true), SMALL);
+        insta::assert_snapshot!(t.backend());
+    }
 }

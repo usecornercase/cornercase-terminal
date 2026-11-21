@@ -80,3 +80,9 @@ fn each_agent_compacts_with_its_own_command() {
 fn knows_a_compact_command(#[case] kind: Known, #[case] text: &str, #[case] compacts: bool) {
     assert_eq!(kind.compacts(text), compacts);
 }
+
+#[test]
+fn four_agents_write_a_recap() {
+    let writers: Vec<Known> = Known::ALL.into_iter().filter(|kind| kind.writes_recap()).collect();
+    assert_eq!(writers, [Known::Claude, Known::Codex, Known::Opencode, Known::Copilot]);
+}

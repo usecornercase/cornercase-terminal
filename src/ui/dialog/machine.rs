@@ -1,6 +1,6 @@
 use ratatui::Frame;
 use ratatui::layout::{Position, Rect};
-use ratatui::style::{Color, Style};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 use ratatui::widgets::{Clear, Paragraph, Wrap};
 
@@ -24,8 +24,15 @@ const INTRO: &str = "Another computer you reach with ssh. cornercase keeps a lin
                      when none runs, and never stops it: removing the machine here leaves its server running.";
 
 fn pitch(body: Rect) -> usize {
-    let spaced = Field::ALL.len() * PITCH - 1;
-    if usize::from(body.height) >= spaced { PITCH } else { PITCH - 1 }
+    let count = Field::ALL.len();
+    let height = usize::from(body.height);
+    if height >= count * PITCH - 1 {
+        PITCH
+    } else if height >= count * (PITCH - 1) {
+        PITCH - 1
+    } else {
+        1
+    }
 }
 
 fn line(area: Rect, field: Field) -> Rect {
@@ -40,7 +47,7 @@ pub(crate) fn field(area: Rect, field: Field) -> Rect {
     let wanted = match field {
         Field::Name => NAME,
         Field::Icon => ICON,
-        Field::Destination | Field::Folder => WIDE,
+        Field::Destination | Field::Folder | Field::Command | Field::Shown => WIDE,
     };
     let width = wanted.min(r.width.saturating_sub(LABEL));
     Rect::new(r.x.saturating_add(LABEL), r.y, width, r.height.min(1))
@@ -89,19 +96,38 @@ fn draw_field(f: &mut Frame, view: &View, form: &Form, field: Field) -> Option<P
     let dim = Style::default().fg(view.muted);
     let focused = form.focus == field;
     let label = if focused { Style::default().fg(Color::Cyan) } else { dim };
-    f.render_widget(Paragraph::new(Span::styled(field.label(), label)), Rect { width: LABEL, height: 1, ..r });
-    let below = note(screen, field);
-    let (about, style) = match form.error(field) {
-        Some(why) => (why, Style::default().fg(Color::Red)),
-        None => (field.about(), dim),
-    };
-    f.render_widget(Paragraph::new(Span::styled(truncate_right(about, usize::from(below.width)), style)), below);
+    if field != Field::Shown {
+        f.render_widget(Paragraph::new(Span::styled(field.label(), label)), Rect { width: LABEL, height: 1, ..r });
+    }
     let at = self::field(screen, field);
+    if pitch(rows(screen)[1]) > 1 {
+        draw_note(f, view, form, field, note(screen, field));
+    }
+    if field == Field::Shown {
+        draw_shown(f, at, form.shown, focused);
+        return None;
+    }
     if let Some(editor) = form.editor_of(field) {
         return draw_text(f, view, at, editor, focused && !form.icon.is_open());
     }
     combo::draw_field(f, view, at, combo::Field { combo: &form.icon, placeholder: "", focused });
     None
+}
+
+fn draw_note(f: &mut Frame, view: &View, form: &Form, field: Field, below: Rect) {
+    let dim = Style::default().fg(view.muted);
+    let (about, style) = match form.error(field) {
+        Some(why) => (why, Style::default().fg(Color::Red)),
+        None => (field.about(), dim),
+    };
+    f.render_widget(Paragraph::new(Span::styled(truncate_right(about, usize::from(below.width)), style)), below);
+}
+
+fn draw_shown(f: &mut Frame, r: Rect, shown: bool, focused: bool) {
+    let style = if focused { Style::default().add_modifier(Modifier::BOLD) } else { Style::default() };
+    let text = format!("{} show its work here", if shown { "[x]" } else { "[ ]" });
+    let inside = Rect { x: r.x + 1, ..r }.intersection(r);
+    f.render_widget(Paragraph::new(Span::styled(text, style)), inside);
 }
 
 pub(in crate::ui) fn draw(f: &mut Frame, view: &View, form: &Form) {
@@ -113,7 +139,8 @@ pub(in crate::ui) fn draw(f: &mut Frame, view: &View, form: &Form) {
     let dim = Style::default().fg(view.muted);
     f.render_widget(Paragraph::new(Span::styled(INTRO, dim)).wrap(Wrap { trim: true }), intro);
     let cursor = Field::ALL.into_iter().fold(None, |cursor, field| draw_field(f, view, form, field).or(cursor));
-    let notice = form.notice.clone().map(Note::Error);
+    let refusal = (pitch(rows(screen)[1]) == 1).then(|| form.errors.first().map(|(_, why)| why.clone())).flatten();
+    let notice = form.notice.clone().or(refusal).map(Note::Error);
     draw_hint(f, view, notice.as_ref(), form.hint(), hint);
     let labels = form.buttons();
     draw_buttons(f, view, &buttons(screen, &labels), &labels, form.submit());

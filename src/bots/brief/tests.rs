@@ -37,6 +37,32 @@ fn each_access_says_what_it_allows() {
 }
 
 #[test]
+fn a_cornercase_bot_is_told_what_cornercase_refuses_it_and_a_full_one_is_not() {
+    let gemini = Bot { agent: String::from("gemini"), ..named(Access::Cornercase) };
+    for bot in [named(Access::Cornercase), gemini] {
+        let told = brief(&bot, Path::new("/b"));
+        assert!(told.contains(BOUNDED), "{told}");
+    }
+    assert!(!brief(&named(Access::Full), Path::new("/b")).contains(BOUNDED));
+}
+
+#[rstest::rstest]
+#[case::cornercase(Access::Cornercase)]
+#[case::full(Access::Full)]
+fn every_opening_teaches_the_secrets_for_each_access(#[case] access: Access) {
+    let bot = named(access);
+    let folder = Path::new("/b/prs");
+    let notes = ("", "");
+    for text in [
+        opening(&bot, folder, notes, None, &said(false, "hi")),
+        setup_opening(&bot, folder, notes, None),
+        run_opening(&bot, folder, notes, "go"),
+    ] {
+        assert!(text.contains(SECRETS), "{text}");
+    }
+}
+
+#[test]
 fn a_bot_whose_agent_reads_only_its_folder_is_told_so() {
     let gemini = Bot { agent: String::from("gemini"), ..named(Access::Cornercase) };
     let told = brief(&gemini, Path::new("/b"));
@@ -248,5 +274,37 @@ mod git {
         let told = on(agent, Access::Cornercase);
         assert!(!told.contains("git -C"), "{told}");
         assert!(told.contains("you cannot run git"), "{told}");
+    }
+}
+
+mod notes {
+    use super::*;
+
+    #[test]
+    fn are_one_line_each_under_their_heading() {
+        let notes =
+            [String::from("The user did not give: a."), String::from("The user saved the secrets you asked for: b.")];
+        assert_eq!(
+            noted(&notes).as_deref(),
+            Some(
+                "## Since your last message\n\n- The user did not give: a.\n- The user saved the secrets you asked for: b."
+            )
+        );
+        assert_eq!(noted(&[]), None);
+    }
+
+    #[test]
+    fn join_the_routines_block_with_a_blank_line() {
+        let both = joined_told(Some(String::from("routines")), Some(String::from("notes")));
+        assert_eq!(both.as_deref(), Some("routines\n\nnotes"));
+        assert_eq!(joined_told(None, Some(String::from("notes"))).as_deref(), Some("notes"));
+        assert_eq!(joined_told(None, None), None);
+    }
+
+    #[test]
+    fn the_brief_teaches_asking_for_a_secret() {
+        let text = brief(&named(Access::Cornercase), Path::new("/b"));
+        assert!(text.contains("cornercase bot secret ask NAME --about"), "{text}");
+        assert!(flags_named(&text).iter().any(|(path, flag)| path == &["bot", "secret", "ask"] && flag == "about"));
     }
 }

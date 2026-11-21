@@ -7,18 +7,24 @@ use crate::agents::probe::Running;
 use crate::bots::brief::{TOLD_KEPT, Told};
 use crate::bots::chat::{self, AgentRef, Line};
 use crate::bots::follow::BATCH;
+use crate::bots::secrets::{self as keeping, Kept, KeyState};
 use crate::bots::turn::Session;
 use crate::bots::{Bot, TURN_TIMEOUT, folder};
 use crate::editor::Editor;
 use crate::error::Result;
 
+mod ask_dialog;
+mod asks;
 mod follow;
 mod form;
+mod links;
 mod manage;
 mod menu;
 mod reports;
 mod routines;
 mod routines_dialog;
+mod secrets;
+mod secrets_dialog;
 mod section;
 mod shown;
 mod talk;
@@ -27,6 +33,7 @@ mod window;
 
 pub(super) use follow::{Read, Started};
 pub(super) use menu::BotItem;
+pub(super) use secrets_dialog::{Secrets, pasted};
 pub(super) use shown::Chat;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -100,16 +107,23 @@ pub(super) struct Live {
     pub(super) answers: VecDeque<(u64, Line)>,
     pub(super) following: Vec<Followed>,
     pub(super) reports: Vec<Report>,
+    pub(super) secrets: Kept,
+    pub(super) retired: Vec<crate::bots::secrets::Entry>,
+    pub(super) asks: Vec<crate::bots::asks::Ask>,
+    pub(super) notes: Vec<String>,
 }
 
 pub(super) struct Bots {
     pub(super) dir: Option<PathBuf>,
+    pub(super) key_path: Option<PathBuf>,
+    pub(super) key: KeyState,
     pub(super) bin: Option<PathBuf>,
     pub(super) live: Vec<Live>,
     pub(super) timeout: Duration,
     pub(super) batch: Duration,
     pub(super) next_turn: u64,
     pub(super) next_key: u64,
+    pub(super) next_ask: u64,
     pub(super) shown: Option<Chat>,
     pub(super) collapsed: bool,
 }
@@ -118,12 +132,15 @@ impl Default for Bots {
     fn default() -> Self {
         Self {
             dir: None,
+            key_path: None,
+            key: KeyState::Missing,
             bin: None,
             live: Vec::new(),
             timeout: TURN_TIMEOUT,
             batch: BATCH,
             next_turn: 1,
             next_key: 1,
+            next_ask: 1,
             shown: None,
             collapsed: false,
         }
@@ -193,6 +210,10 @@ impl Live {
             answers: VecDeque::new(),
             following: Vec::new(),
             reports: Vec::new(),
+            secrets: Kept::default(),
+            retired: Vec::new(),
+            asks: Vec::new(),
+            notes: Vec::new(),
         }
     }
 }
@@ -230,15 +251,23 @@ impl super::App {
     }
 
     pub(crate) fn set_bots_dir(&mut self, dir: &Path) {
+        let key_path = keeping::key_path(dir);
+        self.panels.bots.key = keeping::read_key(&key_path);
+        self.panels.bots.key_path = Some(key_path);
         self.panels.bots.dir = Some(dir.to_path_buf());
         let bots = folder::load_all(dir);
-        let live = bots.into_iter().map(|bot| load_chat(dir, bot, self.panels.bots.take_key())).collect();
-        self.panels.bots.live = live;
+        let key = self.panels.bots.key.clone();
+        let loaded: Vec<(Live, u64)> =
+            bots.into_iter().map(|bot| load_chat(dir, bot, self.panels.bots.take_key(), &key)).collect();
+        let after = loaded.iter().map(|(_, last)| last + 1).max().unwrap_or(1);
+        self.panels.bots.next_ask = self.panels.bots.next_ask.max(after);
+        self.panels.bots.live = loaded.into_iter().map(|(live, _)| live).collect();
         self.panels.bots.shown = None;
+        self.restore_bot_posts();
     }
 }
 
-fn load_chat(dir: &Path, bot: Bot, key: u64) -> Live {
+fn load_chat(dir: &Path, bot: Bot, key: u64, secret_key: &KeyState) -> (Live, u64) {
     let folder = folder::of(dir, &bot.id);
     let path = folder.join(folder::CHAT_FILE);
     let _ = chat::heal(&path);
@@ -252,5 +281,14 @@ fn load_chat(dir: &Path, bot: Bot, key: u64) -> Live {
     let last = lines.iter().rev().find(|line| matches!(line.kind, chat::Kind::You | chat::Kind::Bot)).cloned();
     let mut unseen = chat::unseen(&lines);
     unseen.drain(..unseen.len().saturating_sub(TOLD_KEPT));
-    Live { next_line: chat::replay(&lines).next_id, last, unseen, ..Live::new(bot, folder, key) }
+    let mut notes = chat::noted(&lines);
+    notes.drain(..notes.len().saturating_sub(TOLD_KEPT));
+    let secrets = keeping::load(&folder, &bot.id, secret_key);
+    if secrets.is_unreadable() {
+        crate::log::warning!("bots", "secrets unreadable", bot = bot.id);
+    }
+    let last_ask = lines.iter().filter_map(|line| line.ask).max().unwrap_or(0);
+    let live =
+        Live { next_line: chat::replay(&lines).next_id, last, unseen, notes, secrets, ..Live::new(bot, folder, key) };
+    (live, last_ask)
 }

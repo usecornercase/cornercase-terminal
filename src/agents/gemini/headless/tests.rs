@@ -125,7 +125,7 @@ priority = 900
 
 [[rule]]
 toolName = ["write_file", "replace"]
-argsPattern = '"file_path":"[^"]*(\.[gG][eE][mM][iI][nN][iI]|\.[eE][nN][vV]|[bB][oO][tT]\.[jJ][sS][oO][nN]|[cC][hH][aA][tT]\.[jJ][sS][oO][nN][lL])'
+argsPattern = '"file_path":"[^"]*(\.[gG][eE][mM][iI][nN][iI]|\.[eE][nN][vV]|[bB][oO][tT]\.[jJ][sSſ][oO][nN]|[cC][hH][aA][tT]\.[jJ][sSſ][oO][nN][lL]|[sSſ][eE][cC][rR][eE][tT][sSſ])'
 decision = "deny"
 priority = 950
 
@@ -152,6 +152,8 @@ priority = 950
     #[case::the_settings("/work/bots/prs/.gemini/settings.json")]
     #[case::the_bots_own_file("/work/bots/prs/bot.json")]
     #[case::its_chat("/work/bots/prs/chat.jsonl")]
+    #[case::its_secrets("/work/bots/prs/secrets")]
+    #[case::its_secrets_in_capitals("/work/bots/prs/SECRETS")]
     #[case::the_environment("/work/bots/prs/.env")]
     #[case::a_percent_escaped_dot("/work/bots/prs/%2Egemini/settings.json")]
     #[case::a_percent_escaped_letter("/work/bots/prs/.%67emini/settings.json")]
@@ -159,6 +161,8 @@ priority = 950
     #[case::a_quote_to_end_the_match("/work/bots/prs/\"/../.gemini/settings.json")]
     #[case::another_case("/work/bots/prs/.Gemini/Settings.json")]
     #[case::the_name_in_capitals("/work/bots/prs/BOT.JSON")]
+    #[case::a_long_s_in_its_name("/work/bots/prs/bot.j\u{17f}on")]
+    #[case::a_long_s_in_its_secrets("/work/bots/prs/\u{17f}ecrets")]
     fn a_write_that_could_reach_what_it_protects_is_denied(#[case] path: &str) {
         assert!(denies(path), "{path}");
     }
@@ -174,7 +178,7 @@ priority = 950
     #[test]
     fn a_protected_file_is_denied_with_its_dots_escaped() {
         let ask = Ask { protected: vec!["bot.json", "keys.txt"], ..ask(Tools::Bot(Access::Cornercase)) };
-        assert!(policy(&ask).contains(r"[kK][eE][yY][sS]\.[tT][xX][tT]"));
+        assert!(policy(&ask).contains("[kK\u{212a}][eE][yY][sS\u{17f}]\\.[tT][xX][tT]"));
     }
 }
 

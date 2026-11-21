@@ -3,7 +3,7 @@ import { type Combo, COMBO_ROWS, combo, comboKey, comboList, comboRows, drawComb
 import { EMPTY, bottom, intersect, isEmpty, right } from './layout';
 import type { Key } from './programs';
 import { firstWords, paintRows, seg, wrapWords } from './text';
-import { type Editable, type FieldGrip, drawSelection, editKey, fieldLines, fieldPosition, placeIn } from './todo';
+import { type Editable, type FieldGrip, drawSelection, editKey, fieldLines, fieldPosition, placeIn, removeSelection } from './todo';
 import type { Painter } from './ui';
 
 export interface QueueEntry {
@@ -58,6 +58,9 @@ export const OPEN_IN = ['new tab', 'new worktree'];
 const LISTS: QueueList[] = ['when', 'unit', 'day', 'place', 'openIn', 'agent', 'mode'];
 const LABEL = 9;
 const HEIGHT = 23;
+const PROMPT = 3;
+const PROMPT_MOST = 8;
+const PROMPT_HINT = 'enter breaks the line · tab moves on';
 const WHERE = 8;
 const OPEN_IN_ROW = 10;
 const AGENT = 12;
@@ -104,6 +107,7 @@ export interface QueueForm {
   focus: QueueControl;
   cursor: number;
   anchor?: number | null;
+  promptScroll?: number;
   zone: string;
   error?: string;
 }
@@ -204,13 +208,14 @@ export function queueChose(o: QueueForm, control: QueueList): QueueList {
   return control;
 }
 
-export function queueKey(o: QueueForm, k: Key, width: number, rows: number): QueueStep {
+export function queueKey(o: QueueForm, k: Key, width: number, rows: number, screen?: Rect): QueueStep {
   o.error = undefined;
   const open = queueOpened(o);
   if (open && k.key !== 'Tab') return comboKey(o[open], k, rows) ? queueChose(o, open) : 'none';
   if (k.key === 'Escape') return 'cancel';
-  if (k.key === 'Enter') return 'submit';
-  if (k.key === ' ' && o.focus === 'cleanup') o.cleanup = !o.cleanup;
+  if (k.key === 'Enter' && o.focus !== 'prompt') return 'submit';
+  if (k.key === 'Enter') queueEdit(o, 'prompt', (field) => insertLines(field, '\n'));
+  else if (k.key === ' ' && o.focus === 'cleanup') o.cleanup = !o.cleanup;
   else if (k.key === 'Tab') {
     const controls = queueControls(o);
     const at = Math.max(0, controls.indexOf(o.focus));
@@ -219,7 +224,44 @@ export function queueKey(o: QueueForm, k: Key, width: number, rows: number): Que
   else if (isText(o.focus)) {
     queueEdit(o, o.focus, (field) => editKey(field, k, width));
   }
+  if (o.focus === 'prompt' && screen) revealPrompt(screen, o);
   return 'none';
+}
+
+function insertLines(f: Editable, text: string): void {
+  removeSelection(f);
+  const chars = [...text.replace(/\r\n?/g, '\n').replace(/[\t\u0000-\u0009\u000b-\u001f\u007f]/g, ' ')];
+  f.chars.splice(f.cursor, 0, ...chars);
+  f.cursor += chars.length;
+}
+
+export function queuePaste(screen: Rect, o: QueueForm, text: string): void {
+  const focus = o.focus;
+  if (!isText(focus) || queueOpened(o)) return;
+  if (focus !== 'prompt') return queueEdit(o, focus, (field) => insertLines(field, text.replace(/\s+/g, ' ')));
+  queueEdit(o, 'prompt', (field) => insertLines(field, text));
+  revealPrompt(screen, o);
+}
+
+const promptLines = (screen: Rect, o: QueueForm): number => fieldLines({ chars: [...o.prompt] }, Math.max(1, queueTextRect(screen, o, 'prompt').w)).length;
+
+export function queuePromptTop(screen: Rect, o: QueueForm): number {
+  const rows = Math.max(1, queueTextRect(screen, o, 'prompt').h);
+  return Math.max(0, Math.min(o.promptScroll ?? 0, promptLines(screen, o) - rows));
+}
+
+export function revealPrompt(screen: Rect, o: QueueForm): void {
+  const t = queueTextRect(screen, o, 'prompt');
+  const [line] = fieldPosition({ chars: [...o.prompt], cursor: o.cursor }, Math.max(1, t.w));
+  const rows = Math.max(1, t.h);
+  const top = queuePromptTop(screen, o);
+  o.promptScroll = line < top ? line : line >= top + rows ? line + 1 - rows : top;
+}
+
+export function scrollPrompt(screen: Rect, o: QueueForm, dy: number): boolean {
+  const rows = Math.max(1, queueTextRect(screen, o, 'prompt').h);
+  o.promptScroll = Math.max(0, Math.min(queuePromptTop(screen, o) + dy, promptLines(screen, o) - rows));
+  return true;
 }
 
 function queueEdit(o: QueueForm, control: QueueText, change: (f: Editable, width: number) => void, width = 1): void {
@@ -235,13 +277,17 @@ function queueGrip(screen: Rect, o: QueueForm, control: QueueText): FieldGrip {
   return {
     edit: (change) => queueEdit(o, control, change, Math.max(1, t.w)),
     focused: () => o.focus === control,
-    spot: (x, y) => [firstLine([...o[control]], o.cursor, t) + (y - t.y), Math.max(0, x - t.x)],
+    spot: (x, y) => [topOf(screen, o, control) + (y - t.y), Math.max(0, x - t.x)],
   };
 }
 
+const extra = (rows: number): number => Math.min(PROMPT_MOST - PROMPT, Math.max(0, rows - 2 - HEIGHT));
+
+const at = (screen: Rect, row: number): number => (row > PROMPT ? row + extra(screen.h) : row);
+
 export function queueFormArea(cols: number, rows: number): Rect {
   const w = Math.min(72, Math.max(0, cols - 2));
-  const h = Math.min(HEIGHT, rows);
+  const h = Math.min(HEIGHT + extra(rows), rows);
   return rect(Math.floor((cols - w) / 2), Math.floor((rows - h) / 2), w, h);
 }
 
@@ -250,9 +296,9 @@ function inner(screen: Rect): Rect {
   return rect(a.x + 2, a.y + 1, a.w - 4, a.h - 2);
 }
 
-function row(screen: Rect, at: number, h: number): Rect {
+function row(screen: Rect, y: number, h: number): Rect {
   const r = inner(screen);
-  return intersect(rect(r.x, r.y + at, r.w, h), r);
+  return intersect(rect(r.x, r.y + at(screen, y), r.w, h), r);
 }
 
 function cell(screen: Rect, at: number, x: number, w: number): Rect {
@@ -265,7 +311,7 @@ const rest = (screen: Rect, x: number): number => Math.max(0, inner(screen).w - 
 export function queueRect(screen: Rect, o: QueueForm, control: QueueControl): Rect {
   const on = queueKind(o) === 'on';
   switch (control) {
-    case 'prompt': return row(screen, 1, 3);
+    case 'prompt': return row(screen, 1, PROMPT + extra(screen.h));
     case 'when': return cell(screen, 5, LABEL, COMBO);
     case 'date': return cell(screen, 6, LABEL, DATE);
     case 'day': return cell(screen, 6, LABEL, DAY);
@@ -314,6 +360,10 @@ function firstLine(chars: string[], cursor: number, field: Rect): number {
   return Math.max(0, line - Math.max(0, field.h - 1));
 }
 
+function topOf(screen: Rect, o: QueueForm, control: QueueText): number {
+  return control === 'prompt' ? queuePromptTop(screen, o) : firstLine([...o[control]], o.cursor, queueTextRect(screen, o, control));
+}
+
 export function clickQueue(screen: Rect, o: QueueForm, control: QueueControl, x: number, y: number): void {
   if (control === 'cleanup') {
     focusQueue(o, control);
@@ -322,8 +372,10 @@ export function clickQueue(screen: Rect, o: QueueForm, control: QueueControl, x:
   }
   const opening = isList(control) && !o[control].open;
   const t = queueTextRect(screen, o, control);
-  const top = isText(control) ? firstLine([...o[control]], o.cursor, t) : 0;
+  const top = isText(control) ? topOf(screen, o, control) : 0;
+  const scroll = o.promptScroll;
   focusQueue(o, control);
+  o.promptScroll = scroll;
   if (!isText(control)) {
     if (opening && isList(control)) openCombo(o[control]);
     return;
@@ -331,22 +383,38 @@ export function clickQueue(screen: Rect, o: QueueForm, control: QueueControl, x:
   queueEdit(o, control, (field, width) => placeIn(field, width, top + Math.max(0, y - t.y), Math.max(0, x - t.x)), Math.max(1, t.w));
 }
 
-function drawText(p: Painter, field: Rect, t: Rect, value: string, cursor: number, focused: boolean, placeholder: string): void {
+function drawText(p: Painter, field: Rect, t: Rect, value: string, cursor: number, focused: boolean, placeholder: string, start: number): void {
   const bg: Style = { bg: p.surface };
   p.g.fill(field, bg);
   const chars = [...value];
   const width = Math.max(1, t.w);
   const [line, col] = fieldPosition({ chars, cursor }, width);
-  const start = firstLine(chars, cursor, t);
   if (!chars.length && placeholder) p.span(t.x, t.y, placeholder, { ...bg, ...MUTED }, t.w);
   else {
     const text: Style = { ...bg, fg: p.app.light ? 0 : 15, add: BOLD };
-    const shown = chars.map((c) => (c === '\n' ? '↵' : /\p{Cc}/u.test(c) ? ' ' : c));
+    const shown = chars.map((c) => (/\p{Cc}/u.test(c) ? ' ' : c));
     fieldLines({ chars }, width)
       .slice(start, start + t.h)
       .forEach(([a, b], i) => p.span(t.x, t.y + i, shown.slice(a, b).join(''), text, t.w));
   }
-  if (focused && !isEmpty(t)) p.cursor = { shape: 'block', x: t.x + Math.min(col, t.w - 1), y: t.y + Math.min(line - start, t.h - 1) };
+  if (focused && !isEmpty(t) && line >= start && line < start + t.h) p.cursor = { shape: 'block', x: t.x + Math.min(col, t.w - 1), y: t.y + line - start };
+}
+
+function drawPromptMarks(p: Painter, o: QueueForm, screen: Rect, typing: boolean): void {
+  if (typing && o.focus === 'prompt') {
+    const r = cell(screen, 0, LABEL, rest(screen, LABEL));
+    p.span(r.x, r.y, PROMPT_HINT, MUTED, r.w);
+  }
+  const t = queueTextRect(screen, o, 'prompt');
+  const above = queuePromptTop(screen, o);
+  const below = Math.max(0, promptLines(screen, o) - above - t.h);
+  for (const [count, arrow, y] of [[above, '↑', 0], [below, '↓', PROMPT + 1]] as const) {
+    if (!count) continue;
+    const mark = ` ${arrow} ${count} more `;
+    const r = cell(screen, y, Math.max(0, rest(screen, 0) - mark.length), mark.length);
+    p.g.clear(r);
+    p.span(r.x, r.y, mark, MUTED, r.w);
+  }
 }
 
 function hint(o: QueueForm): string {
@@ -408,12 +476,15 @@ export function drawQueueForm(p: Painter, o: QueueForm): void {
       const focused = !open && o.focus === control;
       const cursor = focused ? o.cursor : [...o[control]].length;
       const t = queueTextRect(screen, o, control);
-      drawText(p, r, t, o[control], cursor, focused, control === 'branch' ? 'branch name' : '');
-      if (focused) drawSelection(p, { chars: [...o[control]], cursor: o.cursor, anchor: o.anchor }, t, firstLine([...o[control]], o.cursor, t), { bg: p.surface });
+      const top = control === 'prompt' ? queuePromptTop(screen, o) : firstLine([...o[control]], cursor, t);
+      drawText(p, r, t, o[control], cursor, focused, control === 'branch' ? 'branch name' : '', top);
+      if (focused) drawSelection(p, { chars: [...o[control]], cursor: o.cursor, anchor: o.anchor }, t, top, { bg: p.surface });
     }
     const field = isText(control) ? queueGrip(screen, o, control) : undefined;
-    p.region({ r, click: (x, y) => { clickQueue(screen, o, control, x, y); app.dirty(); }, cursor: isList(control) ? 'pointer' : 'text', field });
+    const wheel = control === 'prompt' && !open ? (dy: number) => { scrollPrompt(screen, o, dy); app.dirty(); return true; } : undefined;
+    p.region({ r, click: (x, y) => { clickQueue(screen, o, control, x, y); app.dirty(); }, cursor: isList(control) ? 'pointer' : 'text', field, wheel });
   }
+  drawPromptMarks(p, o, screen, !open);
   const values = controls.filter((c) => c === 'clock' || c === 'date' || c === 'amount' || c === 'unit' || c === 'day');
   const end = values.length ? Math.max(...values.map((c) => right(queueRect(screen, o, c)))) : inner(screen).x + LABEL;
   const tipRow = row(screen, 6, 1);
@@ -423,12 +494,12 @@ export function drawQueueForm(p: Painter, o: QueueForm): void {
   const r = inner(screen);
   const buttons = bottom(r) - 1;
   if (o.error) {
-    const y = Math.min(Math.max(buttons - 2, r.y + NOTICE), buttons);
+    const y = Math.min(Math.max(buttons - 2, r.y + at(screen, NOTICE)), buttons);
     const note = rect(r.x, y, r.w, buttons - y);
     p.g.clear(note);
     paragraph(p, note, o.error, { fg: 1 });
   }
-  p.dialogButtons(rect(r.x, buttons, r.w, isEmpty(r) ? 0 : 1), 'schedule', () => app.submitQueue(), () => app.closeQueueForm(false));
+  p.dialogButtons(rect(r.x, buttons, r.w, isEmpty(r) ? 0 : 1), 'schedule', () => app.submitQueue(), () => app.closeQueueForm());
   const list = queueList(screen, o);
   if (open && list) {
     p.region({ r: union(area, list), click: () => { closeQueueLists(o); app.dirty(); }, wheel: scroll });

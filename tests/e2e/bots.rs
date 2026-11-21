@@ -8,16 +8,23 @@ const STREAM: &str = r#"{"type":"system","subtype":"init","model":"claude-opus-5
 {"type":"assistant","message":{"model":"claude-opus-5-5","content":[{"type":"text","text":"hello from the bot"}]}}
 {"type":"result","subtype":"success","is_error":false,"result":"hello from the bot","session_id":"s1","usage":{"input_tokens":3,"output_tokens":4}}"#;
 
+const SAID: &str = "hello from the bot";
+
 pub(super) fn with_agent() -> Arc<Session> {
     with_agent_running("")
 }
 
 fn with_agent_running(before: &str) -> Arc<Session> {
+    with_agent_saying(before, SAID)
+}
+
+pub(super) fn with_agent_saying(before: &str, said: &str) -> Arc<Session> {
     let session = Session::new();
     let claude = session.dir.join("claude-bot");
+    let stream = STREAM.replace(SAID, said);
     write_executable(
         &claude,
-        &format!("#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$0.args\"\n{before}\ncat <<'EOF'\n{STREAM}\nEOF\n"),
+        &format!("#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$0.args\"\n{before}\ncat <<'EOF'\n{stream}\nEOF\n"),
     );
     let config = serde_json::json!({"agent_commands": agent_commands(&[("claude", &claude)]), "agent": "claude"});
     std::fs::write(session.dir.join("config.json"), config.to_string()).expect("write the config");
@@ -51,6 +58,29 @@ fn a_bot_is_made_asked_and_read_back_over_the_socket() {
     assert!(session.says(&["bot", "agents"]).contains("claude"));
     let args = std::fs::read_to_string(session.dir.join("claude-bot.args")).expect("the agent ran");
     assert!(args.contains("--setting-sources user") && args.contains("which are blocked?"), "{args}");
+}
+
+#[test]
+fn chat_apps_is_set_when_a_bot_is_made_changed_and_listed() {
+    let session = started();
+
+    let made: Value = serde_json::from_str(&session.says(&[
+        "bot",
+        "new",
+        "PRs",
+        "--agent",
+        "claude",
+        "--chat-apps",
+        "always",
+        "--json",
+    ]))
+    .expect("json");
+    assert_eq!(made["chat_apps"], "always", "{made}");
+    session.says(&["bot", "edit", "prs", "--chat-apps", "off"]);
+    let list: Value = serde_json::from_str(&session.says(&["bot", "list", "--json"])).expect("json");
+    assert_eq!(list["bots"][0]["chat_apps"], "off", "{list}");
+    let contract = session.says(&["contract"]);
+    assert!(contract.contains("bot-chat-apps"), "{contract}");
 }
 
 fn bot_state(session: &Session) -> Value {
@@ -117,6 +147,18 @@ fn inside_a_bot_a_command_must_name_its_place_and_the_server_cannot_be_stopped()
     assert!(refused(&start, 2, "a bot runs in no pane"), "{start:?}");
     let kill = session.command().env("CORNERCASE_BOT", "prs").arg("kill-server").output().expect("run");
     assert!(refused(&kill, 2, "a bot cannot stop its own server"), "{kill:?}");
+    let elsewhere = "a bot works on this computer only: it cannot act on another machine";
+    let flag =
+        session.command().env("CORNERCASE_BOT", "prs").args(["--remote", "vps", "status"]).output().expect("run");
+    assert!(refused(&flag, 2, elsewhere), "{flag:?}");
+    let named = session
+        .command()
+        .env("CORNERCASE_BOT", "prs")
+        .env("CORNERCASE_REMOTE", "vps")
+        .arg("status")
+        .output()
+        .expect("run");
+    assert!(refused(&named, 2, elsewhere), "{named:?}");
     assert!(session.says(&["status", "--json"]).contains("\"projects\""));
 }
 
@@ -130,6 +172,29 @@ fn inside_a_bot_cornercase_opens_no_window_and_relays_none() {
         assert!(refused(&opened, 2, "a bot cannot attach as a window"), "{args:?}: {opened:?}");
     }
     assert!(session.says(&["status", "--json"]).contains("\"projects\""));
+}
+
+#[test]
+fn inside_a_bot_the_list_of_machines_is_not_changed_from_the_command_line() {
+    let session = Session::new();
+    let run = |bot: Option<&str>, args: &[&str]| {
+        let mut cmd = session.cold_command();
+        if let Some(bot) = bot {
+            cmd.env("CORNERCASE_BOT", bot);
+        }
+        cmd.args(args).output().expect("run cornercase")
+    };
+    assert!(run(None, &["remote", "--remember", "devbox"]).status.success());
+
+    for args in [&["remote", "--forget", "devbox"], &["remote", "--remember", "newbox"]] {
+        let out = run(Some("prs"), args);
+        assert!(refused(&out, 2, "a bot cannot change cornercase's machines"), "{args:?}: {out:?}");
+    }
+
+    let known = run(Some("prs"), &["remote", "--known", "--json"]);
+    assert!(known.status.success(), "{known:?}");
+    let listed = String::from_utf8_lossy(&known.stdout);
+    assert!(listed.contains("\"devbox\"") && !listed.contains("newbox"), "{listed}");
 }
 
 #[test]
@@ -191,6 +256,22 @@ fn a_command_whose_environment_names_a_bot_is_refused_by_the_server() {
 }
 
 #[test]
+fn a_bots_keys_and_closing_a_project_are_refused_by_the_server_but_yours_are_not() {
+    let session = started();
+    session.says(&["bot", "new", "prs", "--agent", "claude"]);
+    let pane = held::new_shell(&session);
+    let as_bot = |args: &[&str]| session.command().env("CORNERCASE_BOT", "prs").args(args).output().expect("run");
+
+    let keys = as_bot(&["keys", "--pane", &pane, "enter"]);
+    let close = as_bot(&["close", "--project", "1"]);
+
+    assert!(refused(&keys, 1, "a bot cannot press keys"), "{keys:?}");
+    assert!(refused(&close, 1, "a bot closes only the tabs and panes it started"), "{close:?}");
+    session.says(&["keys", "--pane", &pane, "enter"]);
+    assert!(session.says(&["read", "--pane", &pane]).contains('$'));
+}
+
+#[test]
 fn inside_a_bot_queue_add_schedules_for_it_and_a_project_entry_is_refused() {
     let session = started();
     session.says(&["bot", "new", "prs", "--agent", "claude"]);
@@ -248,25 +329,42 @@ fn a_bot_routine_run_now_answers_in_its_chat() {
     });
 }
 
-#[test]
-fn a_bots_routine_is_paused_from_its_routines_dialog() {
+fn a_bot_with_a_routine_shown() -> (Arc<Session>, Harness) {
     let session = started();
     session.says(&["bot", "new", "prs", "--agent", "claude"]);
     session.says(&["queue", "add", "--bot", "prs", "--every", "2h", "--prompt", "check", "--name", "Review PRs"]);
-    let mut ui = Harness::open(Arc::clone(&session), ROWS, 160);
+    let mut ui = Harness::open(Arc::clone(&session), ROWS * 2, 160);
     ui.wait_for("the window is drawn", |s| s.contains(ui::MORE_LABEL));
-
     ui.click(ui.position_of("prs"));
     ui.wait_for("its chat shows", |s| s.contains("Message prs…"));
-    ui.click(ui.position_of("routines"));
-    ui.wait_for("its routines dialog opens", |s| s.contains("Routines › prs") && s.contains("pause"));
-    ui.click(ui.position_of("pause"));
+    (session, ui)
+}
 
+fn wait_paused(session: &Session) {
     wait_until("the routine is paused", || {
         let list: Value =
             serde_json::from_str(&session.says(&["queue", "list", "--bot", "prs", "--json"])).expect("json");
         list["entries"][0]["paused"] == true
     });
+}
+
+#[test]
+fn a_bots_routine_is_paused_from_its_routines_dialog() {
+    let (session, mut ui) = a_bot_with_a_routine_shown();
+    ui.click(ui.position_of("routines"));
+    ui.wait_for("its routines dialog opens", |s| s.contains("Routines › prs") && s.contains("pause"));
+    ui.click(ui.position_of("pause"));
+    wait_paused(&session);
+}
+
+#[test]
+fn a_bots_routine_is_paused_from_the_menu_on_its_card() {
+    let (session, mut ui) = a_bot_with_a_routine_shown();
+    ui.wait_for("its routine is on the card", |s| s.contains("Review PRs"));
+    ui.right_click(ui.position_of("Review PRs"));
+    ui.wait_for("its menu opens", |s| s.contains("run now") && s.contains("edit…"));
+    ui.click(ui.position_of("pause"));
+    wait_paused(&session);
 }
 
 #[test]
@@ -376,4 +474,191 @@ fn a_bots_turn_finds_its_servers_cornercase_first_and_your_gh_before_the_one_bes
         std::fs::canonicalize(&found).expect("it leads somewhere"),
         std::fs::canonicalize(&server).expect("copy")
     );
+}
+
+const VALUE: &str = "hunter2-marker-value";
+const READ: &str = "cornercase bot secret get pw > \"$0.$CORNERCASE_BOT.got\" 2>&1\necho $? > \"$0.$CORNERCASE_BOT.status\"\nenv -u CORNERCASE_BOT cornercase bot secret list a > \"$0.$CORNERCASE_BOT.list\" 2>&1";
+
+fn read_by(session: &Session, bot: &str, what: &str) -> String {
+    std::fs::read_to_string(session.dir.join(format!("claude-bot.{bot}.{what}"))).expect("what the turn wrote")
+}
+
+fn saved(session: &Session, bot: &str) {
+    let out = session.fed(&["bot", "secret", "set", bot, "pw"], &format!("{VALUE}\n"));
+    assert!(out.status.success(), "{out:?}");
+    assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "pw");
+}
+
+fn counted(session: &Session) -> u64 {
+    let json: Value = serde_json::from_str(&session.says(&["bot", "list", "--json"])).expect("json");
+    json["bots"][0]["secrets"].as_u64().expect("a count")
+}
+
+#[test]
+fn a_secret_is_read_back_by_its_bots_own_turn_and_by_nothing_else() {
+    let session = started_running(READ);
+    for args in [&["bot", "new", "a", "--agent", "claude"][..], &["bot", "new", "b", "--agent", "claude"]] {
+        session.says(args);
+    }
+    saved(&session, "a");
+
+    let listed = session.says(&["bot", "secret", "list", "a"]);
+    assert!(listed.starts_with("pw\tsaved ") && listed.ends_with("key: file"), "{listed}");
+    assert!(!listed.contains(VALUE));
+    assert_eq!(counted(&session), 1);
+
+    session.says(&["bot", "say", "a", "go", "--wait"]);
+    assert_eq!(read_by(&session, "a", "got"), format!("{VALUE}\n"));
+    assert_eq!(read_by(&session, "a", "status").trim(), "0");
+
+    let plain = session.cli(&["bot", "secret", "get", "pw"]);
+    assert!(refused(&plain, 1, "only the bot itself reads its secrets"), "{plain:?}");
+
+    another_bots_turn_gets_nothing(&session);
+}
+
+fn another_bots_turn_gets_nothing(session: &Session) {
+    session.says(&["bot", "say", "b", "go", "--wait"]);
+    assert!(read_by(session, "b", "got").contains("no secret pw in b"), "{}", read_by(session, "b", "got"));
+    assert_eq!(read_by(session, "b", "status").trim(), "1");
+    assert!(read_by(session, "b", "list").contains("a bot reads only its own secrets"));
+}
+
+#[test]
+fn a_full_access_bot_reads_its_own_secret_too() {
+    let session = started_running(READ);
+    session.says(&["bot", "new", "a", "--agent", "claude", "--access", "full"]);
+    saved(&session, "a");
+
+    session.says(&["bot", "say", "a", "go", "--wait"]);
+
+    assert_eq!(read_by(&session, "a", "got"), format!("{VALUE}\n"));
+}
+
+#[test]
+fn a_bot_cannot_save_or_remove_secrets_and_wrong_usage_is_refused() {
+    let session = started();
+    session.says(&["bot", "new", "prs", "--agent", "claude"]);
+
+    for args in [&["bot", "secret", "set", "prs", "pw"][..], &["bot", "secret", "remove", "prs", "--all"]] {
+        let out = session.command().env("CORNERCASE_BOT", "prs").args(args).output().expect("run");
+        assert!(refused(&out, 2, "a bot cannot save or remove secrets"), "{args:?}: {out:?}");
+    }
+    let other = session.command().env("CORNERCASE_BOT", "prs").args(["bot", "secret", "list", "other"]).output();
+    assert!(refused(&other.expect("run"), 2, "a bot reads only its own secrets"));
+    let value_as_argument = session.cli(&["bot", "secret", "set", "prs", "pw", VALUE]);
+    assert_eq!(value_as_argument.status.code(), Some(2), "{value_as_argument:?}");
+    let empty = session.fed(&["bot", "secret", "set", "prs", "pw"], "\n");
+    assert!(String::from_utf8_lossy(&empty.stderr).contains("the value is empty"), "{empty:?}");
+    let big = session.fed(&["bot", "secret", "set", "prs", "pw"], &"a".repeat(8193));
+    assert!(String::from_utf8_lossy(&big.stderr).contains("8193"), "{big:?}");
+}
+
+#[test]
+fn the_value_is_in_no_file_and_no_log_line_and_one_line_break_is_dropped() {
+    let session = with_agent_running(READ);
+    let started = session.cold_command().env("CORNERCASE_LOG", "debug").arg("start-server").output().expect("run");
+    assert!(started.status.success(), "{started:?}");
+    session.says(&["bot", "new", "a", "--agent", "claude"]);
+    let out = session.fed(&["bot", "secret", "set", "a", "pw"], &format!("{VALUE}\n\n"));
+    assert!(out.status.success(), "{out:?}");
+    session.says(&["bot", "say", "a", "go", "--wait"]);
+    assert_eq!(read_by(&session, "a", "got"), format!("{VALUE}\n\n"));
+    session.says(&["bot", "secret", "list", "a", "--json"]);
+    session.says(&["bot", "secret", "remove", "a", "pw"]);
+
+    let log = session.says(&["logs", "-n", "1000"]);
+    assert!(log.contains("name=pw") && log.contains("bytes=21"), "{log}");
+    assert!(!log.contains(VALUE), "{log}");
+    saved(&session, "a");
+    let found = std::process::Command::new("grep")
+        .args(["-rl", VALUE])
+        .arg(session.dir.join("server.bots"))
+        .output()
+        .expect("grep");
+    assert!(found.stdout.is_empty(), "{found:?}");
+    assert!(session.dir.join("server.bots").join("a").join("secrets").exists());
+}
+
+#[test]
+fn removing_a_bot_removes_its_secrets_and_remove_all_starts_again() {
+    let session = started();
+    session.says(&["bot", "new", "a", "--agent", "claude"]);
+    saved(&session, "a");
+    let file = session.dir.join("server.bots").join("a").join("secrets");
+    assert!(file.exists());
+    session.says(&["bot", "secret", "remove", "a", "--all"]);
+    assert!(!file.exists());
+    assert!(session.says(&["bot", "secret", "list", "a"]).contains("a has no secrets"));
+    saved(&session, "a");
+    session.says(&["bot", "remove", "a"]);
+    assert!(!file.exists());
+}
+
+const ASK: &str = "cornercase bot secret ask campus-user campus-password --about 'to log in' >> \"$0.$CORNERCASE_BOT.ask\" 2>&1\necho \"status $?\" >> \"$0.$CORNERCASE_BOT.ask\"\ncornercase bot secret get campus-password >> \"$0.$CORNERCASE_BOT.got\" 2>&1";
+
+fn asked_ask(session: &Session) -> String {
+    let state: Value = serde_json::from_str(&session.says(&["status", "--app"])).expect("one JSON document");
+    let asks = &state["bots"][0]["asks"];
+    assert_eq!(asks[0]["names"], serde_json::json!(["campus-user", "campus-password"]), "{state}");
+    asks[0]["id"].as_u64().expect("an ask id").to_string()
+}
+
+#[test]
+fn a_bot_asks_for_a_secret_the_user_gives_it_and_its_next_turn_reads_it() {
+    let session = with_agent_running(ASK);
+    let started = session.cold_command().env("CORNERCASE_LOG", "debug").arg("start-server").output().expect("run");
+    assert!(started.status.success(), "{started:?}");
+    let events = session.spawn(&["events"]);
+    session.says(&["bot", "new", "a", "--agent", "claude"]);
+    session.says(&["bot", "say", "a", "go", "--wait"]);
+    assert!(
+        read_by(&session, "a", "ask").starts_with("asked: campus-user, campus-password (ask "),
+        "{}",
+        read_by(&session, "a", "ask")
+    );
+    let history: Value = serde_json::from_str(&session.says(&["bot", "history", "a", "--json"])).expect("json");
+    let lines = history["lines"].as_array().expect("lines");
+    assert!(lines.iter().any(|line| line["kind"] == "notice" && line["ask"].is_u64()), "{history}");
+    let ask = asked_ask(&session);
+
+    let given = session.fed(
+        &["bot", "secret", "give", "a", &ask],
+        &format!("{{\"campus-user\":\"me\",\"campus-password\":\"{VALUE}\"}}"),
+    );
+    assert!(given.status.success(), "{given:?}");
+    assert_eq!(String::from_utf8_lossy(&given.stdout), "campus-password\ncampus-user\n");
+    wait_until("the turn cornercase started read the value", || {
+        std::fs::read_to_string(session.dir.join("claude-bot.a.got")).is_ok_and(|got| got.contains(VALUE))
+    });
+    wait_until("that turn ended", || bot_state(&session)["state"] == "idle");
+    assert!(session.says(&["bot", "history", "a"]).contains("secret saved: campus-user, campus-password"));
+    let again = read_by(&session, "a", "ask");
+    assert!(again.contains("campus-user is already saved") && again.ends_with("status 1\n"), "{again}");
+
+    let mut events = events;
+    let _ = events.kill();
+    let streamed = String::from_utf8_lossy(&events.wait_with_output().expect("the events").stdout).to_string();
+    let chat = std::fs::read_to_string(session.dir.join("server.bots").join("a").join("chat.jsonl")).expect("chat");
+    for text in [chat, session.says(&["logs", "-n", "1000"]), session.says(&["status", "--app"]), streamed] {
+        assert!(!text.contains(VALUE), "{text}");
+    }
+}
+
+#[test]
+fn only_the_bot_asks_and_only_the_user_gives_or_declines() {
+    let session = started_running(ASK);
+    session.says(&["bot", "new", "a", "--agent", "claude"]);
+    let mine = session.cli(&["bot", "secret", "ask", "pw", "--about", "to log in"]);
+    assert!(refused(&mine, 1, "only the bot itself asks for a secret"), "{mine:?}");
+    session.says(&["bot", "say", "a", "go", "--wait"]);
+    let ask = asked_ask(&session);
+    let by_bot = session.command().env("CORNERCASE_BOT", "a").args(["bot", "secret", "decline", "a", &ask]).output();
+    assert!(refused(&by_bot.expect("run"), 2, "a bot cannot give or decline what a bot asks for"));
+
+    session.says(&["bot", "secret", "decline", "a", &ask]);
+
+    assert!(session.says(&["bot", "history", "a"]).contains("secret not given: campus-user, campus-password"));
+    let state: Value = serde_json::from_str(&session.says(&["status", "--app"])).expect("json");
+    assert!(state["bots"][0].get("asks").is_none(), "{state}");
 }

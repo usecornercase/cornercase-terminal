@@ -89,3 +89,24 @@ fn a_bot_without_follow_reads_as_following_and_is_written_as_before() {
     let back: Bot = serde_json::from_str(&off).expect("read back");
     assert!(!back.follow);
 }
+
+#[test]
+fn a_bot_without_chat_apps_reads_as_away_and_is_written_back_unchanged() {
+    let text = serde_json::to_string(&sample("prs", "PRs")).expect("json");
+    assert!(!text.contains("chat_apps"), "{text}");
+    let read: Bot = serde_json::from_str(&text).expect("an old bot.json");
+    assert_eq!(read.chat_apps, ChatApps::Away);
+    assert_eq!(serde_json::to_string(&read).expect("json"), text);
+    let always = serde_json::to_string(&Bot { chat_apps: ChatApps::Always, ..sample("prs", "PRs") }).expect("json");
+    assert!(always.contains("\"chat_apps\":\"always\""), "{always}");
+}
+
+#[rstest]
+#[case::away("away", Some(ChatApps::Away))]
+#[case::always(" always ", Some(ChatApps::Always))]
+#[case::off("off", Some(ChatApps::Off))]
+#[case::other("sometimes", None)]
+fn the_chat_apps_option_is_read_by_its_name(#[case] text: &str, #[case] wanted: Option<ChatApps>) {
+    assert_eq!(ChatApps::parse(text), wanted);
+    assert_eq!(wanted.map(ChatApps::name), wanted.map(|_| text.trim()));
+}

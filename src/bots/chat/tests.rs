@@ -393,3 +393,82 @@ mod preview {
         assert_eq!(preview(&line), "there is no claude account `gone`");
     }
 }
+
+mod asks {
+    use super::*;
+
+    fn notice(id: u64, text: &str, run: Option<u64>) -> Line {
+        Line::notice(id, 30, text).asked(4).in_routine(run)
+    }
+
+    fn head(id: u64, run: u64) -> Line {
+        Line::notice(id, 20, &run_head("Campus", "09:00")).of_run(run)
+    }
+
+    #[test]
+    fn a_line_with_an_ask_round_trips_and_one_without_is_written_without_it() {
+        let text = serde_json::to_string(&Line::notice(1, 1, "x")).expect("json");
+        assert!(!text.contains("ask"), "{text}");
+        let dir = TempDir::new();
+        let line = notice(1, "asks for a secret: a", Some(7));
+        append(&chat(&dir), &line).expect("append");
+        assert_eq!(read(&chat(&dir)), [line]);
+        assert!(std::fs::read_to_string(chat(&dir)).expect("read").contains(r#""ask":4"#));
+    }
+
+    #[test]
+    fn replay_ignores_the_asks_and_the_not_given_notices() {
+        let lines =
+            [you(1, false), notice(2, "asks for a secret: a", None), answer(3), notice(4, "secret not given: a", None)];
+        assert_eq!(replay(&lines), Replayed { next_id: 5, ..Replayed::default() });
+    }
+
+    #[test]
+    fn an_ask_from_a_run_that_ended_leaves_the_run_closed() {
+        let mut run_answer = answer(3);
+        run_answer.routine = Some(7);
+        let lines = [
+            head(1, 7),
+            notice(2, "asks for a secret: a", Some(7)),
+            run_answer,
+            notice(4, "secret not given: a", Some(7)),
+        ];
+        let state = replay(&lines);
+        assert!(state.runs.is_empty(), "{state:?}");
+        assert_eq!(restart_notices(&state, 99), Vec::<Line>::new());
+    }
+
+    #[test]
+    fn a_saved_notice_of_a_chat_ask_opens_a_turn_and_counts_as_held() {
+        let saved = notice(1, "secret saved: a", None);
+        assert!(opens_turn(&saved) && tells_saved(&saved) && !retries(&saved));
+        assert!(replay(std::slice::from_ref(&saved)).running);
+        let held = Line { held: true, ..notice(3, "secret saved: a", None) };
+        let state = replay(&[you(2, false), held]);
+        assert_eq!((state.running, state.held), (true, 1));
+        assert!(!opens_turn(&notice(1, "secret saved: a", Some(7))));
+        assert!(!opens_turn(&Line::notice(1, 1, "secret saved: a")));
+    }
+
+    #[test]
+    fn noted_tells_the_declined_and_the_routines_saved_ones_after_the_last_opener() {
+        let lines = [
+            notice(1, "secret not given: old", None),
+            you(2, false),
+            answer(3),
+            notice(4, "asks for a secret: a", None),
+            notice(5, "secret not given: a", None),
+            notice(6, "secret saved: b", Some(7)),
+        ];
+        assert_eq!(noted(&lines), ["The user did not give: a.", "The user saved the secrets you asked for: b."]);
+        let mut after = lines.to_vec();
+        after.push(you(7, false));
+        assert_eq!(noted(&after), Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_chat_asks_saved_notice_is_an_opener_so_nothing_before_it_is_noted() {
+        let lines = [notice(1, "secret not given: a", None), notice(2, "secret saved: b", None)];
+        assert_eq!(noted(&lines), Vec::<String>::new());
+    }
+}

@@ -2,10 +2,11 @@ pub(in crate::cli) const RECAP_HELP: &str =
     "Prints the Recap panel's summary of what your agents did: `now` (where things stand: what needs
 you first, then what is in progress and done today, a line each), `yesterday` (a stand-up, Done /
 In progress / On you, for the last day with agent activity, so on Monday it is Friday) or `week`
-(per project, the last 7 days). An agent (Claude Code or Codex,
+(per project, the last 7 days). An agent (Claude Code, Codex, GitHub Copilot CLI or opencode,
 set in Settings > Agents > Recap) reads a dossier cornercase builds from the journal of your
-agent conversations and writes it in the background; it runs without a pane, reads transcripts
-and `cornercase search`, and changes no project. The text names each conversation as
+agent conversations and writes it in the background; it runs without a pane and changes no
+project. Claude Code and Codex may also read transcripts and run `cornercase search`; GitHub
+Copilot CLI and opencode read the dossier only. The text names each conversation as
 `project > workspace > tab` and each pull request as `#number`.
 
 A current result is printed at once (`now` for 30 minutes, `yesterday` once per day, `week` once

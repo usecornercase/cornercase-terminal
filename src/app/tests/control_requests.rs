@@ -11,7 +11,6 @@ use crate::control::{self as wire, Command, Done, Response};
 use crate::control::{Item, Report};
 use crate::messenger::link::Event as LinkEvent;
 use crate::messenger::{Chat, Message, Order, Update, Via};
-#[cfg(unix)]
 use crate::messenger::{Keyboard, Press};
 use crate::project::Hierarchy;
 #[cfg(unix)]
@@ -518,7 +517,6 @@ fn chat() -> Chat {
     Chat { id: CHAT, user: USER, name: "@ada".into(), paired: 1 }
 }
 
-#[cfg(unix)]
 fn html(order: &Order) -> &str {
     match order {
         Order::Send { text, .. } | Order::Edit { text, .. } => text,
@@ -526,7 +524,6 @@ fn html(order: &Order) -> &str {
     }
 }
 
-#[cfg(unix)]
 fn keyboard(order: &Order) -> &Keyboard {
     static NONE: Keyboard = Vec::new();
     match order {
@@ -535,7 +532,6 @@ fn keyboard(order: &Order) -> &Keyboard {
     }
 }
 
-#[cfg(unix)]
 fn button(order: &Order, text: &str) -> String {
     let key = keyboard(order).iter().flatten().find(|key| key.text.contains(text));
     key.unwrap_or_else(|| panic!("no `{text}` button in {order:?}")).data.clone()
@@ -596,12 +592,10 @@ impl Phone {
         self.message(app, text, None, (CHAT, USER))
     }
 
-    #[cfg(unix)]
     fn replies(&mut self, app: &mut App, to: i64, text: &str) -> i64 {
         self.message(app, text, Some(to), (CHAT, USER))
     }
 
-    #[cfg(unix)]
     fn taps(&self, app: &mut App, message: i64, data: &str) {
         let press = Press { id: format!("q{message}"), chat: CHAT, user: USER, message, data: data.into() };
         update(app, self.via, Update::Press(press));
@@ -639,6 +633,7 @@ mod agents;
 mod api_errors;
 mod arranging;
 mod bot_boundary;
+mod bot_chats;
 mod bots;
 pub(in crate::app::tests) mod build_folders;
 mod changes;

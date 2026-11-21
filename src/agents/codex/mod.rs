@@ -56,6 +56,7 @@ pub(in crate::agents) const HEADLESS: Option<crate::agents::headless::Spec> = So
     recap: true,
     stderr: false,
     prepare: None,
+    ended: None,
 });
 #[cfg(target_os = "linux")]
 const BOT_WHY: &str = "its sandbox cannot reach cornercase";

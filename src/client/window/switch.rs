@@ -9,10 +9,11 @@ use super::{INCOMPATIBLE, Incoming, Next, Received, Window, openers_for, spawn_r
 use crate::client::{Ending, Guard, Link, Target};
 use crate::error::{Error, Result};
 use crate::host::open::Openers;
+use crate::machines::list::{self, Here};
+use crate::machines::{self, Machine};
 use crate::protocol::{self, ClientMessage, MachineOrder, Machines, ServerMessage};
 use crate::remote;
-use crate::remote::machines::{self, Machine};
-use crate::ui::remote::{self as notice, Button, THIS_MACHINE};
+use crate::ui::remote::{self as notice, Button};
 
 const ANSWER_WAIT: Duration = Duration::from_secs(30);
 const NO_ANSWER: &str = "its cornercase server did not answer within 30 s";
@@ -49,19 +50,25 @@ pub(super) enum Pressed {
     Hover(Option<Button>),
 }
 
-pub(super) fn chosen(to: Option<String>, here: &Target, known: Vec<Machine>) -> Option<(Target, bool)> {
-    let Some(destination) = to else {
+pub(super) fn chosen(to: Option<String>, here: &Target, known: &[Machine]) -> Option<(Target, bool)> {
+    let Some(name) = to else {
         return (!matches!(here, Target::Local)).then_some((Target::Local, false));
     };
-    if !machines::valid(&destination) || here.machine() == Some(destination.as_str()) {
+    let machine = machines::accepted(known).find(|machine| machine.name.eq_ignore_ascii_case(&name))?;
+    if here.machine() == Some(machine.destination.as_str()) {
         return None;
     }
-    let machine = known
-        .into_iter()
-        .find(|machine| machine.destination == destination)
-        .unwrap_or_else(|| Machine::never_reached(destination, None));
-    let asks = machine.unreached;
-    Some((Target::Remote(machine.remote()), asks))
+    Some((Target::Remote(machine.remote()), machine.unreached))
+}
+
+pub(super) fn machines_of(list: &[Machine], here: &Target) -> Machines {
+    let known = machines::accepted(list).map(|machine| machine.name.clone()).collect();
+    let named = |destination: &str| {
+        machines::accepted(list)
+            .find(|machine| machine.destination == destination)
+            .map_or_else(|| destination.to_string(), |machine| machine.name.clone())
+    };
+    Machines { here: here.machine().map(named), known }
 }
 
 pub(super) fn pressed(step: &Step, ev: &Event, screen: Rect) -> Option<Pressed> {
@@ -107,37 +114,31 @@ pub(super) fn failure(error: &Error) -> String {
 }
 
 pub(super) fn place(target: &Target) -> &str {
-    target.machine().unwrap_or(THIS_MACHINE)
+    target.machine().unwrap_or(machines::HERE)
 }
 
 impl Window<'_> {
     pub(super) fn machines_at(here: &Target) -> Machines {
-        let known = machines::read(&machines::file()).into_iter().map(|m| m.destination).collect();
-        Machines { here: here.machine().map(str::to_string), known }
+        machines_of(&list::read(&Here::this_computer()), here)
     }
 
-    pub(super) fn remember(&self) {
+    pub(super) fn remember(&self, reconnecting: bool) {
         if let Target::Remote(remote) = &self.target {
-            let _ = machines::remember(&machines::file(), Machine::of(remote));
+            let _ = list::reached(&Here::this_computer(), remote, reconnecting);
         }
     }
 
     pub(super) fn order(&mut self, order: MachineOrder) -> Result<()> {
-        match order {
-            MachineOrder::Forget(destination) => {
-                let _ = machines::forget(&machines::file(), &destination);
-                self.send_out(ClientMessage::Machines(Self::machines_at(&self.target)));
-                Ok(())
-            }
-            MachineOrder::Switch(to) => self.begin(to),
-        }
+        let MachineOrder::Switch(to) = order;
+        self.begin(to)
     }
 
     fn begin(&mut self, to: Option<String>) -> Result<()> {
         if self.switch.is_some() || self.lost.is_some() {
             return Ok(());
         }
-        let Some((to, asks)) = chosen(to, &self.target, machines::read(&machines::file())) else { return Ok(()) };
+        let known = list::read(&Here::this_computer());
+        let Some((to, asks)) = chosen(to, &self.target, &known) else { return Ok(()) };
         let step = if asks { Step::Asking } else { Step::Connecting };
         self.switch = Some(Switch { to, step, hovered: None, left: None, pending: None });
         if !asks {
@@ -212,7 +213,7 @@ impl Window<'_> {
         self.openers = pending.openers;
         self.sync_plugins();
         self.tunnels.sync(self.target.machine(), Instant::now());
-        self.remember();
+        self.remember(false);
         self.send_out(ClientMessage::Machines(Self::machines_at(&self.target)));
         self.report_tunnels();
         self.lost = None;
@@ -284,7 +285,7 @@ impl Window<'_> {
         match next {
             Next::End(_) | Next::Reconnect => switch.left = kept(switch.left.take(), next),
             Next::Show(_) | Next::Machine(_) | Next::Nothing => {}
-            Next::Sound(_) | Next::Open(_) | Next::Browse(_) | Next::Tunnel(_) => return Some(next),
+            Next::Sound(_) | Next::Open(_) | Next::Browse(_) | Next::Tunnel(_) | Next::Link(_) => return Some(next),
         }
         None
     }

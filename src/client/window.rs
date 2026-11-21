@@ -21,7 +21,7 @@ use crate::error::{Error, Result};
 use crate::graphics::Support;
 use crate::graphics::detect::{self, Facts, Outer};
 use crate::host::notify::{self, Channel};
-use crate::host::open::{Browse, Failed, Open, Opener, Openers};
+use crate::host::open::{Browse, Failed, Link as OpenLink, Open, Opener, Openers};
 use crate::host::sound::{self, Cue, Player};
 use crate::host::theme::HostTheme;
 use crate::paths;
@@ -63,6 +63,7 @@ enum Next {
     Browse(Browse),
     Machine(MachineOrder),
     Tunnel(TunnelOrder),
+    Link(OpenLink),
     Nothing,
 }
 
@@ -79,6 +80,7 @@ fn next(received: Received, reconnects: bool) -> Result<Next> {
         Received::Message(ServerMessage::Browse(browse)) => Next::Browse(browse),
         Received::Message(ServerMessage::Machine(order)) => Next::Machine(order),
         Received::Message(ServerMessage::Tunnel(order)) => Next::Tunnel(order),
+        Received::Message(ServerMessage::Link(link)) => Next::Link(link),
         Received::Message(ServerMessage::Detached | ServerMessage::Shutdown) | Received::Ended => {
             Next::End(Ending::Detached)
         }
@@ -167,7 +169,7 @@ impl Window<'_> {
     fn link(&mut self, link: Link) -> Result<()> {
         self.generation = self.next_id();
         let Link { reader, writer, guard } = link;
-        self.remember();
+        self.remember(self.lost.is_some());
         let hello = self.hello(&self.target, &self.openers)?;
         let out = spawn_writer(writer);
         let _ = out.send(ClientMessage::Hello(Box::new(hello)));
@@ -287,13 +289,9 @@ impl Window<'_> {
                     player.play(&cue, Instant::now());
                 }
             }
-            Next::Open(open) => {
-                let (tx, generation) = (self.tx.clone(), self.generation);
-                self.openers.open(&open, move |failed| {
-                    let _ = tx.send(Incoming::OpenFailed(generation, failed));
-                });
-            }
+            Next::Open(open) => self.openers.open(&open, self.report_failure()),
             Next::Browse(browse) => self.browse(browse),
+            Next::Link(link) => self.open_link(&link),
             Next::Tunnel(order) => {
                 self.tunnels.order(order, Instant::now());
                 self.report_tunnels();
@@ -304,11 +302,21 @@ impl Window<'_> {
         Ok(None)
     }
 
-    fn browse(&mut self, browse: Browse) {
+    fn report_failure(&self) -> impl FnOnce(Failed) + Send + 'static {
         let (tx, generation) = (self.tx.clone(), self.generation);
-        let failed = move |failed| {
+        move |failed| {
             let _ = tx.send(Incoming::OpenFailed(generation, failed));
-        };
+        }
+    }
+
+    fn open_link(&self, link: &OpenLink) {
+        if matches!(self.target, Target::Local) {
+            self.openers.link(link, self.report_failure());
+        }
+    }
+
+    fn browse(&mut self, browse: Browse) {
+        let failed = self.report_failure();
         if matches!(self.target, Target::Local) {
             return self.openers.browse(browse, failed);
         }

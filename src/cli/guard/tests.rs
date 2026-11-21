@@ -34,6 +34,22 @@ fn refused(args: &[&str]) -> Option<String> {
 #[case::proxy(&["proxy"], "a bot cannot attach as a window")]
 #[case::remote_window(&["remote", "vps"], "a bot cannot attach as a window")]
 #[case::server(&["server"], "a bot cannot run cornercase's server")]
+#[case::give(&["bot", "secret", "give", "prs", "3"], "a bot cannot give or decline what a bot asks for")]
+#[case::decline(&["bot", "secret", "decline", "prs", "3"], "a bot cannot give or decline what a bot asks for")]
+#[case::plugin_enable(&["plugin", "enable", "x"], crate::bots::NO_PLUGINS)]
+#[case::plugin_install(&["plugin", "install", "x"], crate::bots::NO_PLUGINS)]
+#[case::plugin_run(&["plugin", "run", "x", "y", "--project", "1"], crate::bots::NO_PLUGINS)]
+#[case::plugin_windows(&["plugin", "windows"], crate::bots::NO_PLUGINS)]
+#[case::machines_add(&["machines", "add", "vps", "me@vps"], crate::bots::NO_MACHINES)]
+#[case::machines_update(&["machines", "update", "vps"], crate::bots::NO_MACHINES)]
+#[case::machines_remove(&["machines", "remove", "vps"], crate::bots::NO_MACHINES)]
+#[case::machines_hide(&["machines", "hide", "vps"], crate::bots::NO_MACHINES)]
+#[case::machines_show(&["machines", "show", "all"], crate::bots::NO_MACHINES)]
+#[case::remember(&["remote", "--remember", "vps"], crate::bots::NO_MACHINES)]
+#[case::remember_with_a_command(&["remote", "--remember", "vps", "--command", "cc"], crate::bots::NO_MACHINES)]
+#[case::forget(&["remote", "--forget", "vps"], crate::bots::NO_MACHINES)]
+#[case::tunnel_open(&["tunnel", "open", "5173"], crate::bots::NO_TUNNELS)]
+#[case::tunnel_hold(&["tunnel", "hold", "5173"], crate::bots::NO_TUNNELS)]
 fn a_bot_is_refused(#[case] args: &[&str], #[case] why: &str) {
     let found = refused(args).unwrap_or_else(|| panic!("{args:?} was allowed"));
     assert!(found.starts_with(why), "{found}");
@@ -75,6 +91,12 @@ fn the_refusal_names_the_flags_that_take_a_place() {
 #[case::export(&["config", "export"])]
 #[case::import_preview(&["config", "import", "/x", "--preview"])]
 #[case::known_machines(&["remote", "--known"])]
+#[case::ask(&["bot", "secret", "ask", "pw", "--about", "to log in"])]
+#[case::plugin_list(&["plugin", "list"])]
+#[case::plugin_status(&["plugin", "status"])]
+#[case::machines_list(&["machines"])]
+#[case::machines_retry(&["machines", "retry"])]
+#[case::tunnels(&["tunnels"])]
 fn a_bot_may_name_its_place_or_use_what_needs_none(#[case] args: &[&str]) {
     assert_eq!(refused(args), None, "{args:?}");
 }

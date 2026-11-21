@@ -1,3 +1,4 @@
+import type { Button as RoutineButton } from './botroutines';
 import type { Tree } from './data';
 import type { KeysGroup } from './keys';
 import type { Context, Place, Shell } from './programs';
@@ -163,6 +164,7 @@ export type Target =
 export type PaneAction = 'split right' | 'split down' | 'send right-clicks to the pane' | 'use this menu on right-click' | 'close pane';
 
 export type MenuAction =
+  | { kind: 'routine'; bot: string; entry: number; button: RoutineButton }
   | { kind: 'rename'; target: Target }
   | { kind: 'moveToGroup'; project: number }
   | { kind: 'setGroup'; project: number; group: number | null }
@@ -194,7 +196,7 @@ export type MenuAction =
 
 export type HelpItem = 'tour' | 'catalogue' | 'docs' | 'keys' | 'bug';
 
-export type MoreItem = 'settings' | 'usage' | 'processes' | 'new bot…' | 'quit';
+export type MoreItem = 'settings' | 'usage' | 'processes' | 'new bot…' | 'queue' | 'quit';
 
 export interface PickItem {
   value: string;
@@ -268,6 +270,7 @@ export type Overlay =
   | import('./queue').QueueForm
   | import('./botform').BotForm
   | import('./botroutines').BotRoutinesDialog
+  | import('./queuelist').QueueListDialog
   | SettingsOverlay
   | IssuesOverlay;
 

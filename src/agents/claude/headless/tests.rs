@@ -166,6 +166,20 @@ mod the_dashed_names {
     }
 }
 
+mod the_secrets {
+    use super::super::rule_path;
+    use super::model::{ask, rules};
+    use crate::agents::headless::args_of;
+
+    #[test]
+    fn a_bot_may_neither_write_its_secrets_nor_read_the_key() {
+        let args = args_of(&super::super::command("claude", &ask(&[])));
+        let denied = rules(&args, "--disallowedTools");
+        assert!(denied.contains(&format!("Edit({}/secrets)", rule_path("/b/prs", cfg!(windows)))), "{denied:?}");
+        assert!(denied.contains(&format!("Read({})", rule_path("/b.key", cfg!(windows)))), "{denied:?}");
+    }
+}
+
 mod the_brief {
     use super::model::{allows, ask};
     use crate::agents::headless::Access;

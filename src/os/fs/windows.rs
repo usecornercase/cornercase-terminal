@@ -124,6 +124,11 @@ fn written(meta: &Metadata) -> Duration {
     meta.modified().ok().and_then(|time| time.duration_since(UNIX_EPOCH).ok()).unwrap_or_default()
 }
 
+#[expect(clippy::unnecessary_wraps, reason = "a directory sync can fail on Unix, so every caller handles an error")]
+pub(crate) fn sync_dir(_dir: &Path) -> io::Result<()> {
+    Ok(())
+}
+
 #[expect(clippy::unnecessary_wraps, reason = "setting a mode can fail on Unix, so every caller handles an error")]
 pub(crate) fn set_mode(_path: impl AsRef<Path>, _mode: u32) -> io::Result<()> {
     Ok(())

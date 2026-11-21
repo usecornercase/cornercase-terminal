@@ -16,7 +16,7 @@ fn you(text: &str, stamp: &str) -> ChatEntry {
 }
 
 fn bot(text: &str) -> ChatEntry {
-    ChatEntry::Bot { head: "prs · 09:12".into(), body: markdown(text) }
+    ChatEntry::Bot { id: 9, head: "prs · 09:12".into(), body: markdown(text) }
 }
 
 fn steps(texts: &[&str], open: bool) -> ChatEntry {
@@ -144,6 +144,40 @@ fn a_link_in_an_answer_is_found_under_a_click() {
     assert_eq!(bots::chat::link_at(row, 0), None);
 }
 
+mod whole_address {
+    use super::*;
+
+    const SHORT: &str = "https://example.com/a";
+    const LONG: &str = "https://example.com/a/b/c";
+
+    #[test]
+    fn an_address_drawn_whole_is_kept_even_when_a_longer_one_starts_with_it() {
+        assert_eq!(whole_address(SHORT, [LONG, &format!("see {SHORT}.")]).as_deref(), Some(SHORT));
+    }
+
+    #[test]
+    fn a_piece_cut_by_the_wrap_gives_the_newest_answer_that_holds_it_whole() {
+        let older = "https://example.com/a/older";
+        let found = whole_address("https://example.com/a/", [&format!("([docs]({LONG}))") as &str, older]);
+        assert_eq!(found.as_deref(), Some(LONG));
+    }
+
+    #[test]
+    fn a_piece_no_answer_holds_finds_nothing() {
+        assert_eq!(whole_address("https://other.dev/x", [LONG]), None);
+    }
+
+    #[rstest]
+    #[case::bold("**https://example.com/a**", SHORT)]
+    #[case::italic_then_a_full_stop("_https://example.com/a_.", SHORT)]
+    #[case::bold_italic("***https://example.com/a***", SHORT)]
+    #[case::strikethrough("~~https://example.com/a~~", SHORT)]
+    #[case::an_asterisk_of_the_address_itself("https://example.com/a*", "https://example.com/a*")]
+    fn emphasis_around_an_address_is_not_part_of_it(#[case] word: &str, #[case] expected: &str) {
+        assert_eq!(whole_address(SHORT, [word]).as_deref(), Some(expected));
+    }
+}
+
 #[test]
 fn the_retry_button_is_only_on_the_error_row() {
     let rows = chat_rows(&[ChatEntry::Error { id: 3, text: "boom".into(), retry: true }], CHAT_W - 2, TONE);
@@ -232,7 +266,7 @@ fn run_block() -> RunBlock {
         first: 4,
         steps: vec!["cornercase status --json".into(), "gh pr list".into()],
         open: false,
-        answer: Some(("prs · 09:05".into(), markdown("Two are **blocked**:\n\n- #482 waits for a review"))),
+        answer: Some((5, "prs · 09:05".into(), markdown("Two are **blocked**:\n\n- #482 waits for a review"))),
         error: None,
         again: false,
         end: None,
@@ -389,6 +423,105 @@ fn a_routine_row_of_the_card_is_a_target_on_both_its_rows() {
     assert_ne!(colour(&make(None), value), Color::Cyan);
 }
 
+fn two_routines(first: &str) -> BotCard {
+    let routine = |id, label, text: &str| CardRow { routine: Some(id), ..CardRow::new(label, text) };
+    BotCard {
+        name: "prs".into(),
+        rows: vec![
+            CardRow::new("agent", "Claude Code"),
+            routine(7, "routine", first),
+            routine(7, "", "next Mon 09:00"),
+            routine(8, "routine", "Nightly"),
+            routine(8, "", "next Tue 09:00"),
+        ],
+    }
+}
+
+fn card_view(card: &BotCard, hover: Option<Position>, overlay: Option<Overlay>) -> View<'_> {
+    View { bot_card: Some(card.clone()), has_project: true, hover, overlay, ..view(&["cornercase"]) }
+}
+
+#[test]
+fn a_hovered_routine_shows_its_menu_button_at_the_end_of_its_first_row() {
+    let card = two_routines("Review PRs");
+    let a = areas();
+    let list = a.workspaces_list;
+    let menu = card_menu(list, &card, 7, 1);
+    assert_eq!(menu.y, list.y + 2);
+    assert_eq!(menu, row_menu_button(Rect::new(list.x + 1, menu.y, list.width - 1, 1), 1));
+    let glyph = Position::new(menu.right() - 1, menu.y);
+    let cell = |view: &View, pos: Position| render(view).backend().buffer()[pos].clone();
+    assert_eq!(cell(&card_view(&card, None, None), glyph).symbol(), " ");
+    let second = Position::new(list.x + 4, list.y + 3);
+    let shown = cell(&card_view(&card, Some(second), None), glyph);
+    assert_eq!((shown.symbol(), shown.fg), (ROW_MENU_ICON, Color::DarkGray));
+    let on = cell(&card_view(&card, Some(glyph), None), glyph);
+    assert_eq!((on.symbol(), on.fg), (ROW_MENU_ICON, Color::Cyan));
+    let other = Position::new(menu.right() - 1, list.y + 4);
+    assert_eq!(cell(&card_view(&card, Some(second), None), other).symbol(), " ");
+    let menu_overlay = Overlay::Menu { at: second, items: vec!["pause".into()], disabled: Vec::new() };
+    assert_eq!(cell(&card_view(&card, Some(second), Some(menu_overlay)), glyph).symbol(), " ");
+    let short = Rect::new(list.x, list.y, list.width, 3);
+    assert!(card_menu(short, &card, 7, 1).is_empty());
+}
+
+#[test]
+fn the_button_is_where_the_view_draws_it_and_nowhere_else() {
+    let card = two_routines("Review PRs");
+    let list = areas().workspaces_list;
+    let menu = card_menu(list, &card, 7, 1);
+    let second = Position::new(list.x + 4, list.y + 3);
+    assert_eq!(card_buttons(&card_view(&card, Some(second), None), list, 1), [(7, menu)]);
+    assert_eq!(card_buttons(&card_view(&card, None, None), list, 1).len(), 0);
+    let covered = Overlay::Menu { at: second, items: vec!["pause".into()], disabled: Vec::new() };
+    assert_eq!(card_buttons(&card_view(&card, Some(second), Some(covered)), list, 1).len(), 0);
+}
+
+#[test]
+fn a_compact_card_shows_every_routines_menu_button_without_hover() {
+    let routine = |id, label, text: &str| CardRow { routine: Some(id), ..CardRow::new(label, text) };
+    let card = BotCard {
+        name: "prs".into(),
+        rows: vec![
+            routine(7, "routine", &"x".repeat(40)),
+            routine(7, "", "next Mon 09:00"),
+            routine(8, "routine", "Nightly"),
+            routine(8, "", "next Tue 09:00"),
+        ],
+    };
+    let list = Rect::new(0, 3, 60, 8);
+    let view = card_view(&card, None, None);
+    let buttons = card_buttons(&view, list, 2);
+    assert_eq!(buttons.iter().map(|(id, _)| *id).collect::<Vec<_>>(), [7, 8]);
+    assert!(buttons.iter().all(|(_, rect)| !rect.is_empty() && rect.height == 2));
+    assert_eq!(card_buttons(&view, list, 1).len(), 0, "a wide card still shows it only under the pointer");
+}
+
+#[test]
+fn a_hovered_routine_cuts_its_name_before_its_menu_button_and_no_other_does() {
+    let card = two_routines(&"x".repeat(40));
+    let card = BotCard {
+        rows: card
+            .rows
+            .into_iter()
+            .map(|row| if row.value == "Nightly" { CardRow { value: "y".repeat(40), ..row } } else { row })
+            .collect(),
+        ..card
+    };
+    let a = areas();
+    let list = a.workspaces_list;
+    let menu = card_menu(list, &card, 7, 1);
+    let hover = Position::new(list.x + 4, list.y + 3);
+    let at = |x: u16, y: u16| {
+        render(&card_view(&card, Some(hover), None)).backend().buffer()[Position::new(x, y)].symbol().to_string()
+    };
+    assert_eq!([at(menu.x - 2, menu.y), at(menu.x - 1, menu.y)], ["…", " "]);
+    let other = list.y + 4;
+    assert_eq!([at(menu.x - 2, other), at(menu.x, other)], ["y", "y"], "the other routine's name is not cut");
+    let resting = render(&card_view(&card, None, None));
+    assert_ne!(resting.backend().buffer()[Position::new(menu.x, menu.y)].symbol(), " ");
+}
+
 fn agent_line(kind: ChatAgentKind, text: &str, body: Vec<Text<'static>>, link: Option<u64>) -> ChatEntry {
     ChatEntry::Agent(ChatAgentLine { id: 40, state: kind, text: text.into(), body, open: false, link })
 }
@@ -458,4 +591,16 @@ fn a_long_notice_wraps_and_keeps_its_reason() {
     let joined: String =
         rows.iter().map(|row| row.line.spans.iter().map(|s| s.content.as_ref()).collect::<String>()).collect();
     assert!(rows.len() > 1 && joined.contains("20 agents"), "{joined}");
+}
+
+#[test]
+fn an_ask_waiting_has_a_give_button_after_its_text() {
+    let rows = chat_rows(&[ChatEntry::Asking { text: "asks for a secret: pw".into(), ask: 4 }], CHAT_W - 2, TONE);
+    let (hit, cols) = rows[0].hit.clone().expect("a button");
+    assert_eq!(hit, RowHit::Give(4));
+    let text: String = rows[0].line.spans.iter().map(|span| span.content.as_ref()).collect();
+    let start = text.find(" give… ").expect("the button");
+    assert_eq!(usize::from(cols.start), text[..start].chars().count());
+    assert_eq!(usize::from(cols.end - cols.start), " give… ".chars().count());
+    assert!(text.contains("── asks for a secret: pw ──"), "{text}");
 }

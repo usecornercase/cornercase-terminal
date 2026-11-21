@@ -92,6 +92,16 @@ fn editing_shows_save_and_the_agent_in_grey() {
 }
 
 #[test]
+fn editing_lists_the_secrets_by_name_with_a_manage_button_and_a_new_bot_has_no_row() {
+    let bot = crate::bots::sample("prs", "PRs");
+    let mut form = Form::editing(agents(), &bot, "Review my pull requests.");
+    form.secrets = String::from("2 saved: campus-user, campus-password");
+    insta::assert_snapshot!(drawn(form).backend());
+    let fresh = format!("{}", drawn(Form::new(agents(), "claude")).backend());
+    assert!(!fresh.contains("Secrets") && !fresh.contains("manage…"), "{fresh}");
+}
+
+#[test]
 fn the_border_is_drawn_at_the_corners_of_its_area() {
     let v = shown(Form::new(agents(), "claude"));
     let (top_left, bottom_right) = corners_of_its_area(&v);
@@ -121,4 +131,23 @@ fn the_form_has_the_follow_box() {
     form.focus_on(Field::Follow);
     let off = format!("{}", drawn(form).backend());
     assert!(off.contains("[ ] tell it when an agent it starts finishes"), "{off}");
+}
+
+#[test]
+fn with_no_chat_app_paired_the_chat_apps_row_says_where_to_pair_one_in_grey() {
+    let view = shown(Form::new(agents(), "claude"));
+    let t = render_sized(&view, 100, 24);
+    let line = |y: u16| row_text(&t, Rect::new(0, y, 100, 1));
+    let y = (0..24).find(|&y| line(y).contains("Chat apps pair Telegram or Discord")).expect("the row");
+    let x = line(y).chars().position(|c| c == 'p').and_then(|x| u16::try_from(x).ok()).expect("its text");
+    assert_eq!(t.backend().buffer()[(x, y)].fg, view.muted);
+}
+
+#[test]
+fn a_paired_chat_app_makes_the_chat_apps_row_a_list() {
+    let mut form = Form::new(agents(), "claude");
+    form.chat_ready = true;
+    form.focus_on(Field::ChatApps);
+    form.chat_apps.open();
+    insta::assert_snapshot!(drawn(form).backend());
 }

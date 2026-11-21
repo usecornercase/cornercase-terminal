@@ -12,7 +12,8 @@ use crate::project::Hierarchy;
 
 pub(super) const GONE: &str = "That agent is gone. /status lists the agents now.";
 const HELP: &str = "/status every agent and what it is doing\n/new start an agent\n/away message me here when an \
-    agent needs you or finishes\n/back stop\n\nReply to one of my messages to write to that agent.";
+    agent needs you or finishes\n/back stop\n/bots every bot and what it is doing\n/bot NAME TEXT write to a bot\n\n\
+    Reply to one of my messages to write to that agent or bot.";
 const STALE: &str = "this button is from before cornercase restarted: /status lists the agents now";
 const ONLY_TEXT: &str = "I only read text messages.";
 const NO_AGENT: &str = "No agent is running. /new starts one.";
@@ -98,6 +99,7 @@ impl App {
             Route::Pane(pane) => self.deliver(via, pane, message.text.clone(), message.id),
             Route::Branch(draft) => self.draft_branch(via, draft, message.text.trim(), message.id),
             Route::Prompt(draft) => self.draft_prompt(via, draft, message, area),
+            Route::Bot(key) => self.write_to_bot(via, key, message.text.clone(), super::bots::Written::of(message)),
         }
     }
 
@@ -120,6 +122,8 @@ impl App {
                 }
             }
             "start" => self.say(via, welcome(via), Delivery::default()),
+            "bots" => self.bots_command(via, None),
+            "bot" => self.bot_command(via, message),
             _ => self.say(via, HELP.into(), Delivery { reply_to: Some(message.id), ..Delivery::default() }),
         }
     }
@@ -226,6 +230,10 @@ impl App {
                 self.answer_press(via, &press.id, "");
                 self.draft_choice(via, draft, choice, press.message);
             }
+            Tap::Bot(key) => {
+                self.answer_press(via, &press.id, "");
+                self.tap_bot(via, key, press.chat);
+            }
         }
     }
 
@@ -271,5 +279,6 @@ fn tap_name(tap: &Tap) -> &'static str {
         Tap::Deliver(..) => "deliver",
         Tap::New => "new",
         Tap::Draft(..) => "new agent",
+        Tap::Bot(_) => "bot",
     }
 }

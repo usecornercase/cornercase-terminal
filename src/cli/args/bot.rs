@@ -3,10 +3,13 @@ use clap::{Args, Subcommand};
 use super::Print;
 use crate::cli::help::{
     BOT_ABOUT_HELP, BOT_AGENTS_HELP, BOT_EDIT_HELP, BOT_HISTORY_HELP, BOT_ID_HELP, BOT_NEW_HELP, BOT_SAY_HELP,
-    BOT_SETUP_HELP,
+    BOT_SECRET_ASK_HELP, BOT_SECRET_DECLINE_HELP, BOT_SECRET_GET_HELP, BOT_SECRET_GIVE_HELP, BOT_SECRET_HELP,
+    BOT_SECRET_LIST_HELP, BOT_SECRET_REMOVE_HELP, BOT_SECRET_SET_HELP, BOT_SETUP_HELP,
 };
 
 const ACCESS: [&str; 2] = ["cornercase", "full"];
+const CHAT_APPS_HELP: &str =
+    "away (the default): its answers reach Telegram and Discord only while you are away; always; off";
 
 #[derive(Debug, Args)]
 pub(crate) struct BotArgs {
@@ -42,6 +45,92 @@ pub(crate) enum BotAction {
     Stop(Target),
     #[command(about = "Mark the bot's answers as read")]
     Seen(Target),
+    #[command(about = "The passwords and tokens a bot keeps, encrypted, for itself", after_help = BOT_SECRET_HELP)]
+    Secret(SecretArgs),
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct SecretArgs {
+    #[command(subcommand)]
+    pub(crate) action: SecretAction,
+}
+
+#[derive(Debug, Subcommand)]
+pub(crate) enum SecretAction {
+    #[command(about = "Save a secret for a bot, reading its value from standard input", after_help = BOT_SECRET_SET_HELP)]
+    Set(SecretSetArgs),
+    #[command(about = "List the names of a bot's secrets and when each was saved", after_help = BOT_SECRET_LIST_HELP)]
+    List(SecretListArgs),
+    #[command(about = "Remove a secret of a bot, or all of them", after_help = BOT_SECRET_REMOVE_HELP)]
+    Remove(SecretRemoveArgs),
+    #[command(about = "Print one of the secrets of the bot that runs this; only that bot may", after_help = BOT_SECRET_GET_HELP)]
+    Get(SecretGetArgs),
+    #[command(about = "Ask the user for secrets the bot that runs this lacks; only that bot may", after_help = BOT_SECRET_ASK_HELP)]
+    Ask(SecretAskArgs),
+    #[command(about = "Give the values a bot asked for, reading them from standard input", after_help = BOT_SECRET_GIVE_HELP)]
+    Give(SecretAnswerArgs),
+    #[command(about = "Turn down what a bot asked for", after_help = BOT_SECRET_DECLINE_HELP)]
+    Decline(SecretAnswerArgs),
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct SecretAskArgs {
+    #[arg(value_name = "NAME", required = true, num_args = 1..=4, help = "1 to 4 names of a-z, 0-9, - and _, such as campus-password")]
+    pub(crate) names: Vec<String>,
+    #[arg(long, value_name = "TEXT", help = "Why the bot needs them, in one line of at most 200 characters")]
+    pub(crate) about: String,
+    #[arg(long, help = "Ask again for names already saved, to replace them")]
+    pub(crate) replace: bool,
+    #[command(flatten)]
+    pub(crate) print: Print,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct SecretAnswerArgs {
+    #[arg(value_name = "BOT", help = BOT_ID_HELP)]
+    pub(crate) bot: String,
+    #[arg(value_name = "ASK", help = "The ask's number, from its `ask` in cornercase status --app or bot history")]
+    pub(crate) ask: u64,
+    #[command(flatten)]
+    pub(crate) print: Print,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct SecretSetArgs {
+    #[arg(value_name = "BOT", help = BOT_ID_HELP)]
+    pub(crate) bot: String,
+    #[arg(value_name = "NAME", help = "1 to 40 characters of a-z, 0-9, - and _, such as campus-password")]
+    pub(crate) name: String,
+    #[command(flatten)]
+    pub(crate) print: Print,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct SecretListArgs {
+    #[arg(value_name = "BOT", help = "The bot's id or its name [default: the bot that runs this]")]
+    pub(crate) bot: Option<String>,
+    #[command(flatten)]
+    pub(crate) print: Print,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct SecretRemoveArgs {
+    #[arg(value_name = "BOT", help = BOT_ID_HELP)]
+    pub(crate) bot: String,
+    #[arg(value_name = "NAME", required_unless_present = "all", conflicts_with = "all", help = "The secret to remove")]
+    pub(crate) name: Option<String>,
+    #[arg(long, help = "Remove every secret, even a file that cannot be read")]
+    pub(crate) all: bool,
+    #[command(flatten)]
+    pub(crate) print: Print,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct SecretGetArgs {
+    #[arg(value_name = "NAME", help = "The secret to read")]
+    pub(crate) name: String,
+    #[command(flatten)]
+    pub(crate) print: Print,
 }
 
 #[derive(Debug, Args)]
@@ -83,6 +172,8 @@ pub(crate) struct NewArgs {
         help = "on (the default): the bot is told when an agent it starts finishes, and answers in its chat; off: it is not"
     )]
     pub(crate) follow: Option<String>,
+    #[arg(long, value_name = "WHEN", value_parser = crate::bots::ChatApps::NAMES, help = CHAT_APPS_HELP)]
+    pub(crate) chat_apps: Option<String>,
     #[arg(
         long,
         value_name = "TEXT",
@@ -116,6 +207,8 @@ pub(crate) struct EditArgs {
         help = "on: the bot is told when an agent it starts finishes, and answers in its chat; off: it is not; from its next turn"
     )]
     pub(crate) follow: Option<String>,
+    #[arg(long, value_name = "WHEN", value_parser = crate::bots::ChatApps::NAMES, help = CHAT_APPS_HELP)]
+    pub(crate) chat_apps: Option<String>,
     #[arg(long, value_name = "TEXT", help = "What the bot is for, written to bot.md; an empty one empties it")]
     pub(crate) about: Option<String>,
     #[command(flatten)]

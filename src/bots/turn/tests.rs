@@ -20,6 +20,7 @@ fn input(folder: &Path, conversation: Option<&str>) -> Input {
         bin: None,
         timeout: Duration::from_secs(1),
         repositories: Vec::new(),
+        key: None,
     }
 }
 
@@ -282,4 +283,28 @@ mod the_git_of_a_turn {
         let projects = [project(&real.join("prs/x").display().to_string(), Vec::new()), project("/w/shop", Vec::new())];
         assert_eq!(repositories(&projects, Some(&link)), [PathBuf::from("/w/shop")]);
     }
+}
+
+#[test]
+fn run_refuses_a_comma_path_before_it_starts_anything() {
+    let made = TempDir::new();
+    let found = input(&made.path().join("a,b"), None);
+    let watch = Watch { progress: std::sync::Arc::default(), steps: None, running: None };
+    let error = run(&found, watch).expect_err("refused");
+    assert!(error.to_string().contains("holds a comma"), "{error}");
+}
+
+#[test]
+fn a_comma_in_a_path_claude_names_in_its_rules_stops_the_turn() {
+    let made = TempDir::new();
+    let mut found = input(&made.path().join("a,b"), None);
+    assert!(comma_in_rules(&found).is_some());
+    found.folder = made.path().join("prs");
+    found.key = Some(made.path().join("k,ey"));
+    assert!(comma_in_rules(&found).is_some());
+    found.bot.agent = String::from("gemini");
+    assert!(comma_in_rules(&found).is_none());
+    found.bot.agent = String::from("claude");
+    found.key = None;
+    assert!(comma_in_rules(&found).is_none());
 }

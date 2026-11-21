@@ -91,12 +91,67 @@ mod set {
         let list =
             rig.ask(&json!({"action": "set", "entry": {"name": "vps", "destination": "me@vps.lan", "create": true}}));
 
-        let added =
-            Machine {
-                name: "vps".into(), icon: "☁".into(), destination: "me@vps.lan".into(), folder: "~/code".into()
-            };
+        let added = Machine {
+            name: "vps".into(),
+            icon: "☁".into(),
+            destination: "me@vps.lan".into(),
+            folder: "~/code".into(),
+            unreached: true,
+            ..Machine::default()
+        };
         assert_eq!(list.expect("added").machines[0].state, State::Connecting);
         assert_eq!(rig.saved(), [added]);
+    }
+
+    #[test]
+    fn a_machine_made_over_the_request_is_marked_and_takes_its_command_and_shown() {
+        let mut rig = Rig::new(Vec::new(), There::Missing);
+
+        let entry = json!({"name": "vps", "destination": "me@vps.lan", "command": " ~/bin/cc ", "shown": false});
+        let list = rig.ask(&json!({"action": "set", "entry": entry})).expect("added");
+
+        let saved = rig.saved();
+        assert_eq!((saved[0].command.as_deref(), saved[0].shown, saved[0].unreached), (Some("~/bin/cc"), false, true));
+        assert_eq!((list.machines[0].shown, rig.links()), (false, Vec::<u64>::new()));
+    }
+
+    #[test]
+    fn an_edit_of_the_folder_keeps_the_mark_and_one_of_the_destination_sets_it() {
+        let reached = machine("vps", "vps.lan");
+        let mut rig = Rig::new(vec![reached], There::Missing);
+
+        rig.ask(&json!({"action": "set", "entry": {"name": "vps", "folder": "/srv"}})).expect("edited");
+        assert!(!rig.saved()[0].unreached);
+        rig.ask(&json!({"action": "set", "entry": {"name": "vps", "destination": "new.lan"}})).expect("edited");
+        assert!(rig.saved()[0].unreached);
+        rig.ask(&json!({"action": "set", "entry": {"name": "vps", "folder": "/opt"}})).expect("edited");
+
+        assert!(rig.saved()[0].unreached);
+    }
+
+    #[test]
+    fn an_empty_command_clears_it_and_shown_turns_the_link_off() {
+        let with_command = Machine { command: Some("~/bin/cc".into()), ..machine("vps", "vps.lan") };
+        let mut rig = Rig::new(vec![with_command], There::Missing);
+        assert_eq!(rig.links().len(), 1);
+
+        rig.ask(&json!({"action": "set", "entry": {"name": "vps", "command": "", "shown": false}})).expect("edited");
+
+        assert_eq!((rig.saved()[0].command.clone(), rig.saved()[0].shown), (None, false));
+        rig.refresh(Duration::from_secs(2));
+        assert_eq!(rig.links(), Vec::<u64>::new());
+    }
+
+    #[test]
+    fn a_command_with_a_control_character_is_malformed() {
+        let mut rig = Rig::new(Vec::new(), There::Missing);
+
+        let entry = json!({"name": "vps", "destination": "vps.lan", "command": "cc\u{1b}[2J"});
+
+        assert_eq!(
+            rig.ask(&json!({"action": "set", "entry": entry})),
+            refused("malformed", "a command cannot hold control or invisible characters")
+        );
     }
 
     #[test]
@@ -108,7 +163,7 @@ mod set {
         rig.ask(&edit).expect("edited");
 
         let edited =
-            Machine { name: "box".into(), icon: "▭".into(), destination: "vps.lan".into(), folder: "/srv".into() };
+            Machine { name: "box".into(), icon: "▭".into(), folder: "/srv".into(), ..machine("vps", "vps.lan") };
         assert_eq!(rig.saved(), [edited, machine("pi", "pi.lan")]);
     }
 
@@ -261,6 +316,106 @@ mod update {
 
         assert_eq!(code, "not-found");
         assert!(message.contains("`my vps` has no link until it is fixed"), "{message}");
+    }
+}
+
+mod not_shown {
+    use super::*;
+
+    fn rig() -> Rig {
+        Rig::new(vec![Machine { shown: false, ..machine("vps", "vps.lan") }], There::Missing)
+    }
+
+    #[rstest]
+    #[case::retry(json!({"action": "retry", "entry": "vps"}))]
+    #[case::update(json!({"action": "update", "entry": "vps"}))]
+    fn a_request_for_its_link_is_not_found_and_says_why(#[case] args: Value) {
+        let mut rig = rig();
+
+        let (code, message) = rig.ask(&args).expect_err("refused");
+
+        assert_eq!(code, "not-found");
+        assert!(message.contains("`vps` is hidden here, so it has no link"), "{message}");
+        assert!(message.contains("`cornercase machines show vps` links it again"), "{message}");
+    }
+
+    #[test]
+    fn a_relay_or_a_stats_request_names_it_too() {
+        let rig = rig();
+
+        assert!(rig.app.no_link("VPS").message.contains("is hidden here"));
+        assert!(rig.app.no_link("nobody").message.contains("no machine is called `nobody`"));
+    }
+
+    #[test]
+    fn the_list_says_so() {
+        let mut rig = rig();
+
+        let list = rig.listed();
+
+        assert_eq!((list.machines[0].shown, list.machines[0].state), (false, State::Unreachable));
+    }
+}
+
+mod hiding {
+    use super::*;
+
+    fn written(rig: &Rig) -> (SystemTime, String) {
+        let path = rig.dir.path().join("config.json");
+        let modified = std::fs::metadata(&path).and_then(|meta| meta.modified()).expect("its time");
+        (modified, std::fs::read_to_string(&path).expect("the file"))
+    }
+
+    #[test]
+    fn hide_answers_the_list_and_ends_the_link() {
+        let mut rig = Rig::new(vec![machine("vps", "vps.lan")], There::Missing);
+
+        let list = rig.ask(&json!({"action": "hide", "entry": "VPS"})).expect("hidden");
+
+        assert_eq!((list.machines[0].shown, rig.saved()[0].shown), (false, false));
+        assert_eq!(rig.links(), Vec::<u64>::new());
+        wait_until("its link ends", || rig.seen("end vps.lan") == 1);
+    }
+
+    #[test]
+    fn show_links_it_again() {
+        let mut rig = Rig::new(vec![Machine { shown: false, ..machine("vps", "vps.lan") }], There::Missing);
+
+        let list = rig.ask(&json!({"action": "show", "entry": "vps"})).expect("shown");
+
+        assert!(list.machines[0].shown && rig.saved()[0].shown);
+        assert_eq!((rig.links().len(), rig.seen("start vps.lan")), (1, 1));
+    }
+
+    #[rstest]
+    #[case::hide(json!({"action": "hide", "entry": null}), false)]
+    #[case::show(json!({"action": "show"}), true)]
+    fn without_a_name_does_every_machine(#[case] args: Value, #[case] shown: bool) {
+        let machines = vec![machine("vps", "vps.lan"), Machine { shown: false, ..machine("pi", "pi.lan") }];
+        let mut rig = Rig::new(machines, There::Missing);
+
+        rig.ask(&args).expect("done");
+
+        assert!(rig.saved().iter().all(|machine| machine.shown == shown));
+    }
+
+    #[test]
+    fn an_unknown_name_is_not_found() {
+        let mut rig = Rig::new(vec![machine("vps", "vps.lan")], There::Missing);
+
+        let refusal = rig.ask(&json!({"action": "hide", "entry": "nobody"}));
+
+        assert_eq!(refusal, refused("not-found", "no machine is called `nobody`; `cornercase machines` lists them"));
+    }
+
+    #[test]
+    fn hiding_a_hidden_machine_is_fine_and_writes_nothing() {
+        let mut rig = Rig::new(vec![Machine { shown: false, ..machine("vps", "vps.lan") }], There::Missing);
+        let before = written(&rig);
+
+        rig.ask(&json!({"action": "hide", "entry": "vps"})).expect("nothing to do");
+
+        assert_eq!(written(&rig), before);
     }
 }
 

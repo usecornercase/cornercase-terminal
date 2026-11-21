@@ -1,6 +1,6 @@
 # Bots › The window
 
-Part of [Bots](../bots.md). Code: `app/bots/` (`shown.rs`, `window.rs`, `section.rs`, `talk.rs`, `menu.rs`, `form.rs`, `routines_dialog.rs`), `ui/bots.rs`, `ui/bots/chat.rs`, `ui/bots/card.rs`, `ui/dialog/bot.rs`, `bots/form.rs`, `app/notifications.rs`, `control/status.rs` (#845).
+Part of [Bots](../bots.md). Code: `app/bots/` (`shown.rs`, `window.rs`, `section.rs`, `talk.rs`, `menu.rs`, `form.rs`, `routines_dialog.rs`, `links.rs`), `ui/bots.rs`, `ui/bots/chat.rs`, `ui/bots/card.rs`, `ui/dialog/bot.rs`, `bots/form.rs`, `app/notifications.rs`, `control/status.rs` (#845).
 
 #844 made bots with no face but `cornercase bot …`. The window draws a bot **as a chat** (bubbles, Markdown, what it is doing), never as the agent's interface, since #844 runs the agent without it and keeps the chat in `chat.jsonl`.
 
@@ -24,7 +24,7 @@ The sidebar section, its placement, height rule, saved fold and compact page are
 - **Times** use the window's zone (`App::window_zone`, the queue form's): `HH:MM` today, else `Mon 3 Nov 14:02` (`queue::clock::when`, shared with `cornercase bot history`).
 - **The header** has ` routines ` one cell left of ` new conversation ` (10 cells, cyan, enabled while a turn runs); it opens the bot's routines dialog (see [Bot routines](routines.md)). It is left out when keeping it would leave the name under 12 cells, and ` ⋯ ` still offers `routines…`.
 - **` new conversation `** while a turn runs is dim, and a click says `PRs is answering: stop it first` (#844's `busy` refusal); the menu greys it.
-- **The card** (workspaces column): the name, agent, model (`the agent's own` when unset), effort and account when set, the access (`full access` in red), `made 2026-11-14`; the agents it started that are still running (`started`, see Followed agents below); the folder comes right after the name, since the stacked layout gives the card few rows. Its click targets are the folder (a click opens the open-in menu, or copies the path), the `started` rows (a click shows that tab) and the two rows of a routine (a click opens its routines dialog, selected; the value turns cyan while hovered). The tree layout has no workspaces column, so it has no card.
+- **The card** (workspaces column): the name, agent, model (`the agent's own` when unset), effort and account when set, the access (`full access` in red), `made 2026-11-14`; the agents it started that are still running (`started`, see Followed agents below); the folder comes right after the name, since the stacked layout gives the card few rows. Its click targets are the folder (a click opens the open-in menu, or copies the path), the `started` rows (a click shows that tab) and the two rows of a routine (a click opens its routines dialog, selected; the value turns cyan while hovered; ` ⋯ ` on its first row, or a right click on either, opens the routine's menu, see [Bot routines](routines.md)). The tree layout has no workspaces column, so it has no card.
 
 ## Followed agents in the window (#847)
 
@@ -32,7 +32,7 @@ The chat draws `started`, `finished` and `waiting` lines (`ui/bots/agent.rs`) as
 
 ## Routines in the window (#846)
 
-A routine run's lines are drawn as one block, the section's row shows `next 09:00` while the bot is idle, the card lists the routines, the empty state has a fourth example and the remove dialog names the entries it removes: see [Bot routines](routines.md) (The window). The simulation shows a canned run block and a seeded routine, and runs none; a bot made in its form with For filled in plays a canned setup that schedules a routine. Its bots' entries live in `app.botQueued`, not `app.queued`: the landing's scripted worlds and `queue.test.ts` need an empty project queue, while the card, the sidebar's `next` and the routines dialog need the bot's routine in them too. `pauseQueued`, `removeQueued` and `removal` take the store to act on, so the dialog reuses the Queue tab's code and its undo toast.
+A routine run's lines are drawn as one block, the section's row shows `next 09:00` while the bot is idle, the card lists the routines, the empty state has a fourth example and the remove dialog names the entries it removes: see [Bot routines](routines.md) (The window). The simulation shows a canned run block and a seeded routine, and runs none; a bot made in its form with For filled in plays a canned setup that schedules a routine. Its bots' entries live in `app.botQueued`, not `app.queued`: the landing's scripted worlds and `queue.test.ts` need an empty project queue, while the card, the sidebar's `next` and the routines dialog need the bot's routine in them too. `pauseQueued`, `removeQueued` and `removal` take the store to act on, so the dialog reuses the queue modal's code and its undo toast, and the card's routine menu shares the dialog's (`actOnRoutine` in the simulation).
 
 ## Keys
 
@@ -46,11 +46,21 @@ While a chat shows, every key goes to its input field and **never to a pane**: `
 
 - **The form** (`bots/form.rs` is the model, `ui/dialog/bot.rs` the drawing): Name, Agent, Model, Effort, Account, Access, Follow and What it is for. The agent list is `bot agents`' (`bot_agent_infos`), with the agents that cannot be bots greyed with their `why` (see Dialogs › Disabled options and typed values); the preselected one is `config.agent` when it can be a bot. The model is a combobox that also takes a typed name, `default` meaning the agent's own. Effort shows only for an agent that takes one; Account only when the agent has accounts, as in the queue form (`AgentAccounts`), with the bot's own login preselected when editing. **Access is never chosen for the user when `cornercase` is not offered** (Codex today): ` create ` answers `choose its access` under the form without sending. The note under it has two lines, the full access one in the error colour. ` create ` shows the chat, where a bot made with For sets itself up (#887), and ` save ` of a changed For runs nothing. Server refusals (name taken, 50 bots) show under the form, which stays open; any key clears them.
 - **`edit…`** is the same form with ` save `, the agent grey and skipped by `Tab`. It sends `about` only when the text changed, through `EditBot.about` (contract feature `bot-about`; `bot edit --about TEXT` for programs, checked by the CLI before sending), which writes `bot.md`. A program's own form gets the text it shows from `bot about` (feature `bot-about-read`, #876); the window reads `bot.md` itself, being the server.
+- **Secrets** (#877) are in a dialog of their own, reached from the form's Secrets row (editing only) and the bot's ` ⋯ ` menu (`secrets…`), with a `secrets` row on the card: see [Secrets › The window](secrets.md#the-window). The form's height grew by one row, for that row.
+- **An ask for a secret** (#878): its notice in the chat has a cyan ` give… ` after its text while it waits; the bot's row says `asks for a secret` in the waiting colour and the card has an `asks` row per ask; the dialog (`ui/dialog/bot_ask.rs`) opens by itself in a window that shows that chat with no draft and no other dialog, and from the toast's ` go `. See [Asks](asks.md).
 - **`rename`** is the small name form (a refusal shows in red in it). **`remove…`** asks `Remove bot prs? Its chat, its memory and its folder are deleted. Agents it started keep running.`; while a turn runs its button says ` stop it first ` and stops the turn, keeping the dialog open, and reads ` remove ` again once it ended: the reading where it acts saves a trip to ` stop `.
 
 ## Links
 
-A click on an `http://` or `https://` address in a bot's line **copies** it; why is in [Opening in other apps](../opening-in-other-apps.md). Opening it is a follow-up issue.
+A click on an `http://` or `https://` address in a bot's answer (alone, or as a routine run's answer) does what the window can do (#863):
+
+- **A local window with a desktop** (it sent the default app in its `Hello`) opens **Open link**: who wrote it, the address on up to three rows, `goes to <host>`, and ` copy `, ` open `, ` cancel `. ` open ` (or `Enter`) opens the address in that window's browser; ` copy ` copies it; `Esc`, ` cancel ` or a click outside close it. Removing the bot closes it.
+- **A remote window, the browser, an ssh session or a Linux console** copies the address at once, as before.
+- **An address the window would refuse** (not ASCII, a user name before the host, an IP address spelled as a browser reads another, over 2,048 bytes, a character a URL cannot hold) is copied, with a toast that says why it is not opened.
+- An address longer than the chat is cut across rows; a click on its first row opens it whole (it is found again in the answer that was clicked), a click on a later row does nothing.
+- Links in a followed agent's `finished` message, in your own messages, steps, notices and errors are not clickable.
+
+The limits and why are in [Opening in other apps › A link in a bot's answer](../opening-in-other-apps.md).
 
 ## Compact mode and the phone
 

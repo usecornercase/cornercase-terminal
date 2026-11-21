@@ -3,6 +3,7 @@ use ratatui::layout::{Position, Rect};
 
 use super::App;
 use super::overlay::Overlay;
+use super::toast::Toast;
 use crate::editor::Editor;
 use crate::list::COMBO_ROWS;
 use crate::log;
@@ -23,6 +24,7 @@ impl App {
             settings::Action::AddMachine => self.open_machine_form(None),
             settings::Action::EditMachine(at) => self.open_machine_form(Some(at)),
             settings::Action::RemoveMachine(at) => self.remove_machine_row(at),
+            settings::Action::ShowMachine(at, shown) => self.show_machine_row(at, shown),
             settings::Action::UpdateMachine(at) => {
                 self.follow_machines();
                 if let Some(name) = self.config.machines.get(at).map(|machine| machine.name.clone()) {
@@ -114,6 +116,7 @@ impl App {
     fn machine_step(&mut self, step: Step) {
         match step {
             Step::None => {}
+            Step::Back if self.machine_form().is_some_and(|form| !form.back_to_settings) => self.overlay = None,
             Step::Back => {
                 let was = self.machine_form().and_then(|form| form.was.clone());
                 let row = self.machine_row_of(was.as_ref());
@@ -162,7 +165,12 @@ impl App {
         };
         log::info!("machines", "machine set", name = saved.name, new = added);
         let notice = format!("{} {}", saved.name, if added { "added" } else { "saved" });
-        let row = self.machine_row_of(Some(&saved));
-        self.back_to_machines(&row, Some(notice));
+        if form.back_to_settings {
+            let row = self.machine_row_of(Some(&saved));
+            self.back_to_machines(&row, Some(notice));
+        } else {
+            self.overlay = None;
+            self.messages.toast = Some(Toast::new(notice, ui::ToastIcon::Check));
+        }
     }
 }

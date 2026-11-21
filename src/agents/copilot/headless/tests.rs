@@ -80,7 +80,7 @@ mod the_command {
             .filter(|pair| pair[0] == "--allow-tool" || pair[0] == "--deny-tool")
             .map(|pair| pair[1].as_str())
             .collect();
-        assert_eq!(rules.len(), 12);
+        assert_eq!(rules.len(), 13);
         for wanted in [
             "shell(cornercase:*)",
             "shell(gh pr list:*)",
@@ -90,6 +90,7 @@ mod the_command {
             "shell(cornercase restart:*)",
             "write(/work/bots/prs/bot.json)",
             "write(/work/bots/prs/chat.jsonl)",
+            "write(/work/bots/prs/secrets)",
         ] {
             assert!(rules.contains(&wanted), "{wanted} in {rules:?}");
         }

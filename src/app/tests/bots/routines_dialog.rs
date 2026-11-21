@@ -1,3 +1,4 @@
+use super::card_menu::assert_a_card_click_opens_its_routines;
 use super::routines::{START, answered_run, bot_routine, scheduled};
 use super::*;
 use crate::bots::routines::{Button, Hit};
@@ -32,18 +33,26 @@ fn opened(c: &mut Chat) {
     render(&mut c.app, AREA);
 }
 
-fn spot(c: &Chat, wanted: Hit) -> Position {
-    let view = view(c);
+pub(super) fn spot_in(view: &ui::BotRoutines, wanted: Hit) -> Position {
     (0..AREA.height)
         .flat_map(|y| (0..AREA.width).map(move |x| Position::new(x, y)))
-        .find(|pos| ui::routines_hit(AREA, &view, *pos) == Some(wanted))
+        .find(|pos| ui::routines_hit(AREA, view, *pos) == Some(wanted))
         .unwrap_or_else(|| panic!("nothing at {wanted:?}"))
 }
 
-fn press_button(c: &mut Chat, row: usize, button: Button) {
-    let rect = ui::routine_button(AREA, &view(c), row, button);
+pub(super) fn press_in(c: &mut Chat, view: &ui::BotRoutines, (row, button): (usize, Button)) {
+    let rect = ui::routine_button(AREA, view, row, button);
     assert!(!rect.is_empty(), "no {button:?} on row {row}");
     click(&mut c.app, rect.as_position());
+}
+
+fn spot(c: &Chat, wanted: Hit) -> Position {
+    spot_in(&view(c), wanted)
+}
+
+fn press_button(c: &mut Chat, row: usize, button: Button) {
+    let view = view(c);
+    press_in(c, &view, (row, button));
 }
 
 fn names(view: &ui::BotRoutines) -> Vec<&str> {
@@ -81,15 +90,10 @@ fn routines_in_the_menu_and_a_routine_on_the_card_open_it_too() {
     let row = ui::bot_rows(a.bots_list, a.pitch, 1, 0).item(0);
     right_click(&mut c.app, Position::new(row.x + 3, row.y));
     pick(&mut c.app, "routines…");
-    assert!(matches!(&c.app.overlay, Some(Overlay::BotRoutines(dialog)) if dialog.selected.is_some()));
+    assert!(matches!(&c.app.overlay, Some(Overlay::BotRoutines(dialog)) if dialog.list.selected.is_some()));
     c.app.overlay = None;
     render(&mut c.app, AREA);
-    let list = c.app.layout(AREA).shown(c.app.screen.nav).workspaces_list;
-    let card = c.app.bot_card(0);
-    let on = |pos: &Position| ui::card_routine(list, &card, *pos).is_some();
-    let pos = (list.y..list.bottom()).map(|y| Position::new(list.x + 3, y)).find(on).expect("a routine row");
-    click(&mut c.app, pos);
-    assert!(matches!(&c.app.overlay, Some(Overlay::BotRoutines(dialog)) if dialog.selected == Some(id)));
+    assert_a_card_click_opens_its_routines(&mut c, id);
 }
 
 #[test]
@@ -199,7 +203,7 @@ fn plus_routine_opens_a_daily_form_for_the_bot_and_saving_lists_it() {
     for ch in "check".chars() {
         send_key(&mut c.app, KeyCode::Char(ch), KeyModifiers::NONE);
     }
-    send_key(&mut c.app, KeyCode::Enter, KeyModifiers::NONE);
+    save_queue_form(&mut c.app);
     assert!(matches!(c.app.overlay, Some(Overlay::BotRoutines(_))), "{:?}", c.app.overlay);
     let view = view(&c);
     assert_eq!(view.rows.len(), 1);
@@ -267,7 +271,7 @@ fn opening_without_a_selection_pins_the_first_routine_to_its_entry() {
     let early = scheduled(&mut c, bot_routine(later(), "2h"));
     let key = c.app.panels.bots.live[0].key;
     c.app.open_bot_routines(key, None);
-    assert!(matches!(&c.app.overlay, Some(Overlay::BotRoutines(dialog)) if dialog.selected == Some(early)));
+    assert!(matches!(&c.app.overlay, Some(Overlay::BotRoutines(dialog)) if dialog.list.selected == Some(early)));
     let mut task = c.app.panels.queued.queue().entry(early).expect("early").task.clone();
     task.at = later() + 20_000;
     c.app.panels.queued.schedule(Some(early), task).expect("moved after the other");
@@ -275,6 +279,6 @@ fn opening_without_a_selection_pins_the_first_routine_to_its_entry() {
     let shown = view(&c);
     assert_eq!(shown.selected, Some(1), "the highlight followed its entry down");
     assert_eq!(shown.rows[1].name, "Review PRs");
-    assert!(matches!(&c.app.overlay, Some(Overlay::BotRoutines(dialog)) if dialog.selected == Some(early)));
+    assert!(matches!(&c.app.overlay, Some(Overlay::BotRoutines(dialog)) if dialog.list.selected == Some(early)));
     assert!(c.app.panels.queued.queue().entry(late).is_some());
 }

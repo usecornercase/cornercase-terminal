@@ -127,8 +127,20 @@ pub(crate) fn use_bot_follow() -> Result<()> {
     require("bot-follow", "cannot change whether a bot follows the agents it starts")
 }
 
+pub(crate) fn use_bot_chat_apps() -> Result<()> {
+    require("bot-chat-apps", "cannot change whether a bot's answers go to the chat apps")
+}
+
 pub(crate) fn use_bot_setup() -> Result<()> {
     require("bot-setup", "cannot set a bot up")
+}
+
+pub(crate) fn use_bot_secrets() -> Result<()> {
+    require("bot-secrets", "cannot keep a bot's secrets")
+}
+
+pub(crate) fn use_bot_asks() -> Result<()> {
+    require("bot-asks", "cannot ask for a bot's secrets")
 }
 
 pub(crate) fn use_bot_about_read() -> Result<()> {
@@ -195,6 +207,14 @@ pub(crate) fn use_fresh_branches() -> Result<()> {
     require("fresh-branches", "cannot make a new branch from the up-to-date default branch")
 }
 
+pub(crate) fn use_machine_shown() -> Result<()> {
+    require("machine-shown", "cannot give a machine a command or add one that is not shown")
+}
+
+pub(crate) fn use_machine_hide() -> Result<()> {
+    require("machine-hide", "cannot hide or show a machine")
+}
+
 pub(crate) fn use_build_folders() -> Result<()> {
     require("build-folders", "cannot set a project's build folders")
 }
@@ -253,6 +273,10 @@ pub(crate) fn use_placed_start() -> Result<()> {
 
 pub(crate) fn use_tunnel_hold() -> Result<()> {
     require("tunnel-hold", "cannot hold a tunnel for a program")
+}
+
+pub(crate) fn use_tunnel_machine() -> Result<()> {
+    require("tunnel-machine", "cannot tunnel a port of a linked machine")
 }
 
 pub(crate) fn use_tunnel_reverse() -> Result<()> {

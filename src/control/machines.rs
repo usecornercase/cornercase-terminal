@@ -14,6 +14,8 @@ pub(crate) enum Machines {
     Remove(String),
     Update(String),
     Retry(Option<String>),
+    Hide(Option<String>),
+    Show(Option<String>),
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -25,6 +27,8 @@ pub(crate) struct MachineSet {
     pub(crate) destination: Option<String>,
     pub(crate) folder: Option<String>,
     pub(crate) create: Option<bool>,
+    pub(crate) command: Option<String>,
+    pub(crate) shown: Option<bool>,
 }
 
 impl Machines {
@@ -35,10 +39,13 @@ impl Machines {
                 .add("action", "set")
                 .add("name", &set.name)
                 .maybe("new_name", set.new_name.as_ref())
-                .add("destination", set.destination.is_some()),
+                .add("destination", set.destination.is_some())
+                .maybe("shown", set.shown),
             Self::Remove(name) => fields.add("action", "remove").add("name", name),
             Self::Update(name) => fields.add("action", "update").add("name", name),
             Self::Retry(name) => fields.add("action", "retry").maybe("name", name.as_ref()),
+            Self::Hide(name) => fields.add("action", "hide").maybe("name", name.as_ref()),
+            Self::Show(name) => fields.add("action", "show").maybe("name", name.as_ref()),
         };
     }
 }

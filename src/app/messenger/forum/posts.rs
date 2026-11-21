@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
 use super::super::{Delivery, Route, TAGS};
-use super::tags::tag_of;
 use crate::app::App;
 use crate::messenger::{Forum, Order, Via};
 use crate::project::{Hierarchy, TabAt};
@@ -12,12 +11,18 @@ mod saved;
 const TITLE: usize = 100;
 pub(super) const FAILED: &str = "a post could not be made, so its messages went to the DM";
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(in crate::app::messenger) enum Owner {
+    Workspace(u64),
+    Bot(u64),
+}
+
 #[derive(Debug, Default)]
 pub(super) struct Posts {
-    threads: HashMap<u64, i64>,
-    making: HashMap<u64, Making>,
-    sent: HashMap<u64, u64>,
-    archived: HashSet<u64>,
+    threads: HashMap<Owner, i64>,
+    making: HashMap<Owner, Making>,
+    sent: HashMap<u64, Owner>,
+    archived: HashSet<Owner>,
     resent: HashSet<u64>,
     pub(super) failed: bool,
 }
@@ -60,57 +65,57 @@ fn first_post(order: &Order, post: NewPost) -> Order {
 }
 
 impl Posts {
-    fn route(&mut self, workspace: u64, order: Order, post: NewPost) -> Option<Order> {
+    fn route(&mut self, owner: Owner, order: Order, post: NewPost) -> Option<Order> {
         let Order::Send { tag: Some(tag), .. } = order else { return Some(order) };
-        if let Some(making) = self.making.get_mut(&workspace) {
+        if let Some(making) = self.making.get_mut(&owner) {
             making.orders.push(order);
             return None;
         }
-        if let Some(&thread) = self.threads.get(&workspace) {
-            self.track(tag, workspace);
-            self.archived.remove(&workspace);
+        if let Some(&thread) = self.threads.get(&owner) {
+            self.track(tag, owner);
+            self.archived.remove(&owner);
             return Some(to_chat(order, thread));
         }
         let first = first_post(&order, post);
-        self.making.insert(workspace, Making { tag, orders: vec![order], pointer: None });
+        self.making.insert(owner, Making { tag, orders: vec![order], pointer: None });
         Some(first)
     }
 
-    fn track(&mut self, tag: u64, workspace: u64) {
-        self.sent.insert(tag, workspace);
+    fn track(&mut self, tag: u64, owner: Owner) {
+        self.sent.insert(tag, owner);
         let oldest = tag.saturating_sub(TAGS);
         self.sent.retain(|kept, _| *kept > oldest);
     }
 
-    fn making_of(&self, tag: u64) -> Option<u64> {
-        self.making.iter().find(|(_, making)| making.tag == tag).map(|(workspace, _)| *workspace)
+    fn making_of(&self, tag: u64) -> Option<Owner> {
+        self.making.iter().find(|(_, making)| making.tag == tag).map(|(owner, _)| *owner)
     }
 
-    fn posted(&mut self, tag: u64, thread: i64) -> (Vec<Order>, Option<(u64, Pointer)>) {
-        let Some(making) = self.making_of(tag).and_then(|workspace| self.making.remove_entry(&workspace)) else {
+    fn posted(&mut self, tag: u64, thread: i64) -> (Vec<Order>, Option<(Owner, Pointer)>) {
+        let Some(making) = self.making_of(tag).and_then(|owner| self.making.remove_entry(&owner)) else {
             return (Vec::new(), None);
         };
-        let (workspace, Making { orders, pointer, .. }) = making;
-        self.threads.insert(workspace, thread);
+        let (owner, Making { orders, pointer, .. }) = making;
+        self.threads.insert(owner, thread);
         self.failed = false;
         let rest: Vec<Order> = orders.into_iter().skip(1).collect();
         for tag in rest.iter().filter_map(Order::tag) {
-            self.track(tag, workspace);
+            self.track(tag, owner);
         }
         let rest = rest.into_iter().map(|order| to_chat(order, thread)).collect();
-        (rest, pointer.map(|pointer| (workspace, pointer)))
+        (rest, pointer.map(|pointer| (owner, pointer)))
     }
 
     fn failed(&mut self, tag: u64) -> Vec<Order> {
-        let Some(workspace) = self.making_of(tag) else { return Vec::new() };
+        let Some(owner) = self.making_of(tag) else { return Vec::new() };
         self.failed = true;
-        self.making.remove(&workspace).map(|making| making.orders).unwrap_or_default()
+        self.making.remove(&owner).map(|making| making.orders).unwrap_or_default()
     }
 
     fn gone(&mut self, thread: i64, tag: Option<u64>) -> Option<bool> {
-        if let Some(workspace) = self.workspace_of(thread) {
-            self.threads.remove(&workspace);
-            self.archived.remove(&workspace);
+        if let Some(owner) = self.owner_of(thread) {
+            self.threads.remove(&owner);
+            self.archived.remove(&owner);
         }
         let tag = tag.filter(|tag| self.sent.remove(tag).is_some())?;
         let oldest = tag.saturating_sub(TAGS);
@@ -118,34 +123,34 @@ impl Posts {
         Some(self.resent.insert(tag))
     }
 
-    pub(super) fn workspace_of(&self, thread: i64) -> Option<u64> {
-        self.threads.iter().find(|(_, known)| **known == thread).map(|(workspace, _)| *workspace)
+    pub(super) fn owner_of(&self, thread: i64) -> Option<Owner> {
+        self.threads.iter().find(|(_, known)| **known == thread).map(|(owner, _)| *owner)
     }
 
-    pub(super) fn thread(&self, workspace: u64) -> Option<i64> {
-        self.threads.get(&workspace).copied()
+    pub(super) fn thread(&self, owner: Owner) -> Option<i64> {
+        self.threads.get(&owner).copied()
     }
 
-    pub(super) fn threads(&self) -> Vec<(u64, i64)> {
-        self.threads.iter().map(|(workspace, thread)| (*workspace, *thread)).collect()
+    pub(super) fn threads(&self) -> Vec<(Owner, i64)> {
+        self.threads.iter().map(|(owner, thread)| (*owner, *thread)).collect()
     }
 
-    pub(super) fn archived(&self, workspace: u64) -> bool {
-        self.archived.contains(&workspace)
+    pub(super) fn archived(&self, owner: Owner) -> bool {
+        self.archived.contains(&owner)
     }
 
-    pub(super) fn archive(&mut self, workspace: u64, archived: bool) {
+    pub(super) fn archive(&mut self, owner: Owner, archived: bool) {
         if archived {
-            self.archived.insert(workspace);
+            self.archived.insert(owner);
         } else {
-            self.archived.remove(&workspace);
+            self.archived.remove(&owner);
         }
     }
 
-    pub(super) fn forget_workspace(&mut self, workspace: u64) {
-        self.threads.remove(&workspace);
-        self.sent.retain(|_, sent| *sent != workspace);
-        self.archived.remove(&workspace);
+    pub(super) fn forget_owner(&mut self, owner: Owner) {
+        self.threads.remove(&owner);
+        self.sent.retain(|_, sent| *sent != owner);
+        self.archived.remove(&owner);
     }
 
     fn unmade(&mut self) -> Vec<Order> {
@@ -168,22 +173,35 @@ impl App {
     }
 
     pub(in crate::app::messenger) fn routed(&mut self, via: Via, route: Option<Route>, order: Order) -> Option<Order> {
-        let (Some(Route::Pane(pane)), Order::Send { reply_to: None, .. }) = (route, &order) else {
+        let (Some(route), Order::Send { reply_to: None, .. }) = (route, &order) else {
             return Some(order);
         };
         let Some((forum, tags)) = self.forum_on(via).map(|forum| (forum.channel, forum.tags)) else {
             return Some(order);
         };
-        let Some(at) = self.projects.tab_of_pane(pane).map(TabAt::workspace) else { return Some(order) };
-        let tag_id = tag_of(self.projects.workspace(at), tags);
-        let post = NewPost { forum, title: truncate_right(&self.place_name(at), TITLE), tag_id };
-        let workspace = self.projects.workspace(at).id;
+        let Some((owner, title)) = self.post_of(route) else { return Some(order) };
+        let Some(tag_id) = self.owner_tag(owner, tags) else { return Some(order) };
+        let post = NewPost { forum, title: truncate_right(&title, TITLE), tag_id };
         let forum = &mut self.messenger_mut(via).forum;
-        let routed = forum.posts.route(workspace, order, post);
+        let routed = forum.posts.route(owner, order, post);
         if matches!(routed, Some(Order::Post { .. })) {
-            forum.labels.shown(workspace, tag_id);
+            forum.labels.shown(owner, tag_id);
         }
         routed
+    }
+
+    fn post_of(&self, route: Route) -> Option<(Owner, String)> {
+        match route {
+            Route::Pane(pane) => {
+                let at = self.projects.tab_of_pane(pane).map(TabAt::workspace)?;
+                Some((Owner::Workspace(self.projects.workspace(at).id), self.place_name(at)))
+            }
+            Route::Bot(key) => {
+                let at = self.panels.bots.by_key(key)?;
+                Some((Owner::Bot(key), format!("🤖 {}", self.panels.bots.live[at].bot.name)))
+            }
+            Route::Branch(_) | Route::Prompt(_) => None,
+        }
     }
 
     pub(in crate::app::messenger) fn post_workspace(&self, via: Via, route: Option<Route>) -> Option<u64> {
@@ -195,9 +213,9 @@ impl App {
 
     pub(in crate::app::messenger) fn pointed(&mut self, via: Via, workspace: u64, pointer: Pointer) {
         let posts = &mut self.messenger_mut(via).forum.posts;
-        if let Some(making) = posts.making.get_mut(&workspace) {
+        if let Some(making) = posts.making.get_mut(&Owner::Workspace(workspace)) {
             making.pointer = Some(pointer);
-        } else if posts.threads.contains_key(&workspace) {
+        } else if posts.threads.contains_key(&Owner::Workspace(workspace)) {
             self.point_to_post(via, workspace, pointer);
         }
     }
@@ -210,15 +228,15 @@ impl App {
     }
 
     pub(in crate::app::messenger) fn knows(&self, via: Via, thread: i64) -> bool {
-        self.messenger(via).forum.posts.workspace_of(thread).is_some()
+        self.messenger(via).forum.posts.owner_of(thread).is_some()
     }
 
     pub(in crate::app::messenger) fn answered_in(&mut self, via: Via, order: Order) -> Order {
         let posts = &mut self.messenger_mut(via).forum.posts;
         if let Order::Send { chat, tag: Some(tag), .. } = &order
-            && let Some(workspace) = posts.workspace_of(*chat)
+            && let Some(owner) = posts.owner_of(*chat)
         {
-            posts.track(*tag, workspace);
+            posts.track(*tag, owner);
         }
         order
     }
@@ -230,12 +248,13 @@ impl App {
             for order in rest {
                 self.post(via, order);
             }
-            if let Some((workspace, pointer)) = pointer {
+            if let Some((Owner::Workspace(workspace), pointer)) = pointer {
                 self.point_to_post(via, workspace, pointer);
             }
         } else {
             self.to_the_dm(via, rest);
         }
+        self.sync_bot_posts(via);
         self.refresh_messenger_note(via);
     }
 
@@ -252,10 +271,12 @@ impl App {
 
     pub(in crate::app::messenger) fn post_gone(&mut self, via: Via, thread: i64, order: Order) {
         let forum = &mut self.messenger_mut(via).forum;
-        if let Some(workspace) = forum.posts.workspace_of(thread) {
-            forum.labels.unshown(workspace);
+        if let Some(owner) = forum.posts.owner_of(thread) {
+            forum.labels.unshown(owner);
         }
-        match forum.posts.gone(thread, order.tag()) {
+        let gone = forum.posts.gone(thread, order.tag());
+        self.sync_bot_posts(via);
+        match gone {
             Some(true) => self.post_again(via, thread, order),
             Some(false) => self.to_the_dm(via, vec![order]),
             None => {}
@@ -275,9 +296,9 @@ impl App {
 
     pub(in crate::app::messenger) fn post_archived(&mut self, via: Via, thread: i64) {
         let forum = &mut self.messenger_mut(via).forum;
-        let Some(workspace) = forum.posts.workspace_of(thread) else { return };
-        forum.posts.archive(workspace, true);
-        forum.labels.unshown(workspace);
+        let Some(owner) = forum.posts.owner_of(thread) else { return };
+        forum.posts.archive(owner, true);
+        forum.labels.unshown(owner);
     }
 
     pub(in crate::app::messenger) fn posts_relinked(&mut self, via: Via) {

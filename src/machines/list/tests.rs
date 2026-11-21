@@ -1,0 +1,478 @@
+use rstest::rstest;
+
+use super::*;
+use crate::machines::machine;
+use crate::test_util::{TempDir, wait_until};
+
+fn here_in(dir: &TempDir) -> Here {
+    Here { config: dir.path().join("config.json"), legacy: dir.path().join("machines.json") }
+}
+
+fn text(file: &Path) -> String {
+    std::fs::read_to_string(file).expect("the file")
+}
+
+fn remote(destination: &str, command: Option<&str>) -> Remote {
+    Remote { destination: destination.into(), command: command.map(Into::into), option: "--command" }
+}
+
+fn names(list: &[Machine]) -> Vec<&str> {
+    list.iter().map(|machine| machine.name.as_str()).collect()
+}
+
+mod naming {
+    use super::*;
+
+    #[rstest]
+    #[case::a_host("devbox", "devbox")]
+    #[case::an_address("me@10.0.0.5", "10.0.0.5")]
+    #[case::a_url("ssh://me@gpu-box:2222", "gpu-box")]
+    #[case::a_long_host("abcdefghijabcdefghijabcdefghij", "abcdefghijabcdefghij")]
+    #[case::the_reserved_word("ALL", "machine")]
+    #[case::nothing_left("me@", "machine")]
+    #[case::an_ipv6_address("me@[fe80::1]:22", "fe80--1")]
+    fn comes_from_the_host(#[case] destination: &str, #[case] name: &str) {
+        assert_eq!(name_for(destination, &[]), name);
+    }
+
+    #[test]
+    fn is_not_one_that_is_taken_whatever_its_case() {
+        assert_eq!(name_for("devbox", &[machine("DevBox", "a")]), "devbox-2");
+    }
+
+    #[test]
+    fn counts_up_until_one_is_free() {
+        let taken = [machine("devbox", "a"), machine("devbox-2", "b")];
+
+        assert_eq!(name_for("devbox", &taken), "devbox-3");
+    }
+
+    #[test]
+    fn is_cut_so_that_its_suffix_fits() {
+        let long = "abcdefghijabcdefghij";
+
+        let name = name_for(long, &[machine(long, "a")]);
+
+        assert_eq!(name, "abcdefghijabcdefgh-2");
+        assert_eq!(name.len(), 20);
+    }
+}
+
+mod reading {
+    use super::*;
+
+    #[test]
+    fn a_missing_file_knows_no_machine() {
+        let dir = TempDir::new();
+
+        assert_eq!(read(&here_in(&dir)), []);
+        assert!(!here_in(&dir).config.exists());
+    }
+
+    #[test]
+    fn a_broken_file_knows_no_machine() {
+        let dir = TempDir::new();
+        std::fs::write(&here_in(&dir).config, "{").expect("broken");
+
+        assert_eq!(read(&here_in(&dir)), []);
+    }
+
+    #[test]
+    fn entries_come_in_the_order_of_the_file_whatever_else_it_holds() {
+        let dir = TempDir::new();
+        let written = r#"{"fetch_minutes": "bad", "machines": [
+            {"name":"b","icon":"☁","destination":"b.lan","folder":"~"},
+            {"name":"a","icon":"☁","destination":"a.lan","folder":"~","shown":false}]}"#;
+        std::fs::write(&here_in(&dir).config, written).expect("written");
+
+        let list = read(&here_in(&dir));
+
+        assert_eq!(names(&list), ["b", "a"]);
+        assert!(list[0].shown && !list[1].shown);
+    }
+}
+
+mod changing {
+    use std::sync::mpsc::{Receiver, Sender, channel};
+
+    use super::*;
+
+    fn add(here: &Here, i: usize) {
+        change(here, |list| list.push(machine(&format!("m{i}"), &format!("m{i}.lan")))).expect("written");
+    }
+
+    fn add_when_released(here: &Here, inside: &Sender<()>, release: &Receiver<()>) {
+        change(here, |list| {
+            inside.send(()).expect("sent");
+            release.recv().expect("released");
+            list.push(machine("first", "first.lan"));
+        })
+        .expect("written");
+    }
+
+    #[test]
+    fn a_held_lock_makes_the_change_fail_with_its_own_message_and_write_nothing() {
+        let dir = TempDir::new();
+        let here = here_in(&dir);
+        let held = take_lock(&here.config).expect("taken");
+        wait_briefly();
+
+        let error = change(&here, |list| list.push(machine("vps", "vps.lan"))).expect_err("waited");
+
+        assert_eq!(error.kind(), io::ErrorKind::TimedOut);
+        assert!(error.to_string().contains("another cornercase is changing the list of machines"), "{error}");
+        drop(held);
+        assert!(!here.config.exists());
+    }
+
+    #[test]
+    fn writers_at_once_lose_none() {
+        let dir = TempDir::new();
+        let here = here_in(&dir);
+        let (inside_tx, inside_rx) = channel();
+        let (release_tx, release_rx) = channel::<()>();
+
+        std::thread::scope(|scope| {
+            let release = release_tx;
+            let first = &here;
+            scope.spawn(move || add_when_released(first, &inside_tx, &release_rx));
+            inside_rx.recv().expect("inside");
+            for i in 0..7 {
+                let here = &here;
+                scope.spawn(move || add(here, i));
+            }
+            wait_until("a writer waits for the lock", || contention::seen(&here.config));
+            release.send(()).expect("sent");
+        });
+
+        assert_eq!(read(&here).len(), 8);
+    }
+
+    #[test]
+    fn a_migration_that_cannot_finish_stops_the_change() {
+        let dir = TempDir::new();
+        let here = here_in(&dir);
+        std::fs::write(&here.legacy, "[nope").expect("written");
+
+        assert!(forget(&here, "vps.lan").is_err());
+        assert!(change(&here, |list| list.push(machine("vps", "vps.lan"))).is_err());
+
+        assert!(!here.config.exists());
+    }
+
+    #[test]
+    fn a_missing_file_gets_only_the_machines() {
+        let dir = TempDir::new();
+
+        change(&here_in(&dir), |list| list.push(machine("vps", "vps.lan"))).expect("written");
+
+        let written: Value = serde_json::from_str(&text(&here_in(&dir).config)).expect("json");
+        assert_eq!(written.as_object().map(serde_json::Map::len), Some(1));
+        assert_eq!(written["machines"][0]["name"], "vps");
+    }
+
+    #[test]
+    fn a_broken_file_is_refused_and_left_as_it_is() {
+        let dir = TempDir::new();
+        std::fs::write(&here_in(&dir).config, "{ nope").expect("broken");
+
+        assert!(change(&here_in(&dir), |list| list.push(machine("vps", "vps.lan"))).is_err());
+
+        assert_eq!(text(&here_in(&dir).config), "{ nope");
+    }
+
+    #[test]
+    fn an_unchanged_list_writes_nothing() {
+        let dir = TempDir::new();
+        let by_hand = r#"{"machines":[{"name":"vps","icon":"☁","destination":"vps.lan","folder":"~"}]}"#;
+        std::fs::write(&here_in(&dir).config, by_hand).expect("written");
+
+        change(&here_in(&dir), |_| ()).expect("fine");
+
+        assert_eq!(text(&here_in(&dir).config), by_hand);
+    }
+}
+
+mod reaching {
+    use super::*;
+
+    #[test]
+    fn a_command_with_a_control_character_leaves_the_list_as_it_is() {
+        let dir = TempDir::new();
+        let here = here_in(&dir);
+        change(&here, |list| list.push(machine("vps", "vps.lan"))).expect("written");
+
+        reached(&here, &remote("vps.lan", Some("a\tb")), false).expect("fine");
+
+        assert_eq!(read(&here), [machine("vps", "vps.lan")]);
+    }
+
+    #[test]
+    fn a_new_machine_is_not_shown_and_gets_a_name_and_the_home_folder() {
+        let dir = TempDir::new();
+
+        reached(&here_in(&dir), &remote("me@devbox:22", Some("/opt/cc")), false).expect("written");
+
+        let list = read(&here_in(&dir));
+        assert_eq!(names(&list), ["devbox"]);
+        assert!(!list[0].shown && !list[0].unreached);
+        assert_eq!((list[0].folder.as_str(), list[0].command.as_deref()), ("~", Some("/opt/cc")));
+    }
+
+    #[test]
+    fn a_first_connection_takes_the_last_command_and_loses_its_mark() {
+        let dir = TempDir::new();
+        remembered(&here_in(&dir), "devbox".into(), Some("/opt/cc".into())).expect("written");
+
+        reached(&here_in(&dir), &remote("devbox", Some("/new/cc")), false).expect("written");
+        assert_eq!(read(&here_in(&dir))[0].command.as_deref(), Some("/new/cc"));
+        reached(&here_in(&dir), &remote("devbox", None), false).expect("written");
+
+        let list = read(&here_in(&dir));
+        assert_eq!((list.len(), list[0].command.clone(), list[0].unreached), (1, None, false));
+    }
+
+    #[test]
+    fn a_reconnect_keeps_the_command_the_list_has_and_loses_the_mark() {
+        let dir = TempDir::new();
+        remembered(&here_in(&dir), "devbox".into(), Some("/opt/cc".into())).expect("written");
+
+        reached(&here_in(&dir), &remote("devbox", Some("/old/cc")), true).expect("written");
+
+        let list = read(&here_in(&dir));
+        assert_eq!((list.len(), list[0].command.as_deref(), list[0].unreached), (1, Some("/opt/cc"), false));
+    }
+
+    #[test]
+    fn a_reconnect_never_gives_an_entry_the_command_it_was_started_with() {
+        let dir = TempDir::new();
+        remembered(&here_in(&dir), "devbox".into(), None).expect("written");
+
+        reached(&here_in(&dir), &remote("devbox", Some("/opt/cc")), true).expect("written");
+
+        assert_eq!(read(&here_in(&dir))[0].command, None);
+    }
+
+    #[test]
+    fn the_same_link_again_writes_nothing() {
+        let dir = TempDir::new();
+        reached(&here_in(&dir), &remote("devbox", None), false).expect("written");
+        let by_hand = text(&here_in(&dir).config).replace(',', ", ");
+        std::fs::write(&here_in(&dir).config, &by_hand).expect("rewritten");
+
+        reached(&here_in(&dir), &remote("devbox", None), false).expect("fine");
+
+        assert_eq!(text(&here_in(&dir).config), by_hand);
+    }
+
+    #[test]
+    fn a_destination_ssh_would_take_for_an_option_writes_nothing() {
+        let dir = TempDir::new();
+
+        reached(&here_in(&dir), &remote("-oProxyCommand=sh", None), false).expect("fine");
+
+        assert!(!here_in(&dir).config.exists());
+    }
+}
+
+mod remembering {
+    use super::*;
+
+    #[test]
+    fn an_invisible_destination_or_a_command_with_a_tab_is_refused_and_nothing_is_written() {
+        let dir = TempDir::new();
+
+        assert!(remembered(&here_in(&dir), "box\u{200b}".into(), None).is_err());
+        assert!(remembered(&here_in(&dir), "box".into(), Some("a\tb".into())).is_err());
+
+        assert!(!here_in(&dir).config.exists());
+    }
+
+    #[test]
+    fn a_new_machine_waits_for_a_window() {
+        let dir = TempDir::new();
+
+        let kept = remembered(&here_in(&dir), "newbox".into(), Some("/opt/cc".into())).expect("written");
+
+        assert!(kept.unreached && !kept.shown);
+        assert_eq!(read(&here_in(&dir)), [kept]);
+    }
+
+    #[test]
+    fn a_known_one_keeps_its_mark_and_takes_the_last_command() {
+        let dir = TempDir::new();
+        remembered(&here_in(&dir), "newbox".into(), Some("/opt/cc".into())).expect("written");
+
+        let kept = remembered(&here_in(&dir), "newbox".into(), None).expect("written");
+
+        assert!(kept.unreached);
+        assert_eq!(kept.command, None);
+    }
+
+    #[test]
+    fn a_machine_a_window_reached_is_not_marked() {
+        let dir = TempDir::new();
+        reached(&here_in(&dir), &remote("devbox", None), false).expect("written");
+
+        let kept = remembered(&here_in(&dir), "devbox".into(), Some("/opt/cc".into())).expect("written");
+
+        assert!(!kept.unreached);
+    }
+
+    #[test]
+    fn forgetting_removes_it_and_an_unknown_one_creates_no_file() {
+        let dir = TempDir::new();
+        assert!(!forget(&here_in(&dir), "devbox").expect("nothing to write"));
+        assert!(!here_in(&dir).config.exists());
+        remembered(&here_in(&dir), "devbox".into(), None).expect("written");
+
+        assert!(forget(&here_in(&dir), "devbox").expect("written"));
+
+        assert_eq!(read(&here_in(&dir)), []);
+    }
+}
+
+mod migrating {
+    use super::*;
+
+    const LEGACY: &str =
+        r#"[{"destination":"me@devbox","command":"/opt/cc","unreached":true},{"destination":"gpu-box"}]"#;
+
+    #[test]
+    fn the_machines_a_window_reached_join_the_list_not_shown_and_the_file_goes() {
+        let dir = TempDir::new();
+        let here = here_in(&dir);
+        std::fs::write(&here.legacy, LEGACY).expect("written");
+
+        let list = read(&here);
+
+        assert_eq!(names(&list), ["devbox", "gpu-box"]);
+        assert!(list.iter().all(|machine| !machine.shown && machine.folder == "~"));
+        assert_eq!((list[0].command.as_deref(), list[0].unreached), (Some("/opt/cc"), true));
+        assert!(!here.legacy.exists());
+    }
+
+    #[test]
+    fn a_known_destination_takes_a_command_only_when_it_had_none() {
+        let dir = TempDir::new();
+        let here = here_in(&dir);
+        let own = Machine { command: Some("mine".into()), ..machine("a", "a.lan") };
+        change(&here, |list| list.extend([own, machine("b", "b.lan")])).expect("written");
+        let old = r#"[{"destination":"a.lan","command":"theirs"},{"destination":"b.lan","command":"theirs"}]"#;
+        std::fs::write(&here.legacy, old).expect("written");
+
+        let list = read(&here);
+
+        assert_eq!(list.len(), 2);
+        assert_eq!((list[0].command.as_deref(), list[1].command.as_deref()), (Some("mine"), Some("theirs")));
+    }
+
+    #[test]
+    fn a_broken_config_keeps_the_old_file_and_is_not_written() {
+        let dir = TempDir::new();
+        let here = here_in(&dir);
+        std::fs::write(&here.legacy, LEGACY).expect("written");
+        std::fs::write(&here.config, "{ nope").expect("broken");
+
+        assert!(migrate(&here).is_err());
+
+        assert_eq!(text(&here.legacy), LEGACY);
+        assert_eq!(text(&here.config), "{ nope");
+    }
+
+    #[test]
+    fn broken_and_option_like_entries_are_skipped() {
+        let dir = TempDir::new();
+        let here = here_in(&dir);
+        let old = r#"[42,{"destination":["x"]},{"command":"/opt/cc"},{"destination":"-oProxyCommand=sh"},{"destination":"devbox"}]"#;
+        std::fs::write(&here.legacy, old).expect("written");
+
+        assert_eq!(names(&read(&here)), ["devbox"]);
+    }
+
+    #[rstest]
+    #[case::truncated(r#"[{"destination":"devbox"},"#)]
+    #[case::an_object(r#"{"destination":"devbox"}"#)]
+    fn an_old_file_that_is_not_an_array_stays_byte_for_byte(#[case] old: &str) {
+        let dir = TempDir::new();
+        let here = here_in(&dir);
+        std::fs::write(&here.legacy, old).expect("written");
+
+        assert!(migrate(&here).is_err());
+
+        assert_eq!(text(&here.legacy), old);
+        assert!(!here.config.exists());
+    }
+
+    #[test]
+    fn an_old_file_over_the_size_limit_is_left_as_it_is() {
+        let dir = TempDir::new();
+        let here = here_in(&dir);
+        let old = format!("{LEGACY}{}", " ".repeat((4 << 20) + 1));
+        std::fs::write(&here.legacy, &old).expect("written");
+
+        let error = migrate(&here).expect_err("refused").to_string();
+
+        assert!(error.contains("machines.json") && error.contains("too large"), "{error}");
+        assert_eq!(std::fs::metadata(&here.legacy).expect("still there").len(), old.len() as u64);
+        assert!(!here.config.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_old_file_that_is_a_fifo_is_refused_without_waiting() {
+        let dir = TempDir::new();
+        let here = here_in(&dir);
+        assert!(std::process::Command::new("mkfifo").arg(&here.legacy).status().expect("mkfifo").success());
+
+        let error = change(&here, |_| ()).expect_err("refused").to_string();
+
+        assert!(error.contains("machines.json") && error.contains("not a regular file"), "{error}");
+        assert_eq!(names(&read(&here)), Vec::<&str>::new());
+        assert!(here.legacy.exists());
+        assert!(!here.config.exists());
+    }
+
+    #[test]
+    fn without_the_old_file_nothing_is_written() {
+        let dir = TempDir::new();
+
+        migrate(&here_in(&dir)).expect("fine");
+
+        assert!(!here_in(&dir).config.exists());
+    }
+
+    #[test]
+    fn a_second_process_that_migrated_and_forgot_is_not_undone_by_a_stale_snapshot() {
+        let dir = TempDir::new();
+        let here = here_in(&dir);
+        std::fs::write(&here.legacy, LEGACY).expect("written");
+        let held = hold(&here.config).expect("held");
+        let late = std::thread::spawn({
+            let here = Here { config: here.config.clone(), legacy: here.legacy.clone() };
+            move || migrate(&here)
+        });
+        wait_until("the late one waits for the lock", || contention::seen(&here.config));
+        std::fs::remove_file(&here.legacy).expect("migrated by the other");
+        drop(held);
+
+        late.join().expect("joined").expect("migrated");
+
+        assert_eq!(names(&read(&here)), Vec::<&str>::new());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_old_file_that_cannot_be_looked_up_names_itself_not_the_config() {
+        let dir = TempDir::new();
+        let blocker = dir.path().join("blocker");
+        std::fs::write(&blocker, "").expect("written");
+        let here = Here { config: dir.path().join("config.json"), legacy: blocker.join("machines.json") };
+
+        let error = change(&here, |_| ()).expect_err("refused");
+
+        let message = error.to_string();
+        assert!(message.contains(&here.legacy.display().to_string()), "{message}");
+        assert!(!message.contains("cannot read or write"), "{message}");
+    }
+}

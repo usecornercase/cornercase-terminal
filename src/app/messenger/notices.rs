@@ -35,7 +35,7 @@ pub(super) fn icon(status: Option<Status>) -> &'static str {
     }
 }
 
-fn label(text: &str) -> String {
+pub(super) fn label(text: &str) -> String {
     let mut out: String = text.chars().take(LABEL).collect();
     if text.chars().count() > LABEL {
         out.pop();

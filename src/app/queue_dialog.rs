@@ -13,12 +13,12 @@ use crate::agents;
 use crate::control::QueueAdd;
 use crate::editor::Editor;
 use crate::git;
-use crate::issues::browser::{Place, Screen, Tab};
+use crate::issues::browser::Place;
 use crate::issues::{self, Issue};
 use crate::list::{COMBO_ROWS, Combo};
 use crate::project::{Hierarchy, Project, Workspace};
 use crate::queue;
-use crate::queue::form::{Choice, Choices, Control, Form, Step, When};
+use crate::queue::form::{Choice, Choices, Control, Form, Room, Step, When};
 use crate::ui;
 
 impl App {
@@ -53,6 +53,10 @@ impl App {
         let mut form = Form::new(choices, zone, date);
         if let Some(entry) = entry {
             fill_from_entry(&mut form, entry, id, clock);
+        }
+        if let Some(area) = self.panels.queued.area().filter(|_| entry.is_some()) {
+            let field = ui::queue_form::text(area, &form, Control::Prompt);
+            form.prompt.reveal(usize::from(field.width.max(1)), usize::from(field.height.max(1)));
         }
         self.stash_back();
         self.overlay = Some(Overlay::Queue(Box::new(form)));
@@ -91,7 +95,7 @@ impl App {
 
     pub(super) fn stash_back(&mut self) {
         let back = match self.overlay.take() {
-            Some(back @ (Overlay::Issues(_) | Overlay::BotRoutines(_))) => Some(Box::new(back)),
+            Some(back @ (Overlay::Issues(_) | Overlay::BotRoutines(_) | Overlay::QueueList(_))) => Some(Box::new(back)),
             other => {
                 self.overlay = other;
                 None
@@ -244,11 +248,14 @@ impl App {
         if form.busy {
             return;
         }
-        let width = usize::from(ui::queue_form::text(area, form, form.focus).width.max(1));
-        let rows = ui::queue_form::list(area, form).map_or(COMBO_ROWS, ui::combo::rows);
-        match form.key(key, width, rows) {
+        let room = Room {
+            width: usize::from(ui::queue_form::text(area, form, form.focus).width.max(1)),
+            list: ui::queue_form::list(area, form).map_or(COMBO_ROWS, ui::combo::rows),
+            prompt: usize::from(ui::queue_form::text(area, form, Control::Prompt).height.max(1)),
+        };
+        match form.key(key, room) {
             Step::Submit => self.submit_queue(),
-            Step::Cancel => self.close_queue_form(false),
+            Step::Cancel => self.close_queue_form(None),
             Step::Chose(control) => self.queue_chose(control),
             Step::None => {}
         }
@@ -303,9 +310,11 @@ impl App {
     pub(super) fn queue_text(&mut self, area: Rect, control: Control) -> Option<(FieldArea, &mut Editor)> {
         let Some(Overlay::Queue(form)) = &mut self.overlay else { return None };
         let text = ui::queue_form::text(area, form, control);
+        let prompt = control == Control::Prompt;
+        let shown = prompt.then(|| ui::queue_form::top(area, form));
         let editor = form.editor(control)?;
-        let top = ui::first_line(editor, text);
-        Some((FieldArea { text, width: usize::from(text.width.max(1)), top, scrolls: false }, editor))
+        let top = shown.unwrap_or_else(|| ui::first_line(editor, text));
+        Some((FieldArea { text, width: usize::from(text.width.max(1)), top, scrolls: prompt }, editor))
     }
 
     pub(super) fn queue_form_mouse(&mut self, event: MouseEvent, pos: Position, area: Rect) {
@@ -314,14 +323,14 @@ impl App {
             return;
         }
         if let Some(delta) = super::input::wheel(event.kind) {
-            wheel_lists(form, delta, area);
+            wheel_form(form, delta, area, pos);
             return;
         }
         if event.kind != MouseEventKind::Down(MouseButton::Left) {
             return;
         }
         match ui::queue_form::hit(area, form, pos) {
-            Some(ui::queue_form::Hit::Cancel) => self.close_queue_form(false),
+            Some(ui::queue_form::Hit::Cancel) => self.close_queue_form(None),
             Some(ui::queue_form::Hit::Submit) => self.submit_queue(),
             Some(ui::queue_form::Hit::Close) | None => form.close_lists(),
             Some(ui::queue_form::Hit::Choose(i)) => {
@@ -463,7 +472,7 @@ impl App {
         match (reply, form) {
             (Ok(id), form) => {
                 if form.is_some() {
-                    self.close_queue_form(true);
+                    self.close_queue_form(Some(id));
                 }
                 let text = self.scheduled_text(id);
                 self.messages.toast = Some(Toast::new(text, ui::ToastIcon::Check));
@@ -488,20 +497,41 @@ impl App {
         }
     }
 
-    pub(super) fn close_queue_form(&mut self, scheduled: bool) {
-        self.overlay = self.panels.queued.take_back().map(|back| match *back {
-            Overlay::Issues(mut browser) => {
+    pub(super) fn close_queue_form(&mut self, saved: Option<u64>) {
+        let back = self.panels.queued.take_back().map(|back| *back);
+        match (back, saved) {
+            (Some(Overlay::Issues(_)), Some(id)) => return self.open_queue(Some(id)),
+            (Some(Overlay::Issues(mut browser)), None) => {
                 browser.scheduling = false;
-                if scheduled {
-                    browser.screen = Screen::List;
-                    browser.tab_to(Tab::Queue);
-                    browser.search.reset();
-                }
-                Overlay::Issues(browser)
+                self.overlay = Some(Overlay::Issues(browser));
             }
-            other => other,
-        });
+            (Some(Overlay::QueueList(dialog)), saved) => {
+                self.overlay = Some(Overlay::QueueList(dialog));
+                self.sync_queued();
+                if let (Some(id), Some(Overlay::QueueList(dialog))) = (saved, &mut self.overlay) {
+                    dialog.select(id);
+                }
+            }
+            (back, _) => self.overlay = back,
+        }
         self.sync_queued();
+    }
+
+    pub(super) fn queue_form_paste(&mut self, text: &str, area: Rect) {
+        let Some(Overlay::Queue(form)) = &mut self.overlay else { return };
+        if form.busy || form.opened().is_some() {
+            return;
+        }
+        let field = ui::queue_form::text(area, form, form.focus);
+        let (width, rows) = (usize::from(field.width.max(1)), usize::from(field.height.max(1)));
+        let prompt = form.focus == Control::Prompt;
+        let Some(editor) = form.editor(form.focus) else { return };
+        if prompt {
+            editor.insert_lines(text);
+            editor.reveal(width, rows);
+        } else {
+            editor.insert(text);
+        }
     }
 
     pub(super) fn queue_form_view(form: &Form) -> Box<Form> {
@@ -603,6 +633,15 @@ fn keep_mode(form: &mut Form, mode: &str) {
     form.mode = Combo::new(modes, Some(chosen));
 }
 
+fn wheel_form(form: &mut Form, delta: isize, area: Rect, pos: Position) {
+    let prompt = ui::queue_form::text(area, form, Control::Prompt);
+    if form.opened().is_none() && prompt.contains(pos) {
+        form.scroll_prompt(delta, usize::from(prompt.width.max(1)), usize::from(prompt.height.max(1)));
+    } else {
+        wheel_lists(form, delta, area);
+    }
+}
+
 fn wheel_lists(form: &mut Form, delta: isize, area: Rect) {
     let rows = ui::queue_form::list(area, form).map(ui::combo::rows);
     if let (Some(open), Some(rows)) = (form.opened(), rows) {
@@ -628,8 +667,9 @@ fn press_control(form: &mut Form, area: Rect, (control, row, col): (Control, usi
         form.cleanup = !form.cleanup;
         return;
     }
+    let top = (control == Control::Prompt).then(|| ui::queue_form::top(area, form));
     if let Some(editor) = form.editor(control) {
-        let line = ui::first_line(editor, r) + row;
+        let line = top.unwrap_or_else(|| ui::first_line(editor, r)) + row;
         editor.place(usize::from(r.width.max(1)), line, col);
     } else if opening {
         form.combo(control).into_iter().for_each(Combo::open);

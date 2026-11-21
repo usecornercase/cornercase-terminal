@@ -78,7 +78,7 @@ ssh -N -T -o BatchMode=yes -o ExitOnForwardFailure=yes -o ControlPath=none \
 
 ### Remembered per machine
 
-The window remembers the tunnels of each machine, on your laptop (`tunnels.json`, beside `machines.json`), so they are there next time:
+The window remembers the tunnels of each machine, on your laptop (`tunnels.json`, beside `session.json`), so they are there next time:
 
 - **They come back.** A window that reaches `devbox` again brings up its tunnels that are not closed, on the same port of your laptop when it's free.
 - **close and forget are different.** **close** (the ports dialog's **close tunnel**, the menu, `tunnel close`) stops the ssh but keeps the tunnel listed as `closed`, so it stays out of the way and **open** brings it back. **forget** removes it for good.
@@ -137,23 +137,31 @@ Reconnecting never asks for a password or a passphrase, since the window has you
 
 ## Switch machines from the window
 
-Once a window has reached another machine, or a program has added one (below), the bottom of the sidebar names the machine it is on, on a row of its own under **`Worktrees`** and **`Recap`**: `devbox ▴`, or `this machine ▴` once you come back. Click it to move the window somewhere else without closing it:
+Once your list holds a machine ([Settings › Machines](../machines/), or a window that reached one with `cornercase remote`, or a program that added one: below), the bottom of the sidebar names where the window is, on a row of its own under **`Worktrees`** and **`Recap`**: `this computer ▴`, or `on devbox ▴` once it moved. Click it to move the window somewhere else without closing it:
 
-- **this machine** attaches it to the server on your laptop, and starts one if none is running.
-- Every machine a window reached before, with `cornercase remote` or from this menu, or that a program added (below), attaches it there, with its last `--command`. The one the window is on has a `✓`.
-- **add machine…** asks for a destination, anything `ssh` takes, such as `devbox` or `me@gpu-box`.
-- **forget…** takes a machine off the list.
-- The tunnels the window holds, one row each, with what you can do to them: see [Remembered per machine](#remembered-per-machine). The button then shows their count, `devbox ⇄2 ▴`.
+- **this computer** attaches it to the server on your laptop, and starts one if none is running.
+- Every machine of your list, shown or not. On this computer each one opens a submenu: **show its work here ✓** hides the machine (its link ends, its server keeps running there), **show its work here ·** shows a hidden one again, and **open the window there** attaches the window there, with its **command** if it has one. On another machine a click attaches the window there at once, and the one the window is on has a `✓`.
+- **only this computer** hides every machine and **show all** shows them all, each dim when it would change nothing; see [Hide a machine](../machines/#hide-a-machine). They show only while the window is on this computer.
+- **add machine…** opens the form of Settings › Machines, and **manage machines…** opens that page. Both show only while the window is on this computer: on another machine the menu lists your computer's machines and nothing else to change them.
+- The tunnels the window holds, one row each, with what you can do to them: see [Remembered per machine](#remembered-per-machine). The button then shows their count, `on devbox ⇄2 ▴`.
+
+<Screen
+  name="machine-menu"
+  alt="The machine menu over the bottom of the sidebar: a check by this computer, then vps with an arrow to its submenu, only this computer, show all, add machine… and manage machines…"
+  crop={[0, 20, 34, 18]}
+/>
+
+There is no **forget…**: a machine is removed in Settings › Machines, where its link ends too.
 
 The shells and agents of the machine you leave keep running there, and when you come back the window shows them as they are now. Until the other machine answers, the window says where it's going and stays where it was: **back** (or `Esc`) returns at once. If the switch fails, for instance because `ssh` refused the key or the other machine runs another version, the window says why and you stay where you were.
 
-Before reaching a machine it has never reached, the window asks first: **connect** (or `Enter`) goes, **back** stays. The question comes from the window on your laptop, not from the server it shows, so a server on another machine can't send your laptop's `ssh` anywhere without you.
+Before reaching a machine a program added and no window has reached yet, the window asks first: **connect** (or `Enter`) goes, **back** stays. The question comes from the window on your laptop, not from the server it shows, so a server on another machine can't send your laptop's `ssh` anywhere: it can only pick among your own list.
 
 <Aside>
-Like reconnecting, switching never asks for a password, a passphrase or an unknown host key, since the window holds your terminal. Use a key in your SSH agent, and for a new host run `cornercase remote <host>` once in a terminal, so `ssh` can ask you about its key; that also puts it on the list.
+Like reconnecting, switching never asks for a password, a passphrase or an unknown host key, since the window holds your terminal. Use a key in your SSH agent, and for a new host run `cornercase remote <host>` once in a terminal, so `ssh` can ask you about its key; that also adds it to your list, not shown.
 </Aside>
 
-The list is kept on your laptop, in `machines.json` in cornercase's state folder (`~/.local/state/cornercase/`, or `%LOCALAPPDATA%\cornercase\` on Windows), beside `remote-shells.json`. The button shows only once a window has reached another machine or a program has added one, so it stays out of the way if you never use one. With the [icon bar](../projects-workspaces-tabs/#the-icon-bar) it's an icon above **`Help`**, and on a [small screen](../small-terminals/) it shares the **`Worktrees`** band of the projects menu.
+The list is your computer's list of machines, `machines` in [`config.json`](../../reference/configuration/#machines): a machine is added once and offers two things, **show its work here** (the server links it) and the window there. A machine a window reaches joins it, not shown, with the `--command` it used. The first time, the `machines.json` older releases kept beside `session.json` is moved into it, not shown, and removed. The button shows as soon as the list holds a machine, so it stays out of the way if you have none. With the [icon bar](../projects-workspaces-tabs/#the-icon-bar) it's an icon above **`Help`**, and on a [small screen](../small-terminals/) it shares the **`Worktrees`** band of the projects menu.
 
 A program on your laptop, such as another interface that offers to move to another server, reads the same list with `cornercase remote --known`, one machine per line, or as JSON:
 
@@ -162,12 +170,12 @@ cornercase remote --known --json
 ```
 
 ```json
-{"machines": [{"destination": "devbox", "command": null},
-              {"destination": "me@10.0.0.5", "command": "~/bin/cornercase"},
-              {"destination": "gpu-box", "command": null, "unreached": true}]}
+{"machines": [{"name": "devbox", "destination": "devbox", "command": null},
+              {"name": "10.0.0.5", "destination": "me@10.0.0.5", "command": "~/bin/cornercase"},
+              {"name": "gpu-box", "destination": "gpu-box", "command": null, "unreached": true}]}
 ```
 
-The machines come in the menu's order, each with its `--command` (`null` without one), and an entry the menu leaves out, such as one broken by hand, is left out here too. It reads the list on this computer, so it needs no server and no `ssh`, and `CORNERCASE_REMOTE` changes nothing for it (`--remote` is refused). `unreached` is there, `true`, for a machine a program added that no window has reached yet. Read the list this way rather than the file itself, whose shape can change with any release.
+The machines come in the order of the file, each with its name and its `--command` (`null` without one), and an entry the menu leaves out, such as one broken by hand, is left out here too. It reads the list on this computer, so it needs no server and no `ssh`, and `CORNERCASE_REMOTE` changes nothing for it (`--remote` is refused). `unreached` is there, `true`, for a machine a program added that no window has reached yet. Read the list this way rather than the file itself, whose shape can change with any release.
 
 A program can change the list too, with no server and no `ssh`:
 
@@ -176,14 +184,14 @@ cornercase remote --remember me@10.0.0.5 --command '~/bin/cornercase'
 cornercase remote --forget devbox
 ```
 
-`--remember` adds a machine to the menu, or gives one already there its new `--command` (leaving it out clears it), and `--forget` takes it off, as **forget…** does. The window asks before it first connects to a machine a program added, as it does for one you type in **add machine…**, and stops asking once it has connected. A destination must be one word that doesn't start with `-`, or the command exits with status 2, and forgetting a machine that isn't on the list changes nothing and exits with 1. `ssh` must already know the host key of a machine a program added, because switching never asks for one: accept it with a plain `ssh <host>` once, or run `cornercase remote <host>` with the same `--command` (without it, the saved command is cleared), or the switch fails and says why. If `machines.json` exists but can't be read, `--remember` and `--forget` refuse it with status 1 and change nothing. A window that is already open sees the change the next time it connects (switching or reconnecting) or forgets a machine, or when it is opened again; a window that is on that machine writes it back, with the `--command` it reached it with, when it reconnects, so change a machine a window is on only after it has left.
+`--remember` adds a machine to the list, not shown, or gives one already there its new `--command` (leaving it out clears it), and `--forget` takes it off, as the `×` of Settings does: its link ends and its server keeps running there. The window asks before it first connects to a machine a program added, and stops asking once it has connected. A destination must be one word that doesn't start with `-`, or the command exits with status 2, and forgetting a machine that isn't on the list changes nothing and exits with 1. `ssh` must already know the host key of a machine a program added, because switching never asks for one: accept it with a plain `ssh <host>` once, or run `cornercase remote <host>` with the same `--command` (without it, the saved command is cleared), or the switch fails and says why. If `config.json` exists but can't be read, `--remember` and `--forget` refuse it with status 1 and change nothing. A window that is already open sees the change the next time it connects (switching or reconnecting) or when it is opened again; a window that reconnects never writes its command over the list.
 
 ## Versions
 
 For the window, both machines must run the same version of cornercase. When they don't, it says which one to update before opening the window:
 
 ```text
-`devbox` runs cornercase 0.11.9 and this machine 0.11.12. Run `cornercase update` there
+`devbox` runs cornercase 0.11.9 and this computer 0.11.12. Run `cornercase update` there
 ```
 
 When the other machine is the older one, it offers to run `cornercase update` there for you, through `ssh`, and attaches once that is done. When there is no terminal to ask in, or you decline, it exits with status 5. When yours is older, run `cornercase update` on it.
@@ -191,7 +199,7 @@ When the other machine is the older one, it offers to run `cornercase update` th
 The [commands for scripts and agents](#commands-for-scripts-and-agents) are more relaxed: the other machine may run the same version or a newer one, so a script on your laptop keeps working when only `devbox` updates. When the other machine is the older one they refuse, since its server could ignore what a newer command asks for, and say how to update it from here:
 
 ```text
-`devbox` runs cornercase 0.11.9 and this machine 0.11.12. Update it from here with `cornercase --remote devbox update`
+`devbox` runs cornercase 0.11.9 and this computer 0.11.12. Update it from here with `cornercase --remote devbox update`
 ```
 
 They exit with status 5, so a program can tell this from a machine it couldn't reach (a `--remote-command` wrapper that exits with 5 during `update`, `restart`, `kill-server` or `logs` passes it through too), and with `--json` they also print both versions (`there` is `null` when that cornercase is too old to say) and the command to update it as one line of JSON (see [Exit status](../scripts-and-agents/#exit-status)).

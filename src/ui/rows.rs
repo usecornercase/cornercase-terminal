@@ -299,11 +299,15 @@ pub(super) fn draw_row_buttons(f: &mut Frame, view: &View, row: Rect, pitch: u16
     draw_close_in(f, view, row, row_close_button(row, pitch), bg);
 }
 
+pub(super) fn menu_shown(view: &View, row: Rect, pitch: u16) -> bool {
+    pitch > 1 || sidebar_hovered(view, row)
+}
+
 pub(super) fn draw_menu_in(f: &mut Frame, view: &View, row: Rect, pitch: u16, bg: Style) {
-    let hover = sidebar_hovered(view, row);
-    if !hover && pitch == 1 {
+    if !menu_shown(view, row, pitch) {
         return;
     }
+    let hover = sidebar_hovered(view, row);
     let menu = row_menu_button(row, pitch);
     let menu_style = button_lit(view, hover, bg, menu, Color::Cyan);
     draw_band(

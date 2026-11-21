@@ -73,7 +73,7 @@ impl Cold {
         theirs
     }
 
-    fn backup(&self) -> std::path::PathBuf {
+    fn backup(&self) -> PathBuf {
         self.server.session.with_extension("json.bak")
     }
 }

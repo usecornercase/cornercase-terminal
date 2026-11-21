@@ -70,6 +70,18 @@ fn itself(path: &[&str], found: &ArgMatches, own: &str) -> Option<String> {
     said.then(|| String::from("a bot cannot write to itself"))
 }
 
+fn secrets(path: &[&str], found: &ArgMatches, own: &str) -> Option<String> {
+    match path {
+        ["bot", "secret", "set" | "remove"] => Some(String::from(crate::bots::secrets::NO_CHANGE)),
+        ["bot", "secret", "give" | "decline"] => Some(String::from(crate::bots::asks::NO_ANSWER)),
+        ["bot", "secret", "list"] => {
+            let other = found.get_one::<String>("bot").filter(|bot| !bot.eq_ignore_ascii_case(own));
+            other.map(|_| String::from(crate::bots::secrets::OWN_ONLY))
+        }
+        _ => None,
+    }
+}
+
 fn writes_a_file(leaf: &Command, found: &ArgMatches) -> Option<String> {
     let help = crate::cli::help::TO_FILE;
     let arg = leaf.get_arguments().find(|arg| {
@@ -88,6 +100,25 @@ fn window(path: &[&str], found: &ArgMatches) -> Option<String> {
         _ => return None,
     };
     Some(String::from(why))
+}
+
+fn changes_the_list(found: &ArgMatches) -> bool {
+    ["remember", "forget"].iter().any(|flag| found.get_one::<String>(flag).is_some())
+}
+
+fn elsewhere_or_runs(path: &[&str], found: &ArgMatches) -> Option<String> {
+    let why = match path {
+        ["plugin", sub, ..] if !["list", "status", "actions", "logs"].contains(sub) => crate::bots::NO_PLUGINS,
+        ["machines", "add" | "edit" | "remove" | "update" | "hide" | "show", ..] => crate::bots::NO_MACHINES,
+        ["remote"] if changes_the_list(found) => crate::bots::NO_MACHINES,
+        ["tunnel", ..] => crate::bots::NO_TUNNELS,
+        _ => return None,
+    };
+    Some(String::from(why))
+}
+
+pub(super) fn refused_remote(remote: bool) -> Option<String> {
+    (remote && own_bot().is_some()).then(|| String::from(crate::bots::ELSEWHERE))
 }
 
 fn in_no_place(leaf: &Command, found: &ArgMatches) -> Option<String> {
@@ -109,6 +140,8 @@ pub(super) fn refusal(command: &Command, matches: &ArgMatches, own: &str) -> Opt
     access(&path, found)
         .or_else(|| window(&path, found))
         .or_else(|| itself(&path, found, own))
+        .or_else(|| secrets(&path, found, own))
+        .or_else(|| elsewhere_or_runs(&path, found))
         .or_else(|| writes_a_file(leaf, found))
         .or_else(|| in_no_place(leaf, found))
 }

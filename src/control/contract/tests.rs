@@ -62,6 +62,16 @@ mod describing {
     }
 
     #[test]
+    fn keeping_a_bots_secrets_is_a_feature() {
+        assert!(FEATURES.contains(&"bot-secrets"));
+    }
+
+    #[test]
+    fn a_bot_asking_for_its_secrets_is_a_feature() {
+        assert!(FEATURES.contains(&"bot-asks"));
+    }
+
+    #[test]
     fn bot_setup_is_a_feature() {
         assert!(FEATURES.contains(&"bot-setup"));
     }
@@ -130,6 +140,16 @@ mod describing {
     fn a_machine_s_tunnels_and_the_end_of_a_hold_are_features() {
         assert!(FEATURES.contains(&"machine-tunnels"));
         assert!(FEATURES.contains(&"tunnel-hold-ended"));
+    }
+
+    #[test]
+    fn a_machine_that_is_not_shown_and_has_a_command_is_a_feature() {
+        assert!(FEATURES.contains(&"machine-shown"));
+    }
+
+    #[test]
+    fn hiding_and_showing_a_machine_is_a_feature() {
+        assert!(FEATURES.contains(&"machine-hide"));
     }
 
     #[test]

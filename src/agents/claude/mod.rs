@@ -49,6 +49,10 @@ pub(in crate::agents) const EFFORT: Option<crate::agents::Effort> = Some(crate::
 });
 pub(in crate::agents) const ADD_DIR: Option<&str> = Some("--add-dir");
 pub(in crate::agents) const UNATTENDED: &[&str] = &["--dangerously-skip-permissions"];
+pub(in crate::agents) const NEVER_ASKS: crate::agents::ModeTable = &[
+    ("bypass permissions (dangerous)", &["--permission-mode", "bypassPermissions"]),
+    ("bypass permissions (dangerous)", &["--permission-mode=bypassPermissions"]),
+];
 pub(in crate::agents) const STATUS_BY_FOLDER: bool = false;
 pub(in crate::agents) const RECORD_BY_FOLDER: bool = false;
 pub(in crate::agents) const MODELS: &[&str] = &["opus", "sonnet", "haiku"];
@@ -77,6 +81,7 @@ pub(in crate::agents) const HEADLESS: Option<crate::agents::headless::Spec> = So
     recap: true,
     stderr: false,
     prepare: None,
+    ended: None,
 });
 const BOT: crate::agents::headless::BotSupport = crate::agents::headless::BotSupport {
     accesses: &[crate::agents::headless::Access::Cornercase, crate::agents::headless::Access::Full],

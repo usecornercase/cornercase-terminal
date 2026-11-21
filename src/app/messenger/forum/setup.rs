@@ -134,6 +134,7 @@ impl App {
         if messenger.saved.forum.as_ref().is_some_and(|old| old.channel != forum.channel) {
             messenger.forum.posts.forget();
             messenger.forum.labels = Labels::default();
+            messenger.saved.bot_posts.clear();
         }
         messenger.saved.forum = Some(forum);
         messenger.save();
