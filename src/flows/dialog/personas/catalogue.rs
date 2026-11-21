@@ -122,15 +122,15 @@ impl Catalogue {
         let name =
             if offered.emoji.is_empty() { offered.name.clone() } else { format!("{} {}", offered.emoji, offered.name) };
         let kib = offered.text.len().div_ceil(1024);
-        let note = match (&offered.problem, offered.replaces) {
+        let value = match (&offered.problem, offered.replaces) {
             (Some(problem), _) => problem.clone(),
             (None, true) => format!("{kib} KiB · replaces yours"),
             (None, false) => format!("{kib} KiB"),
         };
         RowText {
             label: format!("  {mark} {name}"),
-            value: offered.description.clone(),
-            note,
+            value,
+            note: offered.description.clone(),
             red: offered.problem.is_some(),
             ..RowText::default()
         }

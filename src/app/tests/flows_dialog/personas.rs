@@ -73,22 +73,25 @@ fn an_empty_library_says_how_to_get_personas() {
 }
 
 #[test]
-fn new_writes_a_persona_of_yours_from_its_fields() {
-    let mut s = personas_page();
+fn new_writes_a_persona_of_yours_from_its_fields_and_selects_it() {
+    let mut s = with_reviewer();
     button(&mut s.app, WIDE, dialog::NEW);
-    fill(&mut s, 0, "Careful Tester");
+    fill(&mut s, 0, "Zed Tester");
     fill(&mut s, 2, "🧪");
     click_list_row(&mut s.app, WIDE, 3);
     type_in(&mut s.app, "Write a test first.", WIDE);
     button(&mut s.app, WIDE, dialog::SAVE);
     button(&mut s.app, WIDE, dialog::SAVE);
 
-    let file = std::fs::read_to_string(library(&s).join("careful-tester.md")).expect("saved");
+    let file = std::fs::read_to_string(library(&s).join("zed-tester.md")).expect("saved");
     assert_eq!(draft::body(&file), "Write a test first.\n");
     assert!(!file.contains("source:"), "{file}");
     assert!(page(&s.app).form.is_none());
-    assert_eq!(page(&s.app).library[0].emoji, "🧪");
-    assert!(dialog(&s.app).agents.personas.iter().any(|named| named.id == "careful-tester"));
+    assert_eq!(
+        page(&s.app).selected().map(|persona| (persona.id.as_str(), persona.emoji.as_str())),
+        Some(("zed-tester", "🧪"))
+    );
+    assert!(dialog(&s.app).agents.personas.iter().any(|named| named.id == "zed-tester"));
 }
 
 #[test]

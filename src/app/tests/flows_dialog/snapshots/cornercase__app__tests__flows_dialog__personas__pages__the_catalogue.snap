@@ -1,6 +1,6 @@
 ---
 source: src/app/tests/flows_dialog/personas.rs
-assertion_line: 232
+assertion_line: 215
 expression: "shown(&mut s.app, WIDE).replace(&server.url(), \"SERVER\")"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                                                            "
@@ -9,9 +9,9 @@ expression: "shown(&mut s.app, WIDE).replace(&server.url(), \"SERVER\")"
 "     │ 2 personas in octo/agents: check the ones to import                                                                                      │     "
 "  + N│                                                                                                                                          │     "
 "     │ ▌ [ ] Engineering           1 persona  check all                                                                                         │     "
-"     │     [ ] 👁️ Code Reviewer    Reviews code.  1 KiB · replaces yours                                                                        │     " Hidden by multi-width symbols: [(16, " ")]
+"     │     [ ] 👁️ Code Reviewer    1 KiB · replaces yours  Reviews code.                                                                        │     " Hidden by multi-width symbols: [(16, " ")]
 "     │   [ ] Testing               1 persona  check all                                                                                         │     "
-"     │     [ ] Tester              Tests it.  1 KiB                                                                                             │     "
+"     │     [ ] Tester              1 KiB  Tests it.                                                                                             │     "
 "     │                                                                                                                                          │     "
 "     │                                                                                                                                          │     "
 "     │                                                                                                                                          │     "

@@ -403,9 +403,12 @@ impl Page {
         }
     }
 
-    pub(crate) fn saved(&mut self, persona: &str) {
+    pub(crate) fn saved(&mut self, id: &str, name: &str) {
         self.form = None;
-        self.notice = Some(format!("saved {persona}"));
+        if let Some(i) = self.library.iter().position(|persona| persona.id == id) {
+            self.cursor = i;
+        }
+        self.notice = Some(format!("saved {name}"));
     }
 
     pub(crate) fn refused(&mut self, error: String) {

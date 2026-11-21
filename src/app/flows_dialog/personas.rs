@@ -120,7 +120,7 @@ impl App {
         self.refresh_personas_page();
         let Some(page) = self.persona_page() else { return };
         match saved {
-            Ok(info) => page.saved(&info.name),
+            Ok(info) => page.saved(&info.id, &info.name),
             Err(refusal) => page.refused(refusal.message),
         }
     }
