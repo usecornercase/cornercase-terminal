@@ -196,7 +196,7 @@ pub(crate) fn use_flow_close_when_merged() -> Result<()> {
 }
 
 pub(crate) fn use_flow_sync() -> Result<()> {
-    require("flow-sync", "cannot sync your flows with your machines")
+    require(control::contract::FLOW_SYNC, "cannot sync your flows with your machines")
 }
 
 pub(crate) fn use_flow_free_builds() -> Result<()> {

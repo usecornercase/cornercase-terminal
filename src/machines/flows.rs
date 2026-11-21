@@ -3,6 +3,7 @@ use serde_json::Value;
 use super::act::{self, QUICK};
 use super::ask;
 use super::link::{self, Connect};
+use crate::control::contract::FLOW_SYNC;
 use crate::control::{
     Command, Contract, FlowImport, FlowInfo, FlowList, FlowSpec, FlowSyncFailure, Flows, MachineFlows, Response,
 };
@@ -13,7 +14,6 @@ use crate::time::Stamp;
 const USER: &str = "user";
 const YOURS: &str = "yours";
 const SENDER_KEPT: usize = 64;
-const FEATURE: &str = "flow-sync";
 const OLDER: &str = "it runs an older cornercase, which keeps no time on a flow and may save it readable by \
                                 other users: update cornercase there, then sync again";
 
@@ -79,7 +79,7 @@ fn told(connect: &dyn Connect, machine: &str, command: Command) -> Result<(), St
 fn offers_sync(connect: &dyn Connect, machine: &str) -> Result<(), String> {
     let described = answered(&ask::ask(connect, machine, Command::Contract(Contract {}), None, QUICK)?)?;
     let features = described["features"].as_array().map(Vec::as_slice).unwrap_or_default();
-    if features.iter().any(|feature| feature == FEATURE) { Ok(()) } else { Err(OLDER.into()) }
+    if features.iter().any(|feature| feature == FLOW_SYNC) { Ok(()) } else { Err(OLDER.into()) }
 }
 
 fn listed(connect: &dyn Connect, machine: &str) -> Result<Vec<Held<FlowSpec>>, String> {

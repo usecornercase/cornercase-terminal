@@ -22,7 +22,7 @@ struct Machine {
 
 impl Machine {
     fn new(listed: Value) -> Self {
-        Self { listed, refuses: None, features: vec!["tunnel-machine", FEATURE], asked: Arc::default() }
+        Self { listed, refuses: None, features: vec!["tunnel-machine", FLOW_SYNC], asked: Arc::default() }
     }
 
     fn asked(&self) -> Vec<Value> {
