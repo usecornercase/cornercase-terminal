@@ -143,4 +143,20 @@ mod modes {
 
         assert_eq!((mode(&saved), mode(&unsaid)), (0o600, 0o600));
     }
+
+    #[test]
+    fn a_flow_file_in_a_folder_that_can_be_listed_but_not_searched_is_broken() {
+        let dir = TempDir::new();
+        let flows = dir.path().join("flows");
+        let duo = save(&flows, &named("Duo"), None).expect("save Duo");
+        let mut listing = Listing::default();
+
+        std::fs::set_permissions(&flows, std::fs::Permissions::from_mode(0o600)).expect("lock the folder");
+        read_dir(&flows, Origin::User, &mut listing);
+        std::fs::set_permissions(&flows, std::fs::Permissions::from_mode(0o700)).expect("unlock the folder");
+
+        assert_eq!(listing.broken.iter().map(|(path, _)| path).collect::<Vec<_>>(), [&duo]);
+        assert!(listing.broken[0].1.contains("ermission denied"), "{:?}", listing.broken);
+        assert!(listing.flows.is_empty() && listing.unlisted.is_empty(), "{listing:?}");
+    }
 }

@@ -277,7 +277,7 @@ fn flow_files(
     let mut paths = Vec::new();
     for entry in entries {
         match entry {
-            Ok(path) if path.extension().is_some_and(|ext| ext == EXTENSION) && path.is_file() => paths.push(path),
+            Ok(path) if path.extension().is_some_and(|ext| ext == EXTENSION) => paths.extend(flow_file(path, listing)),
             Err(error) if !listing.unlisted.iter().any(|(unlisted, _)| unlisted == dir) => {
                 listing.unlisted.push((dir.to_path_buf(), error.to_string()));
             }
@@ -286,6 +286,17 @@ fn flow_files(
     }
     paths.sort();
     paths
+}
+
+fn flow_file(path: PathBuf, listing: &mut Listing) -> Option<PathBuf> {
+    match std::fs::metadata(&path) {
+        Ok(metadata) => metadata.is_file().then_some(path),
+        Err(error) => {
+            let reason = Error::FlowFile { path: path.clone(), reason: error.to_string() }.to_string();
+            listing.broken.push((path, reason));
+            None
+        }
+    }
 }
 
 pub(crate) fn read(path: &Path) -> Result<Flow> {
