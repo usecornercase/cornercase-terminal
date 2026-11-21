@@ -150,12 +150,12 @@ both ends are yours.
 It prints one line per machine; with --json {\"machines\": [{\"machine\", \"sent\", \"kept\", \"same\",
 \"failed\": [{\"name\", \"error\"}], \"error\"}]}: the names of the flows sent and kept, how many were
 already the same, the flows that did not go and why (refused there, too large to share, a time ahead
-that could not be fixed here, a file of yours that cannot be read, two files of yours with one name, or a
-folder of your flows that cannot be read), and error when the machine could not be reached. It exits
-with 1 when no machine is shown here, when --machine or FLOW names none, and, after printing the
-answer, when a machine could not be reached or a flow did not go. Each flow's env values go too; on
-Linux and macOS each flow file of yours is written readable only by you on both ends, and on Windows
-it is in your user profile.
+that could not be fixed here, two files of yours with one name, a file of yours that cannot be read,
+named by its file name, or a folder of your flows that cannot be read, named by its path), and error
+when the machine could not be reached. It exits with 1 when no machine is shown here, when --machine or
+FLOW names none, and, after printing the answer, when a machine could not be reached or a flow did not
+go. Each flow's env values go too; on Linux and macOS each flow file of yours is written readable only
+by you on both ends, and on Windows it is in your user profile.
 
 Examples:
   cornercase flow sync
