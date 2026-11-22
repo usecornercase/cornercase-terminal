@@ -168,10 +168,26 @@ test('the form refuses a name in use and a missing name', () => {
   assert.equal(app.overlay?.kind, 'bot');
 });
 
+test('a long draft in a low chat stays inside the field', () => {
+  const app = panes(140, 9);
+  app.bots.page = true;
+  app.bots.show('prs');
+  const bot = app.bots.current();
+  assert.ok(bot);
+  bot.draft = draftOf('1\n2\n3\n4\n5\n6');
+  const { cursor } = app.render();
+  const lines = screen(app).split('\n');
+  const edge = lines.findLastIndex((line) => line.includes('▀▀▀▀'));
+  assert.ok(cursor && edge > 0, screen(app));
+  assert.ok(cursor.y < edge, `${cursor.y} ${edge}\n${screen(app)}`);
+});
+
 test('a not-yet agent is greyed and cannot be chosen', () => {
   const app = demo(140);
   app.openBotForm();
   inputKey(app, key('Tab'));
+  inputKey(app, key('Tab'));
+  assert.equal(app.overlay?.kind === 'bot' && app.overlay.focus, 'agent');
   for (const k of ['ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowDown', 'Enter']) inputKey(app, key(k));
   const o = app.overlay;
   assert.equal(o?.kind, 'bot');
@@ -183,6 +199,7 @@ test('opencode offers full access only, with its reason', () => {
   app.openBotForm();
   inputKey(app, key('Tab'));
   inputKey(app, key('Tab'));
+  assert.equal(app.overlay?.kind === 'bot' && app.overlay.focus, 'agent');
   for (const k of ['ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowDown', 'Enter']) inputKey(app, key(k));
   const o = app.overlay;
   assert.equal(o?.kind, 'bot');
@@ -199,6 +216,7 @@ test('gemini says it reads and writes only its folder, claude that it reads anyt
   assert.match(screen(app), /through cornercase +▾[^\n]*\n[^\n]* reads anything, writes only in its folder/);
   inputKey(app, key('Tab'));
   inputKey(app, key('Tab'));
+  assert.equal(app.overlay?.kind === 'bot' && app.overlay.focus, 'agent');
   for (const k of ['ArrowDown', 'ArrowDown', 'ArrowDown', 'Enter']) inputKey(app, key(k));
   assert.match(screen(app), / reads and writes only in its folder/);
   assert.doesNotMatch(screen(app), /can change any file/);

@@ -157,6 +157,10 @@ fn column(pane: Rect) -> Rect {
     Rect { x: pane.x + margin + (room - width) / 2, width, ..pane }
 }
 
+fn band_of(input: Rect) -> Rect {
+    if input.height >= 3 { Rect { y: input.y + 1, height: input.height - 2, ..input } } else { input }
+}
+
 fn composer(inner: Rect, top: u16, rows: u16, pitch: u16) -> (Rect, Rect, Rect) {
     let height = (rows + 2).max(pitch);
     let y = inner.bottom().saturating_sub(height).max(top);
@@ -164,12 +168,12 @@ fn composer(inner: Rect, top: u16, rows: u16, pitch: u16) -> (Rect, Rect, Rect) 
     let send_width = SEND_WIDTH.min(input.width);
     let send =
         Rect { x: input.right().saturating_sub(send_width + PAD), width: send_width, ..input }.intersection(input);
-    let text_y = (input.y + 1).min(input.bottom());
+    let band = band_of(input);
     let input_text = Rect {
         x: input.x + PAD.min(input.width),
-        y: text_y,
+        y: band.y,
         width: input.width.saturating_sub(2 * PAD + send_width + 1),
-        height: rows.min(input.bottom().saturating_sub(text_y)),
+        height: rows.min(band.height),
     };
     (input, input_text, send)
 }
@@ -539,7 +543,7 @@ pub(in crate::ui) fn draw(f: &mut Frame, view: &View, chat: &ChatView, pane: Rec
 
 fn draw_composer(f: &mut Frame, view: &View, chat: &ChatView, areas: &ChatAreas) {
     let input = areas.input;
-    let band = if input.height >= 3 { Rect { y: input.y + 1, height: input.height - 2, ..input } } else { input };
+    let band = band_of(input);
     if band != input {
         let edge = Style::default().fg(view.surface());
         for (y, glyph) in [(input.y, TOP_HALF), (input.bottom() - 1, BOTTOM_HALF)] {

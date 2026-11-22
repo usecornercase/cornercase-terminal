@@ -247,6 +247,24 @@ fn a_wide_pane_keeps_the_chat_in_a_centred_column() {
     assert_eq!(areas.input.x, areas.lines.x);
 }
 
+#[rstest]
+#[case::eight_rows(8, 6)]
+#[case::five_rows(5, 3)]
+#[case::six_rows(6, 2)]
+fn a_low_pane_keeps_the_draft_inside_the_band(#[case] height: u16, #[case] rows: u16) {
+    let pane = Rect::new(0, 0, 60, height);
+    let areas = chat_areas(pane, rows, 1);
+    assert!(areas.input_text.bottom() < areas.input.bottom(), "{areas:?}");
+    assert!(areas.input_text.y > areas.input.y, "{areas:?}");
+    let mut view = chat(&[]);
+    view.input = Editor::new(&(1..=rows).map(|n| format!("line {n}")).collect::<Vec<_>>().join("\n"));
+    let mut t = Terminal::new(TestBackend::new(60, height)).expect("test backend");
+    let shown = View { chat: Some(view), ..super::view(&[]) };
+    t.draw(|f| bots::chat::draw(f, &shown, shown.chat.as_ref().expect("a chat"), pane, 1)).expect("draw");
+    let cursor = t.get_cursor_position().expect("a cursor");
+    assert!(cursor.y < areas.input.bottom() - 1, "{cursor:?} {areas:?}");
+}
+
 #[test]
 fn a_tall_pane_leaves_a_row_above_the_field_and_a_low_one_does_not() {
     let tall = chat_areas(Rect::new(0, 0, CHAT_W, CHAT_H), 1, 1);

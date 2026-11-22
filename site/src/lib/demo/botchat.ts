@@ -340,6 +340,8 @@ interface Layout {
   send: Rect;
 }
 
+const bandOf = (input: Rect): Rect => (input.h >= 3 ? rect(input.x, input.y + 1, input.w, input.h - 2) : input);
+
 function column(area: Rect): Rect {
   const margin = Math.min(MARGIN, Math.floor(area.w / 4));
   const room = Math.max(0, area.w - 2 * margin);
@@ -358,12 +360,13 @@ function chatLayout(area: Rect, pitch: number, bot: Bot): Layout {
   const input = rect(inner.x, inputY, inner.w, bottom(inner) - inputY);
   const air = inner.h >= AIRY_FROM ? 1 : 0;
   const top = Math.min(bottom(rule) + air, input.y);
+  const band = bandOf(input);
   return {
     header,
     rule,
     lines: rect(inner.x, top, inner.w, Math.max(0, input.y - air - top)),
     input,
-    text: rect(input.x + PAD, Math.min(input.y + 1, bottom(input)), tw, rowsNeeded),
+    text: rect(input.x + PAD, band.y, tw, Math.min(rowsNeeded, band.h)),
     send: rect(right(input) - PAD - sendW, input.y, sendW, input.h),
   };
 }
@@ -435,7 +438,7 @@ function drawInput(p: Painter, l: Layout, bot: Bot): void {
   const bg: Style = { bg: p.surface };
   const t = l.text;
   const input = l.input;
-  const band = input.h >= 3 ? rect(input.x, input.y + 1, input.w, input.h - 2) : input;
+  const band = bandOf(input);
   if (band !== input) {
     p.span(input.x, input.y, '▄'.repeat(input.w), { fg: p.surface }, input.w);
     p.span(input.x, bottom(input) - 1, '▀'.repeat(input.w), { fg: p.surface }, input.w);
