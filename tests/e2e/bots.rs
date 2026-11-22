@@ -35,6 +35,12 @@ pub(super) fn started() -> Arc<Session> {
     started_running("")
 }
 
+pub(super) fn open_the_bots(ui: &mut Harness) {
+    const BUTTON: &str = "Bots ›";
+    ui.wait_for("the Bots button shows", |s| s.contains(BUTTON));
+    ui.click(ui.position_of(BUTTON));
+}
+
 fn started_running(before: &str) -> Arc<Session> {
     let session = with_agent_running(before);
     let started = session.cold(&["start-server"]);
@@ -198,6 +204,17 @@ fn inside_a_bot_the_list_of_machines_is_not_changed_from_the_command_line() {
 }
 
 #[test]
+fn the_bots_button_shows_before_any_bot_and_its_page_offers_new_bot() {
+    let session = started();
+    let mut ui = Harness::open(Arc::clone(&session), ROWS * 2, COLS);
+    ui.wait_for("the window is drawn", |s| s.contains(ui::MORE_LABEL));
+    open_the_bots(&mut ui);
+    ui.wait_for("the page says what a bot is", |s| s.contains("Meet your bots") && s.contains("‹ Projects"));
+    ui.click(ui.position_of("+ New bot"));
+    ui.wait_for("the form opens", |s| s.contains("For") && s.contains("create"));
+}
+
+#[test]
 fn a_bot_made_from_the_form_answers_in_its_chat() {
     let session = started();
     let mut ui = Harness::open(Arc::clone(&session), ROWS, COLS);
@@ -335,7 +352,7 @@ fn a_bot_with_a_routine_shown() -> (Arc<Session>, Harness) {
     session.says(&["queue", "add", "--bot", "prs", "--every", "2h", "--prompt", "check", "--name", "Review PRs"]);
     let mut ui = Harness::open(Arc::clone(&session), ROWS * 2, 160);
     ui.wait_for("the window is drawn", |s| s.contains(ui::MORE_LABEL));
-    ui.click(ui.position_of("prs"));
+    open_the_bots(&mut ui);
     ui.wait_for("its chat shows", |s| s.contains("Message prs…"));
     (session, ui)
 }

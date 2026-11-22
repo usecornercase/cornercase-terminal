@@ -2,11 +2,19 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.13.112
+## 0.13.113
 
 - **Open, close and rename a machine's tabs from your sidebar.** A machine's workspace now has a `+ Tab` row, and its tabs a `×` and a ` ⋯ ` menu with **rename tab** and **close tab**, as yours. The `×` asks first when an agent works in the tab, and in the compact layout; a shell tab closes at once.
 - **The prefix key's menu works on a machine's tab**: **new tab**, **split right**, **split down**, **close pane**, **rename tab**, the arrows between panes, **rename workspace** and **close workspace** act there, and the machine's workspace stays picked.
 - While the machine closes a tab, its row reads `closing…`. A refusal shows the machine's own words (`could not split the pane on vps: pane 3 is too small to split right`), and a machine that is down or restarted says that nothing was sent or changed.
+
+## 0.13.112
+
+- **Bots have a page of their own.** **Bots ›**, at the right of the Projects title, opens it in every layout, also before you make your first bot. While a bot answers it shows the spinner, and while answers wait for you how many, for every bot together.
+- **On the page** your bots take the place of the projects list and the Agents section, with **+ New** under them, the chat takes the place of the panes and the bot's card the place of the workspaces. It opens on the bot you read last, or the first one, and **‹ Projects** takes you back. The Bots section between the lists and the Agents section is gone, and its fold with it.
+- **With no chat chosen** the page says what a bot is, has **+ New bot** and three ideas, PRs, News and Releases, that open the form with the name and what it is for filled in, so a first bot is two clicks away. With bots, it asks you to pick one. Removing the bot you are reading leaves you on the page.
+- **In compact mode** Bots › is always in the projects menu and opens the list of your bots, or that page while you have none.
+- Nothing changes for scripts: `cornercase bot list --json`, the `bot` events and `shown_bot` in `cornercase status --json` already carry what the page shows.
 
 ## 0.13.111
 

@@ -23,10 +23,10 @@ pub(super) fn access_words(access: Access) -> (&'static str, bool) {
 
 impl App {
     pub(in crate::app) fn bots_view(&self) -> Option<ui::BotsView> {
-        let live = &self.panels.bots.live;
-        if live.is_empty() {
+        if !self.bots_offered() {
             return None;
         }
+        let live = &self.panels.bots.live;
         let shown = self.shown_bot();
         let entries = live
             .iter()
@@ -41,7 +41,7 @@ impl App {
                 asking: !state.asks.is_empty(),
             })
             .collect();
-        Some(ui::BotsView { entries, scroll: self.scroll.of(List::Bots), folded: self.panels.bots.collapsed })
+        Some(ui::BotsView { entries, scroll: self.scroll.of(List::Bots), page: self.bots_page() })
     }
 
     fn bot_detail_short(&self, at: usize) -> String {
@@ -141,8 +141,8 @@ impl App {
 
     pub(in crate::app) fn bots_mouse(&mut self, areas: &ui::Areas, pos: Position, kind: MouseEventKind, area: Rect) {
         match kind {
-            MouseEventKind::Down(MouseButton::Left) if areas.bots_title.contains(pos) => {
-                self.press_bots_title(areas, pos);
+            MouseEventKind::Down(MouseButton::Left) if self.bots_layout(areas).button().contains(pos) => {
+                self.open_bot_form(None);
             }
             MouseEventKind::Down(MouseButton::Left) => self.press_bot(areas, pos, area),
             MouseEventKind::Down(MouseButton::Right) => {
@@ -151,15 +151,6 @@ impl App {
                 }
             }
             _ => {}
-        }
-    }
-
-    fn press_bots_title(&mut self, areas: &ui::Areas, pos: Position) {
-        if ui::bots_new(areas.bots_title).contains(pos) {
-            self.open_bot_form(None);
-        } else if !areas.compact() && ui::bots_fold(areas.bots_title).contains(pos) {
-            self.panels.bots.collapsed = !self.panels.bots.collapsed;
-            self.clamp_bots_scroll();
         }
     }
 

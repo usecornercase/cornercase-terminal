@@ -1,18 +1,12 @@
 use super::*;
 use crate::agents::headless::Action;
-use crate::app::layout::List;
 
 fn drawn(app: &mut App) -> String {
     format!("{}", render(app, AREA).backend())
 }
 
-fn row_of(app: &App, i: usize) -> Rect {
-    let a = app.layout(AREA);
-    ui::bot_rows(a.bots_list, a.pitch, app.panels.bots.live.len(), app.scroll.of(List::Bots)).item(i)
-}
-
 fn click_bot(app: &mut App, i: usize) {
-    let row = row_of(app, i);
+    let row = bot_row(app, i);
     render(app, AREA);
     click(app, Position::new(row.x + 3, row.y));
 }
@@ -170,12 +164,12 @@ fn an_answer_on_screen_is_neither_unread_nor_notified() {
 
 #[cfg(unix)]
 #[test]
-fn a_click_on_a_project_goes_back_to_the_panes() {
+fn projects_on_the_page_goes_back_to_the_panes() {
     let mut c = project_chat(ANSWER);
     show(&mut c);
     assert!(c.app.bot_shown());
-    click(&mut c.app, entry_pos());
-    assert!(!c.app.bot_shown());
+    press_back(&mut c.app);
+    assert!(!c.app.bot_shown() && !c.app.bots_page());
     assert!(c.app.visible_tab().is_some());
 }
 
@@ -223,20 +217,6 @@ fn an_example_fills_the_field_and_sends_nothing() {
     assert_eq!(c.lines(), []);
 }
 
-#[test]
-fn the_fold_of_the_section_is_saved_and_restored() {
-    let mut c = chat(ANSWER);
-    let title = c.app.layout(AREA).bots_title;
-    render(&mut c.app, AREA);
-    click(&mut c.app, Position::new(title.x + 3, title.y));
-    assert!(c.app.panels.bots.collapsed);
-    let state = c.app.state();
-    assert!(state.bots_collapsed);
-    let (mut other, _rx) = empty_app();
-    other.restore(&state, AREA);
-    assert!(other.panels.bots.collapsed);
-}
-
 #[cfg(unix)]
 fn pane_shows_nothing_of(c: &mut Chat, words: &[&str]) {
     type_line(&mut c.app, "markerend");
@@ -260,7 +240,7 @@ fn keys_while_a_chat_shows_never_reach_a_pane() {
     send_key(&mut c.app, KeyCode::Char('b'), KeyModifiers::CONTROL);
     c.app.handle_event(AppEvent::Input(Event::Paste("pasted".into())), AREA).expect("paste");
     send_key(&mut c.app, KeyCode::Enter, KeyModifiers::NONE);
-    click(&mut c.app, entry_pos());
+    press_back(&mut c.app);
     assert_eq!(c.lines().first().map(|line| line.kind), Some(chat::Kind::You));
     pane_shows_nothing_of(&mut c, &["abc", "pasted", "^B"]);
 }
@@ -277,7 +257,7 @@ fn a_key_while_a_bot_shows_but_the_chat_has_no_keys_reaches_no_pane() {
     send_key(&mut c.app, KeyCode::Char('q'), KeyModifiers::NONE);
     c.app.handle_event(AppEvent::Input(Event::Paste("pasted".into())), AREA).expect("paste");
     c.app.screen.nav = None;
-    click(&mut c.app, entry_pos());
+    press_back(&mut c.app);
     pane_shows_nothing_of(&mut c, &["pasted", "qmarker"]);
 }
 

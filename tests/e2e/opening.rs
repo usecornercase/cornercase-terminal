@@ -65,8 +65,7 @@ const DOCS: &str = "https://example.com/docs";
 fn bot_answered(session: &Arc<Session>, ui: &mut Harness) {
     session.says(&["bot", "new", "prs", "--agent", "claude"]);
     session.says(&["bot", "say", "prs", "go", "--wait"]);
-    ui.wait_for("the bot's row shows", |s| s.contains("prs"));
-    ui.click(ui.position_of("prs"));
+    bots::open_the_bots(ui);
     ui.wait_for("the answer shows", |s| s.contains(DOCS));
     ui.click(ui.position_of(DOCS));
 }

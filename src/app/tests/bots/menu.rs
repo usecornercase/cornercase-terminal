@@ -2,8 +2,7 @@ use super::*;
 
 pub(super) fn open_menu(c: &mut Chat) {
     render(&mut c.app, AREA);
-    let a = c.app.layout(AREA);
-    let row = ui::bot_rows(a.bots_list, a.pitch, 1, 0).item(0);
+    let row = bot_row(&mut c.app, 0);
     right_click(&mut c.app, Position::new(row.x + 3, row.y));
 }
 
@@ -36,9 +35,8 @@ fn new_conversation_is_greyed_while_a_turn_runs() {
 fn the_menu_button_of_a_row_opens_the_same_menu() {
     let mut c = chat(ANSWER);
     render(&mut c.app, AREA);
-    let a = c.app.layout(AREA);
-    let row = ui::bot_rows(a.bots_list, a.pitch, 1, 0).item(0);
-    let button = ui::bot_menu(row, a.pitch);
+    let row = bot_row(&mut c.app, 0);
+    let button = ui::bot_menu(row, 1);
     assert!(!button.is_empty());
     click(&mut c.app, button.as_position());
     assert_eq!(menu_labels(&c.app).len(), 7);

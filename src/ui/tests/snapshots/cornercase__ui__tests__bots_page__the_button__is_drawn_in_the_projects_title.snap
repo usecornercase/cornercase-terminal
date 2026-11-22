@@ -1,10 +1,10 @@
 ---
-source: src/ui/tests/bots_section.rs
-expression: drawn.backend()
+source: src/ui/tests/bots_page.rs
+expression: "render_sized(&shown(Sidebar::SideBySide, quiet, false), W,\nTALL.height).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "                                                         │                                          "
-" Projects                      │ Workspaces              │                                          "
+" Projects               Bots › │ Workspaces              │                                          "
 "                               │                         │                                          "
 "▌ cornercase (1)               │  + New                  │                                          "
 "  website (1)                  │                         │                                          "
@@ -22,12 +22,12 @@ expression: drawn.backend()
 "                               │                         │                                          "
 "                               │                         │                                          "
 "                               │                         │                                          "
-" ───────────────────────────── │                         │                                          "
-" ▾ Bots                      + │                         │                                          "
 "                               │                         │                                          "
-"  ●2 prs    claude · opus      │                         │                                          "
-"  ⠋ digest          codex      │                         │                                          "
-"  inbox    claude · haiku      │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
+"                               │                         │                                          "
 "                               │                         │                                          "
 " ───────────────────────────── │                         │                                          "
 "  Worktrees      Recap         │                         │                                          "

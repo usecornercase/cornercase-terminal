@@ -25,6 +25,13 @@ impl App {
     }
 
     pub(in crate::app) fn leave_bot(&mut self) {
+        self.leave_chat();
+        if std::mem::take(&mut self.panels.bots.page) {
+            log::info!("ui", "bots page left");
+        }
+    }
+
+    pub(in crate::app) fn leave_chat(&mut self) {
         if let Some(shown) = self.panels.bots.shown.take() {
             log::info!("ui", "bot hidden", bot = shown.bot);
         }
@@ -39,6 +46,8 @@ impl App {
         lines.drain(..skip);
         log::info!("ui", "bot shown", bot = id, lines = lines.len());
         self.panels.bots.shown = Some(Chat::new(id.clone(), lines));
+        self.panels.bots.page = true;
+        self.panels.bots.last = Some(id.clone());
         let _ = self.bot_seen(&id);
         self.screen.nav = None;
         self.panels.files.set_full_screen(false);

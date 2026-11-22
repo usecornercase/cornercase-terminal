@@ -1,13 +1,13 @@
 ---
-source: src/ui/tests/bots_section.rs
-expression: "render_sized(&compact_view(Some(Nav::Projects)), 80, 30).backend()"
+source: src/ui/tests/bots_page.rs
+expression: "render_sized(&compact_view(Some(Nav::Projects), false), 80, 30).backend()"
 ---
 "                                                                                "
 "   ≡     cornercase                                           ▤      ☐      ⌕   "
 "                                                                                "
 "                                                                                "
 "                                                                                "
-" Projects                                                              Bots ›   "
+" Projects                                                         ⠋ ●2 Bots ›   "
 "                                                                                "
 "                                                                                "
 "▌                                                                               "
