@@ -73,7 +73,7 @@ test('a click on a bot shows its chat in place of the panes, with its card', () 
   const app = demo(140);
   press(app, 'digest');
   const text = screen(app);
-  assert.match(text, /digest {2}codex/);
+  assert.match(text, /digest {3}codex/);
   assert.match(text, /what merged yesterday\?/);
   assert.match(text, /Yesterday in web-shop:/);
   assert.match(text, /access +full access/);
@@ -168,10 +168,26 @@ test('the form refuses a name in use and a missing name', () => {
   assert.equal(app.overlay?.kind, 'bot');
 });
 
+test('a long draft in a low chat stays inside the field', () => {
+  const app = panes(140, 9);
+  app.bots.page = true;
+  app.bots.show('prs');
+  const bot = app.bots.current();
+  assert.ok(bot);
+  bot.draft = draftOf('1\n2\n3\n4\n5\n6');
+  const { cursor } = app.render();
+  const lines = screen(app).split('\n');
+  const edge = lines.findLastIndex((line) => line.includes('▀▀▀▀'));
+  assert.ok(cursor && edge > 0, screen(app));
+  assert.ok(cursor.y < edge, `${cursor.y} ${edge}\n${screen(app)}`);
+});
+
 test('a not-yet agent is greyed and cannot be chosen', () => {
   const app = demo(140);
   app.openBotForm();
   inputKey(app, key('Tab'));
+  inputKey(app, key('Tab'));
+  assert.equal(app.overlay?.kind === 'bot' && app.overlay.focus, 'agent');
   for (const k of ['ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowDown', 'Enter']) inputKey(app, key(k));
   const o = app.overlay;
   assert.equal(o?.kind, 'bot');
@@ -182,6 +198,8 @@ test('opencode offers full access only, with its reason', () => {
   const app = demo(140);
   app.openBotForm();
   inputKey(app, key('Tab'));
+  inputKey(app, key('Tab'));
+  assert.equal(app.overlay?.kind === 'bot' && app.overlay.focus, 'agent');
   for (const k of ['ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowDown', 'Enter']) inputKey(app, key(k));
   const o = app.overlay;
   assert.equal(o?.kind, 'bot');
@@ -195,10 +213,25 @@ test('opencode offers full access only, with its reason', () => {
 test('gemini says it reads and writes only its folder, claude that it reads anything', () => {
   const app = demo(140);
   app.openBotForm();
-  assert.match(screen(app), /through cornercase: reads anything, writes only in its folder/);
+  assert.match(screen(app), /through cornercase +▾[^\n]*\n[^\n]* reads anything, writes only in its folder/);
   inputKey(app, key('Tab'));
+  inputKey(app, key('Tab'));
+  assert.equal(app.overlay?.kind === 'bot' && app.overlay.focus, 'agent');
   for (const k of ['ArrowDown', 'ArrowDown', 'ArrowDown', 'Enter']) inputKey(app, key(k));
-  assert.match(screen(app), /through cornercase: reads and writes only in its folder/);
+  assert.match(screen(app), / reads and writes only in its folder/);
+  assert.doesNotMatch(screen(app), /can change any file/);
+});
+
+test('the form lists what it is for right after the name, and full access warns', () => {
+  const app = demo(140);
+  app.openBotForm();
+  const text = screen(app);
+  assert.ok(text.indexOf('For ') < text.indexOf('Agent '), text);
+  const o = app.overlay;
+  if (o?.kind !== 'bot') return assert.fail('a bot form');
+  o.access.chosen = 1;
+  app.dirty();
+  assert.match(screen(app), /can change any file and run anything, unattended/);
 });
 
 test('an example fills the field and sends nothing', () => {
