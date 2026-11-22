@@ -28,12 +28,15 @@ pub(crate) struct TunnelPort {
     pub(crate) port: u16,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) direction: Option<Direction>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) machine: Option<String>,
 }
 
 impl TunnelPort {
     pub(super) fn fields(&self, fields: &mut Fields) {
         fields.add("port", self.port);
         fields.maybe("direction", self.direction.map(Direction::name));
+        fields.maybe("machine", self.machine.as_ref());
     }
 }
 
@@ -85,6 +88,20 @@ pub(crate) struct TunnelList {
     pub(crate) tunnels: Vec<TunnelInfo>,
     pub(crate) windows: usize,
     pub(crate) takers: usize,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) machine_tunnels: Vec<MachineTunnelInfo>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct MachineTunnelInfo {
+    pub(crate) machine: String,
+    pub(crate) port: u16,
+    pub(crate) local: Option<u16>,
+    pub(crate) state: String,
+    pub(crate) error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) registered: Option<bool>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

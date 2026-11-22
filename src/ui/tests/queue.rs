@@ -4,43 +4,50 @@ use crate::list::Combo;
 use crate::queue::Place;
 use crate::queue::form::{Choice, Choices, Control, Form, When};
 
-fn queue_tab() -> View<'static> {
-    let row = |when: &str, label: &str, meta: &str, colour| IssueRow {
-        key: when.into(),
-        title: label.into(),
+fn queue_row(when: &str, title: &str, meta: &str, colour: Option<Color>) -> QueueRow {
+    QueueRow {
+        fold: None,
+        run: false,
+        when: when.into(),
+        title: title.into(),
         meta: meta.into(),
+        hidden: None,
         colour,
-    };
-    let items = vec![
-        row("2026-10-14 14:30", "#482 Fix the login form", "pending · claude · shop › issue-482", None),
-        row("2026-10-14 15:00", "Update the docs", "started · pane 7 · codex · shop", Some(Color::Green)),
-        row("2026-10-14 16:00", "Fix logout", "failed · codex is not installed · codex · shop", Some(Color::Red)),
-        row("2026-10-14 17:00", "Review the tests", "missed · claude · api", Some(Color::Yellow)),
-    ];
-    let issues = Issues {
-        title: "Issues · shop".into(),
-        tabs: vec!["All", "GitHub", "Queue"],
-        tab: 2,
-        toggles: Vec::new(),
-        on: Vec::new(),
-        body: IssuesBody::List {
-            filter: String::new(),
-            items,
-            selected: Some(0),
-            scroll: 0,
-            empty: String::new(),
-            tail: None,
-        },
-        note: None,
+        dim: false,
+    }
+}
+
+fn queue_view(rows: Vec<QueueRow>) -> View<'static> {
+    let queue = QueueList {
+        filter: String::new(),
+        rows,
+        selected: Some(0),
+        scroll: 0,
+        empty: "nothing queued: new schedules a prompt, and schedule on an issue queues it".into(),
+        tail: None,
         hint: "enter edits it · start now runs it at once".into(),
-        buttons: vec!["new", "start now", "remove", "clear started", "cancel"],
+        buttons: vec!["new", "start now", "remove", "clear started", "done"],
     };
-    View { overlay: Some(Overlay::Issues(issues)), ..view(&["shop"]) }
+    View { overlay: Some(Overlay::QueueList(Box::new(queue))), ..view(&["shop"]) }
+}
+
+fn queue_list() -> View<'static> {
+    queue_view(vec![
+        queue_row("2026-10-14 14:30", "#482 Fix the login form", "pending · claude · shop › issue-482", None),
+        queue_row("2026-10-14 15:00", "Update the docs", "started · pane 7 · codex · shop", Some(Color::Green)),
+        queue_row("2026-10-14 16:00", "Fix logout", "failed · codex is not installed · codex · shop", Some(Color::Red)),
+        queue_row("2026-10-14 17:00", "Review the tests", "missed · claude · api", Some(Color::Yellow)),
+    ])
+}
+
+fn tail_of<'a>(view: &'a mut View<'static>) -> &'a mut QueueList {
+    let Some(Overlay::QueueList(queue)) = &mut view.overlay else { panic!("the queue modal") };
+    queue
 }
 
 #[test]
-fn the_queue_tab_lists_every_entry_with_its_state_in_colour() {
-    let t = render_sized(&queue_tab(), 120, 24);
+fn the_queue_lists_every_entry_with_its_state_in_colour() {
+    let t = render_sized(&queue_list(), 120, 24);
     insta::assert_snapshot!(t.backend());
     let lines = lines(&t);
     let failed = lines.iter().position(|l| l.contains("Fix logout")).expect("the failed row");
@@ -48,6 +55,80 @@ fn the_queue_tab_lists_every_entry_with_its_state_in_colour() {
     let x = u16::try_from(lines[failed][..x].chars().count()).expect("column");
     let y = u16::try_from(failed).expect("row");
     assert_eq!(t.backend().buffer()[(x, y)].fg, Color::Red);
+}
+
+#[test]
+fn a_narrow_row_keeps_its_meta_inside_the_row() {
+    let meta = "failed · codex is not installed · codex · shop";
+    for width in 43..=60 {
+        let view = queue_view(vec![queue_row("2026-10-14 16:00", "Fix the login form", meta, Some(Color::Red))]);
+        let list = queue_list_rows(Rect::new(0, 0, width, 24));
+        let cut = crate::text::truncate_right(meta, usize::from(list.width) / 3);
+        let lines = lines(&render_sized(&view, width, 24));
+        let row = lines.iter().find(|l| l.contains("16:00")).expect("the row");
+        assert!(row.contains(&format!("{cut}  │")), "{width}: {row}");
+    }
+}
+
+#[test]
+fn the_queue_border_is_drawn_at_the_corners_of_its_area() {
+    let (top_left, bottom_right) = corners_of_its_area(&queue_list());
+    assert_eq!((top_left.as_str(), bottom_right.as_str()), ("╭", "╯"));
+}
+
+fn routines() -> Vec<QueueRow> {
+    let run = |when: &str, status: &str, origin: &str, colour| QueueRow {
+        run: true,
+        ..queue_row(when, status, origin, colour)
+    };
+    vec![
+        QueueRow {
+            fold: Some(false),
+            ..queue_row("2026-10-15 09:00", "Review the open pull requests", "↻ every day 09:00 · claude · shop", None)
+        },
+        run("2026-10-14 09:00", "started · pane 7", "claude · shop › routine/review", Some(Color::Green)),
+        run("2026-10-13 09:00", "removed", "claude · shop", Some(Color::DarkGray)),
+        run("2026-10-12 09:00", "kept · 2 uncommitted", "claude · shop", Some(Color::Yellow)),
+        queue_row("2026-10-15 14:30", "#482 Fix the login form", "pending · claude · shop › issue-482", None),
+        QueueRow {
+            fold: Some(true),
+            hidden: Some(" · 2 runs".into()),
+            ..queue_row("2026-10-16 08:00", "Nightly build", "↻ every day 08:00 · codex · api", None)
+        },
+        QueueRow {
+            dim: true,
+            ..queue_row("paused", "Triage new issues", "↻ every 2h · claude · shop", Some(Color::DarkGray))
+        },
+    ]
+}
+
+#[test]
+fn the_queue_shows_routines_with_their_runs_under_them_a_folded_one_and_a_paused_one() {
+    let mut view = queue_view(routines());
+    let queue = tail_of(&mut view);
+    queue.hint = "enter edits it · start now runs it once more · ← → fold its runs".into();
+    queue.buttons = vec!["new", "start now", "pause", "remove", "clear started", "done"];
+    let t = render_sized(&view, 120, 24);
+    insta::assert_snapshot!(t.backend());
+    let lines = lines(&t);
+    let folded = lines.iter().find(|l| l.contains("Nightly build")).expect("the folded routine");
+    assert!(folded.contains("▸ ") && folded.contains(" · 2 runs"), "{folded}");
+    let open = lines.iter().find(|l| l.contains("Review the open")).expect("the open routine");
+    assert!(open.contains("▾ "), "{open}");
+}
+
+#[test]
+fn a_click_on_the_mark_folds_and_elsewhere_on_the_row_opens() {
+    let view = queue_view(routines());
+    let Some(Overlay::QueueList(queue)) = &view.overlay else { panic!("the queue modal") };
+    let screen = Rect::new(0, 0, 120, 24);
+    let list = queue_list_rows(screen);
+    let at = |x: u16, y: u16| queue_list_hit(screen, queue, Position::new(list.x + x, list.y + y));
+    assert_eq!(at(1, 0), Some(crate::queue::dialog::Hit::Fold(0)));
+    assert_eq!(at(10, 0), Some(crate::queue::dialog::Hit::Row(0)));
+    assert_eq!(at(1, 1), Some(crate::queue::dialog::Hit::Row(1)));
+    let done = *queue_list_buttons(screen, &queue.buttons).last().expect("done");
+    assert_eq!(queue_list_hit(screen, queue, done.as_position()), Some(crate::queue::dialog::Hit::Button(4)));
 }
 
 fn form(prompt: &str, note: Option<&str>) -> Form {
@@ -132,6 +213,47 @@ fn a_prompt_with_line_breaks_shows_them() {
     let lines = lines(&shown(form("first line\nsecond line", None), 100, 24));
     let first = lines.iter().position(|l| l.contains("│ first line ")).expect("the first line");
     assert!(lines[first + 1].contains("│ second line "), "{lines:#?}");
+}
+
+#[test]
+fn the_prompt_is_taller_in_a_tall_window() {
+    let f = form("Fix the login form", None);
+    let screen = Rect::new(0, 0, 100, 40);
+    assert_eq!(queue_form::text(screen, &f, Control::Prompt).height, 8);
+    assert_eq!(queue_form::area(screen).height, 28);
+    let short = Rect::new(0, 0, 100, 24);
+    let shift = queue_form::rect(screen, &f, Control::Agent).y - queue_form::area(screen).y;
+    assert_eq!(shift, queue_form::rect(short, &f, Control::Agent).y - queue_form::area(short).y + 5);
+    insta::assert_snapshot!(shown(f, 100, 40).backend());
+}
+
+#[test]
+fn a_short_window_keeps_three_rows() {
+    let f = form("Fix the login form", None);
+    let screen = Rect::new(0, 0, 100, 24);
+    assert_eq!(queue_form::text(screen, &f, Control::Prompt).height, 3);
+    assert_eq!(queue_form::area(screen).height, 23);
+}
+
+#[test]
+fn a_scrolled_prompt_shows_how_much_is_hidden() {
+    let text: Vec<String> = (1..=12).map(|n| format!("line {n}")).collect();
+    let mut f = form(&text.join("\n"), None);
+    f.prompt.scroll_by(4, 60, 3);
+    let lines = lines(&shown(f, 100, 24));
+    let label = lines.iter().position(|l| l.contains("Prompt")).expect("the label");
+    assert!(lines[label].contains(" ↑ 4 more "), "{lines:#?}");
+    assert!(lines[label + 1].contains("│ line 5 "), "{lines:#?}");
+    assert!(lines[label + 4].contains(" ↓ 5 more "), "{lines:#?}");
+}
+
+#[test]
+fn the_focused_prompt_says_what_enter_does() {
+    let mut f = form("fix", None);
+    let hint = "enter breaks the line · tab moves on";
+    assert!(!lines(&shown(f.clone(), 100, 24)).iter().any(|l| l.contains(hint)));
+    f.focus = Control::Prompt;
+    assert!(lines(&shown(f, 100, 24)).iter().any(|l| l.contains(hint)));
 }
 
 #[test]
@@ -238,62 +360,6 @@ fn a_flow_replaces_the_mode_and_the_account() {
     assert!(lines.iter().any(|l| l.contains("set by the flow's roles")), "{lines:#?}");
 }
 
-fn queue_issues(items: Vec<IssueRow>, hint: &str, buttons: Vec<&'static str>) -> Issues {
-    let body = IssuesBody::List {
-        filter: String::new(),
-        items,
-        selected: Some(0),
-        scroll: 0,
-        empty: String::new(),
-        tail: None,
-    };
-    Issues {
-        title: "Issues · shop".into(),
-        tabs: vec!["All", "GitHub", "Queue"],
-        tab: 2,
-        toggles: Vec::new(),
-        on: Vec::new(),
-        body,
-        note: None,
-        hint: hint.into(),
-        buttons,
-    }
-}
-
-#[test]
-fn the_queue_tab_shows_routines_their_runs_and_a_paused_one() {
-    let row = |when: &str, label: &str, meta: &str, colour| IssueRow {
-        key: when.into(),
-        title: label.into(),
-        meta: meta.into(),
-        colour,
-    };
-    let items = vec![
-        row("2026-10-15 09:00", "Review the open pull requests", "↻ every day 09:00 · claude · shop", None),
-        row("paused", "Triage new issues", "↻ every 2h · claude · shop", Some(Color::DarkGray)),
-        row(
-            "2026-10-14 09:00",
-            "Review the open pull requests",
-            "started · pane 7 · claude · shop › routine/review",
-            Some(Color::Green),
-        ),
-        row("2026-10-13 09:00", "Review the open pull requests", "removed · claude · shop", Some(Color::DarkGray)),
-        row(
-            "2026-10-12 09:00",
-            "Review the open pull requests",
-            "kept · 2 uncommitted · claude · shop",
-            Some(Color::Yellow),
-        ),
-    ];
-    let issues = queue_issues(
-        items,
-        "enter edits it · start now runs it once more",
-        vec!["new", "start now", "pause", "remove", "clear started", "cancel"],
-    );
-    let view = View { overlay: Some(Overlay::Issues(issues)), ..view(&["shop"]) };
-    insta::assert_snapshot!(render_sized(&view, 120, 24).backend());
-}
-
 #[test]
 fn a_bot_hides_the_agent_mode_account_and_open_in_rows() {
     let places = vec![Choice {
@@ -322,22 +388,17 @@ fn a_bot_hides_the_agent_mode_account_and_open_in_rows() {
 }
 
 fn with_tail(mut view: View<'static>, tail: &str, empty: bool) -> View<'static> {
-    let Some(Overlay::Issues(Issues { body: IssuesBody::List { items, tail: slot, empty: text, .. }, .. })) =
-        &mut view.overlay
-    else {
-        panic!("the issues modal")
-    };
-    *slot = Some(tail.into());
+    let queue = tail_of(&mut view);
+    queue.tail = Some(tail.into());
     if empty {
-        items.clear();
-        *text = "nothing queued: new schedules a prompt, and schedule on an issue queues it".into();
+        queue.rows.clear();
     }
     view
 }
 
 #[test]
-fn the_queue_tab_ends_with_a_dim_line_naming_the_bot_routines() {
-    let t = render_sized(&with_tail(queue_tab(), "2 bot routines: in each bot's chat", false), 120, 24);
+fn the_queue_ends_with_a_dim_line_naming_the_bot_routines() {
+    let t = render_sized(&with_tail(queue_list(), "2 bot routines: in each bot's chat", false), 120, 24);
     let lines = lines(&t);
     let last = lines.iter().position(|l| l.contains("Review the tests")).expect("the last row");
     assert!(lines[last + 1].contains("2 bot routines: in each bot's chat"), "{lines:#?}");
@@ -349,7 +410,7 @@ fn the_queue_tab_ends_with_a_dim_line_naming_the_bot_routines() {
 
 #[test]
 fn the_bot_routines_line_goes_under_the_empty_text() {
-    let t = render_sized(&with_tail(queue_tab(), "1 bot routine: in its bot's chat", true), 120, 24);
+    let t = render_sized(&with_tail(queue_list(), "1 bot routine: in its bot's chat", true), 120, 24);
     let lines = lines(&t);
     let empty = lines.iter().position(|l| l.contains("nothing queued")).expect("the empty text");
     assert!(lines[empty + 1].contains("1 bot routine: in its bot's chat"), "{lines:#?}");
@@ -357,17 +418,8 @@ fn the_bot_routines_line_goes_under_the_empty_text() {
 
 #[test]
 fn the_bot_routines_line_is_left_out_when_the_rows_fill_the_list() {
-    let mut view = queue_tab();
-    let Some(Overlay::Issues(Issues { body: IssuesBody::List { items, .. }, .. })) = &mut view.overlay else {
-        panic!("the issues modal")
-    };
-    let (key, title, meta) = (items[0].key.clone(), items[0].title.clone(), items[0].meta.clone());
-    items.extend((0..40).map(|_| IssueRow {
-        key: key.clone(),
-        title: title.clone(),
-        meta: meta.clone(),
-        colour: None,
-    }));
+    let mut view = queue_list();
+    tail_of(&mut view).rows.extend((0..40).map(|_| queue_row("2026-10-14 14:30", "Fix", "pending", None)));
     let t = render_sized(&with_tail(view, "9 bot routines: in each bot's chat", false), 120, 24);
     assert!(!lines(&t).join("\n").contains("bot routines"));
 }

@@ -148,6 +148,7 @@ pub(super) enum MenuAction {
     RemoteRename(Aim),
     RemoteTabRename(TabAim),
     RemoteTabClose(TabAim),
+    RemotePorts(Aim),
     RemoteAgentFold(PaneAim),
     MachineNote(u64),
     Machine(MachineItem),

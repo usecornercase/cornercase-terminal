@@ -70,13 +70,27 @@ jobs:
 
   windows:
     name: clippy + tests (windows-2025)
-    runs-on: windows-2025
+    runs-on: windows-2022
     timeout-minutes: 45
     env:
       CARGO_PROFILE_DEV_DEBUG: line-tables-only
     steps:
       - name: long paths
         run: git config --system core.longpaths true
+
+      - name: console host
+        shell: pwsh
+        run: |
+          $release = "WezTerm-windows-20240203-110809-5046fc22"
+          $package = "$env:RUNNER_TEMP\wezterm.zip"
+          $unpacked = "$env:RUNNER_TEMP\wezterm"
+          $host_dir = "$env:RUNNER_TEMP\conpty"
+          Invoke-WebRequest -Uri "https://github.com/wezterm/wezterm/releases/download/20240203-110809-5046fc22/$release.zip" -OutFile $package
+          if ((Get-FileHash $package -Algorithm SHA256).Hash -ne '57e5d03b585303d81e8b8e96d1230362852eb39aca92b3b29c7a42cfb82f9ac4') { throw 'unexpected WezTerm release' }
+          Expand-Archive $package $unpacked
+          New-Item -ItemType Directory -Force $host_dir | Out-Null
+          Copy-Item "$unpacked\$release\conpty.dll", "$unpacked\$release\OpenConsole.exe" $host_dir
+          Add-Content $env:GITHUB_PATH $host_dir
 
       - uses: actions/checkout@v7
 

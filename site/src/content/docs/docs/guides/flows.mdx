@@ -255,6 +255,25 @@ cornercase flow import octocat/security-audit
 - An import is a copy: a repository changed or deleted later does not change yours, and the page shows the file as it was at the last refresh, so read the file you actually import.
 - The list leaves out flows that set `env` or `args`, but a flow you import from any address can; the import shows them in red.
 
+## Sync your flows with your machines
+
+A flow you made or tuned on your laptop can be on your [machines](../machines/) too, so [starting one on a machine](../machines/#start-work-on-a-machine) runs the version you just saved. Nothing is sent on its own: you send it when you want, from **settings → Flows**, while at least one machine is linked and shown there.
+
+- **`sync`** sends the selected flow, like **`export`** acts on it. It is offered for your flows (built-in flows you edited included), not for a built-in you did not change nor for a project's flow, which already travels with its repository.
+- **`sync all`** sends every flow of yours.
+- **Where**: every machine in **settings → Machines** that shows its work here. A hidden machine, or a computer you only open a window on, has no link to send them through, and a machine that is not linked right then gets nothing: sync again once it is back. A machine still on an older cornercase gets nothing either, since it would keep no time on a flow and could save it readable by other users: the answer says `it runs an older cornercase: update it there, then sync again`.
+- **What it says**: what each machine got, or why it failed, such as `vps: sent Duo · 2 already the same`, `vps: kept its newer Duo` or `vps: not synced: vps unreachable`. A flow that cannot go is named with why: one too large to share, a file of yours that cannot be read (written by a newer cornercase, for instance), two files of yours with the same name (neither goes until you rename or delete one), or a folder of your flows that cannot be read.
+- **The last saved wins**: saving a flow writes the time in its file (`changed`), by each computer's clock, so keep your machines' clocks right (a time more than 5 minutes ahead is replaced by the receiving computer's). A flow saved later on the machine is left alone there, even when it is saved while the sync runs.
+- **Nothing is deleted there**: deleting a flow here leaves the machine's copy, and deleting or restoring a built-in flow stays on this computer, as do your default flow and your order.
+- **Nothing asks**: both ends are your machines and you clicked, so a synced flow is saved there without the question an import asks, even when it sets `env` or `args`. Its `env` values and arguments go too, secrets included; on Linux and macOS each flow file of yours is written readable only by you, on both ends; on Windows it is in your user profile. A flow that arrives or replaces one of yours shows a note there naming the computer it came from. Agents the flow uses that are not installed there are named on that machine's Flows list, as usual.
+
+From a terminal, `cornercase flow sync` sends every flow of yours and prints what each machine got; name a flow to send only it (`--machine vps` for one machine, `--json` for programs):
+
+```sh
+cornercase flow sync
+cornercase flow sync Review --machine vps --json
+```
+
 ## Where flows are kept
 
 | Flows | Where |
@@ -313,7 +332,7 @@ cornercase flow save draft.json --check
 cornercase flow hide Quick
 ```
 
-`flow export` and `flow import` [share a flow](#share-a-flow). `flow save`, `flow delete`, `flow hide` and `flow restore` [manage them](../scripts-and-agents/#manage-flows), `flow runs`, `flow messages` and `flow files` [follow a run](../scripts-and-agents/#follow-a-flow-run), and a program with an editor of its own reads each flow whole in `flow list --json` and saves one with `flow save` (the `flow-save` request). `flow list` lists the flows with their agents and their problems. `flow run` starts one, answering once the tabs exist with the workspace's id and each role's pane id; nothing changes in the window unless you pass `--focus`. An agent can use them too, and [`start`](../scripts-and-agents/#start-an-agent) takes `--model`, `--mode` and `--effort` to start a single agent with a model, a mode and an effort of its own. See [Start a flow](../scripts-and-agents/#start-a-flow) in Scripts and agents.
+`flow export` and `flow import` [share a flow](#share-a-flow), and `flow sync` [sends your flows to your machines](#sync-your-flows-with-your-machines). `flow save`, `flow delete`, `flow hide` and `flow restore` [manage them](../scripts-and-agents/#manage-flows), `flow runs`, `flow messages` and `flow files` [follow a run](../scripts-and-agents/#follow-a-flow-run), and a program with an editor of its own reads each flow whole in `flow list --json` and saves one with `flow save` (the `flow-save` request). `flow list` lists the flows with their agents and their problems. `flow run` starts one, answering once the tabs exist with the workspace's id and each role's pane id; nothing changes in the window unless you pass `--focus`. An agent can use them too, and [`start`](../scripts-and-agents/#start-an-agent) takes `--model`, `--mode` and `--effort` to start a single agent with a model, a mode and an effort of its own. See [Start a flow](../scripts-and-agents/#start-a-flow) in Scripts and agents.
 
 `cornercase status --json` gives each workspace that runs a flow a `run` with its `end`, whether it was `reached` and, when the run closes its agents once merged, `close_when_merged` (and `free_builds` when it also frees their builds), and `exited`, the roles whose agent exited by itself, while there are any.
 

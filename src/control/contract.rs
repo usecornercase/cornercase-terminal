@@ -4,6 +4,7 @@ use serde_json::Value;
 use super::{Command, Response};
 
 pub(crate) const CONTRACT: u32 = 1;
+pub(crate) const FLOW_SYNC: &str = "flow-sync";
 pub(crate) const EVENTS_VERSION: u32 = 1;
 pub(crate) const WATCH_VERSION: u32 = 1;
 pub(crate) const SURFACE_VERSION: u32 = 1;
@@ -103,6 +104,8 @@ pub(crate) const FEATURES: &[&str] = &[
     "machine-shown",
     "machine-hide",
     "bot-chat-apps",
+    FLOW_SYNC,
+    "tunnel-machine",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

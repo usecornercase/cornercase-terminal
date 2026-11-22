@@ -467,6 +467,7 @@ pub(in crate::ui) fn draw(f: &mut Frame, view: &View, chat: &ChatView, pane: Rec
         text: areas.input_text,
         focused: chat.focused,
         placeholder: &chat.placeholder,
+        top: None,
     };
     draw_editor(f, view, &chat.input, at);
     let style = button_style(view, areas.send, Style::default().fg(Color::Cyan), Color::Cyan);

@@ -29,7 +29,7 @@ mod shell;
 pub(crate) mod tunnel;
 pub(crate) mod tunnels;
 
-const SSH: &str = "ssh";
+pub(crate) const SSH: &str = "ssh";
 const BANNER: &str = "cornercase-proxy";
 const BANNER_LINES: usize = 64;
 const BANNER_BYTES: u64 = 4096;

@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use super::{Account, Detail, Issue, People, Person, Query, Secret, Source, Who, sort_by_updated};
 use crate::list::Search;
 use crate::machines::run_on::RunOn;
-use crate::queue::State;
 
 mod buttons;
 mod input;
@@ -35,7 +34,6 @@ pub(crate) struct Room {
 pub(crate) enum Tab {
     All,
     One(Source),
-    Queue,
 }
 
 impl Tab {
@@ -43,7 +41,6 @@ impl Tab {
         match self {
             Self::All => "All",
             Self::One(source) => source.name(),
-            Self::Queue => "Queue",
         }
     }
 
@@ -51,12 +48,11 @@ impl Tab {
         match self {
             Self::All => "all",
             Self::One(source) => source.id(),
-            Self::Queue => "queue",
         }
     }
 
     pub(crate) fn from_id(id: &str) -> Option<Self> {
-        std::iter::once(Self::All).chain(Source::ALL.map(Self::One)).chain([Self::Queue]).find(|t| t.id() == id)
+        std::iter::once(Self::All).chain(Source::ALL.map(Self::One)).find(|t| t.id() == id)
     }
 }
 
@@ -73,59 +69,7 @@ pub(crate) fn tabs(names: &[String]) -> Vec<Tab> {
     if tabs.is_empty() {
         tabs = all.collect();
     }
-    tabs.push(Tab::Queue);
     tabs
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct Queued {
-    pub(crate) id: u64,
-    pub(crate) when: String,
-    pub(crate) label: String,
-    pub(crate) first_line: String,
-    pub(crate) meta: String,
-    pub(crate) state: State,
-    pub(crate) kind: QueuedKind,
-    pub(crate) live: bool,
-    pub(crate) unsent: bool,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum QueuedKind {
-    Entry,
-    Routine { paused: bool },
-    Run,
-}
-
-impl Queued {
-    pub(crate) fn runnable(&self) -> bool {
-        match self.kind {
-            QueuedKind::Run => false,
-            QueuedKind::Routine { .. } => true,
-            QueuedKind::Entry => matches!(self.state, State::Pending | State::Failed { .. } | State::Missed),
-        }
-    }
-
-    pub(crate) fn clearable(&self) -> bool {
-        match self.kind {
-            QueuedKind::Routine { .. } => false,
-            QueuedKind::Entry => matches!(self.state, State::Started { .. } | State::Answered { .. }),
-            QueuedKind::Run => matches!(
-                self.state,
-                State::Started { .. }
-                    | State::Answered { .. }
-                    | State::Removed
-                    | State::Kept { .. }
-                    | State::Failed { .. }
-                    | State::Missed
-            ),
-        }
-    }
-
-    fn matches(&self, query: &str) -> bool {
-        let query = query.to_lowercase();
-        [&self.when, &self.label, &self.first_line, &self.meta].iter().any(|text| text.to_lowercase().contains(&query))
-    }
 }
 
 #[derive(Debug, Default)]
@@ -308,13 +252,6 @@ pub(crate) enum Action {
     StartNamed(Box<Naming>),
     StartFlow(Issue, Option<Place>),
     Schedule(Issue, String, Option<Place>),
-    QueueNew,
-    QueueOpen(u64),
-    QueueRun(u64),
-    QueuePause(u64),
-    QueueResume(u64),
-    QueueRemove(u64),
-    QueueClear,
     CheckToken(Source, Secret),
     SaveJira { site: String, email: String },
     SavePlane { workspace: String },
@@ -385,8 +322,6 @@ pub(crate) struct Browser {
     pub(crate) place: Option<usize>,
     pub(crate) filtering: Option<usize>,
     pub(crate) members: HashMap<Source, Result<Vec<Person>, String>>,
-    pub(crate) queued: Vec<Queued>,
-    pub(crate) bot_routines: usize,
     pub(crate) run_on: Option<RunOn>,
     pub(crate) there: Option<There>,
 }
@@ -417,7 +352,6 @@ impl Browser {
         let wanted: Vec<Source> = match self.current() {
             Tab::All => Source::ALL.to_vec(),
             Tab::One(source) => vec![source],
-            Tab::Queue => Vec::new(),
         };
         wanted.into_iter().filter(|s| self.can_list(*s)).collect()
     }
@@ -475,18 +409,8 @@ impl Browser {
         crate::issues::filter(issues, self.search.query())
     }
 
-    pub(crate) fn shown_queue(&self) -> Vec<&Queued> {
-        self.queued.iter().filter(|queued| queued.matches(self.search.query())).collect()
-    }
-
-    pub(crate) fn selected_queued(&self) -> Option<&Queued> {
-        let shown = self.shown_queue();
-        let last = shown.len().checked_sub(1)?;
-        shown.get(self.search.selected().min(last)).copied()
-    }
-
     pub(super) fn list_len(&self) -> usize {
-        if self.current() == Tab::Queue { self.shown_queue().len() } else { self.shown().len() }
+        self.shown().len()
     }
 
     pub(super) fn selected(&self) -> Option<Issue> {

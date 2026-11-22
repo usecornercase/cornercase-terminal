@@ -41,7 +41,7 @@ impl App {
     }
 
     pub(in crate::app) fn remote_tab_menu(&mut self, at: TabAim, pos: Position) {
-        self.noted_menu(at.aim.link, vec![MenuAction::RemoteTabRename(at), MenuAction::RemoteTabClose(at)], pos);
+        self.noted_menu(at.aim.link, &[MenuAction::RemoteTabRename(at), MenuAction::RemoteTabClose(at)], pos);
     }
 
     pub(super) fn remote_tab_disabled(&self, action: MenuAction) -> bool {

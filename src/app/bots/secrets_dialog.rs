@@ -170,7 +170,7 @@ impl App {
         Some(ui::BotRoutines {
             title: format!("Secrets › {name}"),
             selected: fitted.index(&ids),
-            scroll: fitted.scroll,
+            scroll: fitted.list.scroll,
             rows,
             hint,
             empty,

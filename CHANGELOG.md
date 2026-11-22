@@ -2,11 +2,32 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.13.108
+## 0.13.111
 
 - **Open, close and rename a machine's tabs from your sidebar.** A machine's workspace now has a `+ Tab` row, and its tabs a `×` and a ` ⋯ ` menu with **rename tab** and **close tab**, as yours. The `×` asks first when an agent works in the tab, and in the compact layout; a shell tab closes at once.
 - **The prefix key's menu works on a machine's tab**: **new tab**, **split right**, **split down**, **close pane**, **rename tab**, the arrows between panes, **rename workspace** and **close workspace** act there, and the machine's workspace stays picked.
 - While the machine closes a tab, its row reads `closing…`. A refusal shows the machine's own words (`could not split the pane on vps: pane 3 is too small to split right`), and a machine that is down or restarted says that nothing was sent or changed.
+
+## 0.13.110
+
+- **Send your flows to your machines.** Settings › Flows has **sync**, which sends the selected flow of yours to every machine shown in Settings › Machines, and **sync all**, which sends all of them, so starting a flow on a machine runs the version you just saved. Both show while a machine is linked, and then say what each machine got or why it did not (`vps: sent Duo`). A machine still on an older cornercase gets nothing until you update it there. Nothing is sent on its own and nothing is deleted there; your default flow, your order and the built-in flows you deleted stay on each computer.
+- **The last saved wins.** Saving a flow now writes the time in its file (`changed`), by each computer's clock, and a flow saved later on the machine is left alone there, even when it is saved while the sync runs. The machine shows a note naming the computer a flow came from. Nothing asks, since both ends are yours: a synced flow is saved there even when it sets `env` or `args`.
+- **Secrets stay yours.** A flow's `env` values and arguments go with it, so on Linux and macOS each flow file of yours is now written readable only by you when it is saved, here and on the machine; on Windows it is in your user profile.
+- **From a terminal.** `cornercase flow sync [FLOW] [--machine NAME] [--json]` sends every flow of yours, or one, prints what each machine got and exits with 1 when one could not be reached or a flow did not go; `flow list --json` gives each flow of yours `changed`, and `cornercase contract` lists `flow-sync`.
+
+## 0.13.109
+
+- **A linked machine's workspace has a Ports dialog.** ` ⋯ ` or a right-click on its row, then **ports**, lists the ports its programs listen on there, with the machine's tab that started each one. **go** shows that tab, and **stop** asks first and has the machine stop the program.
+- **Tunnel a machine's port to this computer** from that dialog: **tunnel** forwards it with your own `ssh`, on the same port when it's free here, and **open** then opens it in your browser. Cornercase's server holds the tunnel, so it stays while the window is closed, and the machine lists it too, so closing it there ends it here.
+- Scripts do the same with `cornercase tunnel open 5173 --machine vps` and `tunnel close 5173 --machine vps`; `cornercase tunnels` and `status --json` list these tunnels under `machine_tunnels`.
+- `ports --json` gives each program's `started`, and the `stop-port` request takes it back: a program that was replaced on that pid since it was listed is then left alone.
+
+## 0.13.108
+
+- **The queue has a window of its own.** Open it from **More ▴ › queue**, or with `e` in the keys menu, with or without a project open. The Issues window no longer has a `Queue` tab, and ` schedule ` still works on an issue: cancelling goes back to the issue, and saving opens the queue with the new entry selected.
+- **A routine's runs are listed under it**, indented and newest first. Click its `▾`, or press `←`, to fold them into one row that says how many there are, and `→` to unfold them. What starts next comes first, then paused routines, then what already ran, newest first.
+- The selection stays on its entry when a routine fires or a row is added above it.
+- **The schedule form's prompt takes line breaks**: `Enter` starts a new line there (and still saves from the other fields), a paste keeps its lines, the field is taller in a tall window, the wheel scrolls it, and `↑ n more` / `↓ n more` say how much is out of sight.
 
 ## 0.13.107
 

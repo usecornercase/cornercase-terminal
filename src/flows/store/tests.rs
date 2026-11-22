@@ -80,3 +80,109 @@ mod saving {
         assert!(!old.exists());
     }
 }
+
+mod listing {
+    use super::*;
+
+    #[test]
+    fn an_entry_that_cannot_be_read_names_the_folder_and_keeps_the_flows_it_read() {
+        let dir = TempDir::new();
+        let duo = save(dir.path(), &named("Duo"), None).expect("save Duo");
+        let entries = vec![Ok(duo.clone()), Err(std::io::Error::other("an entry went missing"))];
+        let mut listing = Listing::default();
+
+        let paths = flow_files(dir.path(), entries.into_iter(), &mut listing);
+
+        assert_eq!(paths, [duo]);
+        assert_eq!(listing.unlisted, [(dir.path().to_path_buf(), "an entry went missing".to_string())]);
+    }
+
+    #[test]
+    fn a_flow_file_that_cannot_be_looked_at_is_broken_and_the_others_are_kept() {
+        let dir = TempDir::new();
+        let duo = save(dir.path(), &named("Duo"), None).expect("save Duo");
+        let gone = dir.path().join("gone.toml");
+        let mut listing = Listing::default();
+
+        let paths = flow_files(dir.path(), vec![Ok(gone.clone()), Ok(duo.clone())].into_iter(), &mut listing);
+
+        assert_eq!(paths, [duo]);
+        assert_eq!(listing.broken.iter().map(|(path, _)| path).collect::<Vec<_>>(), [&gone]);
+        assert!(listing.unlisted.is_empty(), "{listing:?}");
+    }
+
+    #[test]
+    fn broken_files_are_in_path_order_whatever_made_them_broken() {
+        let dir = TempDir::new();
+        std::fs::write(dir.path().join("a.toml"), "not a flow").expect("write a.toml");
+        let mut listing = Listing::default();
+        let (a, z) = (dir.path().join("a.toml"), dir.path().join("z.toml"));
+
+        read_entries(dir.path(), [Ok(z.clone()), Ok(a.clone())].into_iter(), Origin::User, &mut listing);
+
+        assert_eq!(listing.broken.iter().map(|(path, _)| path).collect::<Vec<_>>(), [&a, &z]);
+    }
+
+    #[test]
+    fn a_folder_not_made_yet_is_no_error() {
+        let dir = TempDir::new();
+        let mut listing = Listing::default();
+
+        read_dir(&dir.path().join("flows"), Origin::User, &mut listing);
+
+        assert_eq!(listing, Listing::default());
+    }
+}
+
+#[cfg(unix)]
+mod modes {
+    use std::os::unix::fs::PermissionsExt;
+
+    use super::*;
+
+    fn mode(path: &Path) -> u32 {
+        std::fs::metadata(path).expect("metadata").permissions().mode() & 0o777
+    }
+
+    #[test]
+    fn yours_are_readable_only_by_their_owner_and_a_project_s_are_not() {
+        let dir = TempDir::new();
+        let mut secret = named("Deploy");
+        secret.roles[0].args = vec!["--api-key=abc".into()];
+
+        let yours = save_in(&dir.path().join("flows"), &secret, None, Folder::Yours).expect("save it");
+        let project = save_in(&project_dir(dir.path()), &named("Plain"), None, Folder::Project).expect("save it");
+        let ordinary = project_dir(dir.path()).join("ordinary.txt");
+        std::fs::write(&ordinary, "plain").expect("an ordinary file");
+
+        assert_eq!(mode(&yours), 0o600);
+        assert_eq!(mode(&project), mode(&ordinary));
+    }
+
+    #[test]
+    fn a_folder_of_yours_named_like_a_project_s_is_still_yours() {
+        let dir = TempDir::new();
+        let yours = dir.path().join(".cornercase").join("flows");
+
+        let saved = save_in(&yours, &named("Deploy"), None, Folder::Yours).expect("save it");
+        let unsaid = save(&yours, &named("Quick"), None).expect("save it");
+
+        assert_eq!((mode(&saved), mode(&unsaid)), (0o600, 0o600));
+    }
+
+    #[test]
+    fn a_flow_file_in_a_folder_that_can_be_listed_but_not_searched_is_broken() {
+        let dir = TempDir::new();
+        let flows = dir.path().join("flows");
+        let duo = save(&flows, &named("Duo"), None).expect("save Duo");
+        let mut listing = Listing::default();
+
+        std::fs::set_permissions(&flows, std::fs::Permissions::from_mode(0o600)).expect("lock the folder");
+        read_dir(&flows, Origin::User, &mut listing);
+        std::fs::set_permissions(&flows, std::fs::Permissions::from_mode(0o700)).expect("unlock the folder");
+
+        assert_eq!(listing.broken.iter().map(|(path, _)| path).collect::<Vec<_>>(), [&duo]);
+        assert!(listing.broken[0].1.contains("ermission denied"), "{:?}", listing.broken);
+        assert!(listing.flows.is_empty() && listing.unlisted.is_empty(), "{listing:?}");
+    }
+}

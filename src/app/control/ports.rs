@@ -130,6 +130,10 @@ fn stop_port(places: &Places, request: &StopPort) -> Result<PortStopped, Refusal
             return Err(Refusal::new(Code::Conflict, message));
         }
     };
+    if request.started.is_some_and(|started| port.started != Some(started)) {
+        let message = format!("pid {} is no longer the program that listened on port {}", port.pid, request.port);
+        return Err(Refusal::new(Code::Conflict, message));
+    }
     if port.place.workspace.is_none() {
         let message = format!("port {} is not held by a program of a workspace, so it is not stopped", request.port);
         return Err(Refusal::new(Code::Conflict, message));

@@ -112,7 +112,7 @@ Once a machine is linked, your server reads what it has, and the sidebar shows i
 
 Hover over a machine's workspace (in compact mode its buttons always show) and use its buttons as you would on yours. Each one sends the machine the request a script would send, over a connection of its own, and the machine does it as if you had clicked in its own window:
 
-- **` ⋯ `**, or a right-click on the row, opens a menu with **rename workspace**. Leave the name empty to go back to the branch name. The new name shows when the machine sends its next update.
+- **` ⋯ `**, or a right-click on the row, opens a menu with **rename workspace** and **ports**. Leave the name empty to go back to the branch name. The new name shows when the machine sends its next update. **ports** lists the ports that workspace's programs listen on there: see [Ports of a machine's workspace](#ports-of-a-machines-workspace).
 - **`×` on a plain workspace** asks first, also when the window is wide: `Close the workspace notes on vps?`. Its shells stop on the machine.
 - **`×` on a workspace with a worktree** asks the machine what removing it would lose, as the [remove a worktree](../worktrees/#remove-a-worktree) dialog does here: changes that aren't committed (**remove anyway**), a lock (**unlock and remove**), its roles' worktrees and its teardown. Then the row says `removing…` until the machine answers with `removed feat/dark-mode on vps`, or, if its teardown or a role's worktree failed there, `removed feat/dark-mode on vps, cleanup failed in part, see server.log`, as a removal here says; the reason is in this computer's log (`cornercase logs`). If the machine can't check, the dialog closes and a toast says why; nothing is removed.
 - **If the machine is down**, the menu says `vps unreachable` (or why the link is waiting) and its items are greyed out, and the `×` says the same with `nothing was sent`. Nothing is kept to send later.
@@ -189,6 +189,19 @@ With a machine's workspace picked, ` Changes ` and ` Files ` show that workspace
 - **The button's number** shows once the machine has counted that workspace's changes, usually once you open the panel. Until then the button reads ` Changes ` alone.
 - **When the machine goes down**, both panels keep what they showed with `vps unreachable` and `seen 2 min ago` or `reconnecting in 4 s` under their header. Unfolding a file, opening a folder or a file and searching then send nothing and say so. When the link is back they pick up where they were.
 - While they show a machine's workspace they open `ssh` connections of their own, one for each thing they follow, such as the tree and the open file. [Your own `ControlMaster`](#what-you-need) makes them quicker.
+
+### Ports of a machine's workspace
+
+**ports** in a machine workspace's menu opens the same [Ports dialog](../projects-workspaces-tabs/#ports-a-workspace-listens-on) as yours, titled `Ports › vps › web-shop`. The machine finds the ports, so it lists what its own programs listen on, about every two seconds while the dialog is open, with the tab of the machine that started each one (`pane 31 · dev`):
+
+- **The address is the machine's.** A row reads `http://localhost:5173 on vps`: that `localhost` is the machine's, not yours, so **open** only shows once the port is tunnelled.
+- **tunnel** forwards the port to this computer with your own `ssh`, as a [window's tunnel](../remote/#tunnel-a-port-to-your-laptop) does: on the same port when it's free here, otherwise on another one, and the toast says which, `port 5173 of vps is tunnelled to localhost:5174 (5173 is taken here)`, with an **open** button. The row then shows `⇄ :5174` with **open** (your browser opens `http://localhost:5174`), **copy** (that address) and **close tunnel**.
+- **Your server holds the tunnel**, not the window, so it stays when you close the window and ends when the server stops, when the machine is removed or when you click **close tunnel**. It isn't remembered: after the server restarts, open it again. One that drops after it was up is tried again while the machine is linked. It needs a window on this computer: a window opened with `cornercase remote` on another computer offers no **tunnel** there.
+- **The machine sees it** as a tunnel held by a program (`cornercase tunnels` there lists it as a `hold`), so `cornercase tunnel close 5173` on the machine ends it here too, with `vps closed the tunnel of its port 5173`.
+- **go** shows the machine's tab that started the program, and **stop** asks first, then has the machine stop it with its own checks (`stopped node (pid 48211) on port 5173 on vps`).
+- **When the machine goes down**, the dialog says why and sends nothing; when the machine restarts, or the workspace closes there, the dialog closes.
+
+Scripts tunnel a machine's port the same way with [`cornercase tunnel open 5173 --machine vps`](../scripts-and-agents/#tunnels), and list a machine's ports with `cornercase --remote vps ports`.
 
 ### Notices from a machine
 

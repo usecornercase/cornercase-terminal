@@ -110,7 +110,7 @@ impl App {
     }
 
     pub(in crate::app) fn agent_fold_menu(&mut self, aim: PaneAim, at: Position) {
-        self.noted_menu(aim.link, vec![MenuAction::RemoteAgentFold(aim)], at);
+        self.noted_menu(aim.link, &[MenuAction::RemoteAgentFold(aim)], at);
     }
 
     fn aimed_pane(&self, aim: PaneAim) -> Result<String, String> {

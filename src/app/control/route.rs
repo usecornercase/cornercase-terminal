@@ -191,6 +191,7 @@ impl App {
             Command::FlowOrder(req) => self.flow_order_request(caller, &req),
             Command::FlowMessages(messages) => self.flow_messages_request(client, caller, &messages),
             Command::FlowFiles(files) => self.flow_files_request(client, caller, &files),
+            Command::FlowSync(sync) => self.flow_sync_request(client, &sync),
             other => return ControlFlow::Continue(other),
         })
     }

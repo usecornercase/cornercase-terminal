@@ -29,6 +29,7 @@ pub(super) enum Undo {
 pub(super) enum TunnelButton {
     Open(u16),
     Close(u16),
+    There(u64, u16),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -61,7 +62,9 @@ impl Toast {
             _ if matches!(self.undo, Some(Undo::Agents(_))) => Some(ui::ToastButton::Reopen),
             _ if self.undo.is_some() => Some(ui::ToastButton::Undo),
             _ if self.go.is_some() => Some(ui::ToastButton::Go),
-            _ if matches!(self.tunnel, Some(TunnelButton::Open(_))) => Some(ui::ToastButton::Open),
+            _ if matches!(self.tunnel, Some(TunnelButton::Open(_) | TunnelButton::There(..))) => {
+                Some(ui::ToastButton::Open)
+            }
             _ if self.tunnel.is_some() => Some(ui::ToastButton::Close),
             ui::ToastIcon::Restart => Some(ui::ToastButton::Cancel),
             ui::ToastIcon::Check | ui::ToastIcon::Agent(_) | ui::ToastIcon::Bug => None,
@@ -82,6 +85,7 @@ impl App {
             Some(Toast { undo: Some(Undo::Agents(workspace)), .. }) => self.reopen_from_window(workspace, area),
             Some(Toast { go: Some(token), .. }) => self.notification_clicked(&token),
             Some(Toast { tunnel: Some(TunnelButton::Open(port)), .. }) => self.browse_tunnel_here(port),
+            Some(Toast { tunnel: Some(TunnelButton::There(link, port)), .. }) => self.browse_there(link, port),
             Some(Toast { tunnel: Some(TunnelButton::Close(port)), .. }) => {
                 self.close_tunnel(port);
             }

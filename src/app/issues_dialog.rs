@@ -164,8 +164,6 @@ impl App {
             here,
             place: None,
             filtering: None,
-            queued: self.queued_rows(),
-            bot_routines: self.bot_routine_count(),
             members: self.known_members(project.id),
             run_on: self.run_on_for(project.id),
             there: None,
@@ -242,13 +240,6 @@ impl App {
             Action::Load(sources) => sources.into_iter().for_each(|source| self.load_issues(source)),
             Action::Read(issue) => self.read_issue(issue),
             Action::Schedule(issue, agent, place) => self.schedule_issue(&issue, &agent, place),
-            Action::QueueNew => self.new_queue_form(None),
-            Action::QueueOpen(id) => self.open_queued(id, area),
-            Action::QueueRun(id) => self.run_queued_now(id),
-            Action::QueuePause(id) => self.pause_queued(id, true),
-            Action::QueueResume(id) => self.pause_queued(id, false),
-            Action::QueueRemove(id) => self.remove_queued(id),
-            Action::QueueClear => self.clear_queued(),
             Action::Start(issue, agent, place) => {
                 return self.start_issue(&issue, IssueStart { agent: &agent, place, names: None }, area);
             }
@@ -499,14 +490,12 @@ impl App {
     }
 
     pub(super) fn issues_key(&mut self, key: KeyEvent, area: Rect) -> Result<()> {
-        self.sync_queued();
         let Some(Overlay::Issues(b)) = &mut self.overlay else { return Ok(()) };
         let action = b.key(key, room(area));
         self.act(action, area)
     }
 
     pub(super) fn issues_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) -> Result<()> {
-        self.sync_queued();
         let Some(Overlay::Issues(b)) = &mut self.overlay else { return Ok(()) };
         let room = room(area);
         let ui::Overlay::Issues(view) = view(b, room, time::now()) else { return Ok(()) };
@@ -773,7 +762,6 @@ fn screen_view(browser: &Browser, room: Room, now: i64) -> (ui::IssuesBody, Opti
         _ if let Some(naming) = &browser.naming => naming_view(naming),
         _ if browser.filtering.is_some() => people_view(browser),
         Screen::Detail { detail, scroll, .. } => detail_view(browser, room, detail.as_ref(), *scroll),
-        Screen::List if browser.current() == Tab::Queue => super::queue_panel::queue_tab(browser),
         Screen::List => match browser.token_form() {
             Some(source) => token_view(browser, source),
             None => list_view(browser, now),
@@ -959,7 +947,7 @@ fn list_empty(browser: &Browser, busy: bool) -> String {
 fn list_hint(browser: &Browser, refreshing: bool, selected: Option<&Issue>) -> String {
     let account = match browser.current() {
         Tab::One(source) => browser.connections.get(&source).and_then(|c| c.account.as_ref()).map(Account::describe),
-        Tab::All | Tab::Queue => None,
+        Tab::All => None,
     };
     let action =
         selected.map(|issue| format!("enter reads {} · start works on it {}", issue.key, browser.start_hint(issue)));

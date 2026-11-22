@@ -1,7 +1,8 @@
-import { DAYS, ROUTINE_GRACE, ROUTINE_RUNS, type QueueChoice, type QueueEntry, type QueueForm, type QueueList, UNITS, isText, parseRepeat, queueAt, queueChoice, queueChose, queueForm, queueKey as queueFormKey, queueListRows, queueOpened, queueRefit, queueRepeat, queueRepeats, queueTextRect, queueTime, queueWhen, queueFirstLine, queueName, queueWorktree, repeatFirst, repeatWalk, routineSlug, whenCombo } from './queue';
+import { DAYS, ROUTINE_GRACE, ROUTINE_RUNS, type QueueChoice, type QueueEntry, type QueueForm, type QueueList, UNITS, parseRepeat, queueAt, queueChoice, queueChose, queueForm, queueKey as queueFormKey, queueListRows, queueRefit, queueRepeat, queueRepeats, queueTextRect, queueTime, queueWhen, queueFirstLine, queueName, queuePaste, queueWorktree, repeatFirst, repeatWalk, revealPrompt, routineSlug, whenCombo } from './queue';
 import { botFormKey, botFormPaste, newBotForm } from './botform';
 import { actOnRoutine, botRoutinesKey, buttonsOf, openBotRoutines, routinesOf } from './botroutines';
 import { Bots } from './bots';
+import { type QueueListDialog, type QueueShown, foldAsked, moveQueueList, openQueueList, queueButtons, queueIndex, queueShown } from './queuelist';
 import { chooseCombo, combo, comboLabel } from './combo';
 import { shareLink } from '../stats/model';
 import { STATS } from './data';
@@ -154,7 +155,7 @@ const HELP_LABELS: Record<HelpItem, string> = {
   keys: 'keys menu',
   bug: 'report a bug',
 };
-const MORE_ITEMS: MoreItem[] = ['settings', 'usage', 'processes', 'new bot…', 'quit'];
+const MORE_ITEMS: MoreItem[] = ['settings', 'usage', 'processes', 'new bot…', 'queue', 'quit'];
 const CLOSE_AGENT_NEEDS = 'this needs cornercase on your computer: the demo closes no agents';
 const CONTEXT_NEEDS = "this needs cornercase on your computer: the demo's agents are not real Claude Code sessions";
 const AGENT_TITLES: Record<string, string> = { claude: 'Claude Code', codex: 'Codex', gemini: 'Gemini CLI', opencode: 'opencode', grok: 'Grok Build', cursor: 'Cursor CLI', copilot: 'GitHub Copilot CLI', vibe: 'Vibe CLI' };
@@ -217,6 +218,18 @@ export interface IssuesView {
   error?: boolean;
 }
 
+export interface QueueListView {
+  rows: { id: number; fold: boolean | null; run: boolean; when: string; title: string; meta: string; hidden: string; colour?: number; dim: boolean }[];
+  selected: number | null;
+  scroll: number;
+  empty: string;
+  tail?: string;
+  hint: string;
+  buttons: string[];
+}
+
+const queueClearable = (entry: QueueEntry): boolean => !entry.repeat && (entry.routine ? entry.state !== 'pending' : entry.state === 'started' || entry.state === 'answered');
+
 export const SETTING_RESULT = 3;
 
 export interface SearchResult {
@@ -237,7 +250,6 @@ type Listener = (event: string, detail?: string) => void;
 const SOURCE_NAMES: Record<string, string> = { all: 'All', github: 'GitHub', gitlab: 'GitLab', shortcut: 'Shortcut', linear: 'Linear', jira: 'Jira', plane: 'Plane', asana: 'Asana' };
 const DEMO_WORKSPACE = 'Acme';
 const DEMO_WORKSPACE_ID = '1200';
-const QUEUE = 'queue';
 const KNOWN_AGENTS = ['claude', 'codex', 'gemini', 'opencode', 'grok', 'cursor', 'copilot', 'vibe'];
 const QUEUE_EVERY = "every project's scheduled agents";
 const QUEUE_COLOURS: Partial<Record<QueueEntry['state'], number>> = { failed: 1, missed: 3, started: 2, answered: 2, removed: 8, kept: 3 };
@@ -508,7 +520,8 @@ export class App {
   queued: QueueEntry[] = [];
   botQueued: QueueEntry[] = [];
   private queueTimers = new Map<QueueEntry, () => void>();
-  private queueBack: IssuesOverlay | null = null;
+  private queueBack: IssuesOverlay | QueueListDialog | null = null;
+  queueFolded = new Set<number>();
   nextQueueId = 1;
   private linkPress: { at: Pos; link: PathLink; held: (() => void) | null } | null = null;
   private folded = new Map<string, boolean>();
@@ -1528,6 +1541,7 @@ export class App {
     else if (item === 'usage') this.openUsage();
     else if (item === 'processes') this.bug(PROCESSES_NEED);
     else if (item === 'new bot…') this.openBotForm();
+    else if (item === 'queue') this.openQueue();
     else this.quit();
   }
 
@@ -2628,7 +2642,7 @@ export class App {
   dismissDialog(): void {
     const o = this.overlay;
     if (!o || (o.kind === 'newWorkspace' && o.creating) || ('busy' in o && o.busy)) return;
-    if (o.kind === 'queue') return this.closeQueueForm(false);
+    if (o.kind === 'queue') return this.closeQueueForm();
     this.closeOverlay();
   }
 
@@ -3351,6 +3365,7 @@ export class App {
       if (opening) this.addTodo();
     } else if (a.kind === 'recap') this.toggleRecap();
     else if (a.kind === 'newBot') this.openBotForm();
+    else if (a.kind === 'queue') this.openQueue();
     else if (a.kind === 'settings') this.openSettings();
     else if (a.kind === 'usage') this.openUsage();
     else if (a.kind === 'processes') this.bug(PROCESSES_NEED);
@@ -4005,11 +4020,11 @@ export class App {
   }
 
   private issuesSource(o: IssuesOverlay): string {
-    return o.tab === this.config.sources.length ? QUEUE : this.config.sources[o.tab] ?? 'all';
+    return this.config.sources[o.tab] ?? 'all';
   }
 
   private issuesTabCount(): number {
-    return this.config.sources.length + 1;
+    return this.config.sources.length;
   }
 
   private queuePlace(entry: QueueEntry): string {
@@ -4019,57 +4034,140 @@ export class App {
     return inside ? `${name} › ${inside}` : name;
   }
 
-  private queueRow(entry: QueueEntry): IssuesView['items'][number] {
+  queueStatus(entry: QueueEntry): string {
+    if (entry.repeat) return `↻ every ${entry.repeat}`;
     const pane = entry.pane === undefined ? null : this.findPane(entry.pane);
-    const status = entry.state === 'started' ? `started · ${pane ? `pane ${entry.pane}` : 'pane closed'}` : entry.state === 'failed' ? `failed · ${entry.error ?? 'unknown'}` : entry.state === 'kept' ? `kept · ${entry.error ?? ''}` : entry.state;
-    if (entry.repeat) {
-      return { key: entry.paused ? 'paused' : queueWhen(entry.at), title: entry.label, meta: `↻ every ${entry.repeat} · ${entry.agent} · ${this.queuePlace(entry)}`, colour: entry.paused ? 8 : undefined };
-    }
-    return { key: queueWhen(entry.at), title: entry.label, meta: `${status} · ${entry.agent} · ${this.queuePlace(entry)}`, colour: QUEUE_COLOURS[entry.state] };
+    if (entry.state === 'started') return `started · ${pane ? `pane ${entry.pane}` : 'pane closed'}`;
+    if (entry.state === 'failed') return `failed · ${entry.error ?? 'unknown'}`;
+    return entry.state === 'kept' ? `kept · ${entry.error ?? ''}` : entry.state;
   }
 
-  private queueShown(o: IssuesOverlay): QueueEntry[] {
+  private queueOrigin(entry: QueueEntry): string {
+    return `${entry.agent} · ${this.queuePlace(entry)}`;
+  }
+
+  private queueWhenText(entry: QueueEntry): string {
+    return entry.repeat && entry.paused ? 'paused' : queueWhen(entry.at);
+  }
+
+  queueListShown(o: QueueListDialog): QueueShown[] {
     const query = o.filter.toLowerCase();
-    return this.queued.filter((entry) => {
-      const row = this.queueRow(entry);
-      return [row.key, row.title, queueFirstLine(entry.prompt), row.meta].some((text) => text.toLowerCase().includes(query));
-    });
+    const matches = (entry: QueueEntry) =>
+      [this.queueWhenText(entry), entry.label, queueFirstLine(entry.prompt), `${this.queueStatus(entry)} · ${this.queueOrigin(entry)}`].some((text) => text.toLowerCase().includes(query));
+    return queueShown(this.queued, this.queueFolded, query, matches);
   }
 
-  private queueSelected(o: IssuesOverlay): QueueEntry | undefined {
-    const shown = this.queueShown(o);
-    return shown[Math.min(o.selected, shown.length - 1)];
+  private queueListRows(): number {
+    return Math.max(1, Math.min(this.rows - 2, 30) - 6);
   }
 
-  private queueView(o: IssuesOverlay, tabs: string[]): IssuesView {
-    const shown = this.queueShown(o);
-    const selected = Math.min(o.selected, Math.max(0, shown.length - 1));
-    const sel = shown[selected];
+  queueListView(o: QueueListDialog): QueueListView {
+    const shown = this.queueListShown(o);
+    if (o.selected === null) o.selected = shown[0]?.entry.id ?? null;
+    const selected = queueIndex(o, shown);
+    const item = selected === null ? undefined : shown[selected];
+    const sel = item?.entry;
     const opens = (sel?.state === 'started' || sel?.state === 'kept') && sel.pane !== undefined && !!this.findPane(sel.pane);
     const hint = !sel ? QUEUE_EVERY : sel.repeat ? 'enter edits it · start now runs it once more' : sel.routine ? (opens ? 'enter opens its pane · a run of a routine' : sel.state === 'pending' ? `a run of a routine · ${QUEUE_EVERY}` : 'enter shows its result · a run of a routine') : sel.state === 'started' ? `${opens ? 'enter opens its pane' : 'enter shows its result'} · ${QUEUE_EVERY}` : 'enter edits it · start now runs it at once';
-    const runnable = !!sel && (sel.repeat ? true : !sel.routine && sel.state !== 'started' && sel.state !== 'answered');
-    const clearable = (entry: QueueEntry) => !entry.repeat && (entry.routine ? entry.state !== 'pending' : entry.state === 'started' || entry.state === 'answered');
-    const buttons = [
-      'new',
-      ...(runnable ? ['start now'] : []),
-      ...(sel?.repeat ? [sel.paused ? 'resume' : 'pause'] : []),
-      ...(sel ? ['remove'] : []),
-      ...(this.queued.some(clearable) ? ['clear started'] : []),
-      'cancel',
-    ];
     const botRoutines = this.botQueued.filter((entry) => !entry.routine && this.bots.list.some((bot) => bot.id === entry.bot)).length;
+    const width = Math.min(this.cols - 4, 110) - 4;
     return {
-      tabs,
-      toggles: [],
-      items: shown.map((entry) => this.queueRow(entry)),
+      rows: shown.map(({ entry, run, fold, hidden }) => ({
+        id: entry.id,
+        fold,
+        run,
+        when: this.queueWhenText(entry),
+        title: run ? this.queueStatus(entry) : entry.label,
+        meta: run ? this.queueOrigin(entry) : `${this.queueStatus(entry)} · ${this.queueOrigin(entry)}`,
+        hidden: hidden ? ` · ${counted(hidden, 'run')}` : '',
+        colour: entry.repeat ? (entry.paused ? 8 : undefined) : QUEUE_COLOURS[entry.state],
+        dim: !!entry.repeat && !!entry.paused,
+      })),
       selected,
       scroll: o.scroll,
-      tail: botRoutines ? (botRoutines === 1 ? "1 bot routine: in its bot's chat" : `${botRoutines} bot routines: in each bot's chat`) : undefined,
       empty: this.queued.length ? 'nothing matches' : 'nothing queued: new schedules a prompt, and schedule on an issue queues it',
-      hint,
-      buttons,
-      picking: false,
+      tail: botRoutines ? (botRoutines === 1 ? "1 bot routine: in its bot's chat" : `${botRoutines} bot routines: in each bot's chat`) : undefined,
+      hint: item?.fold !== null && item?.fold !== undefined ? `${hint} · ← → fold its runs` : hint,
+      buttons: queueButtons(sel, this.queued.some(queueClearable), width),
     };
+  }
+
+  openQueue(selected?: number): void {
+    this.nav = null;
+    this.overlay = openQueueList(selected ?? null);
+    this.dirty();
+  }
+
+  queueListClick(id: number): void {
+    const o = this.overlay;
+    if (o?.kind !== 'queuelist') return;
+    const item = this.queueListShown(o).find((shown) => shown.entry.id === id);
+    if (!item) return;
+    o.selected = item.entry.id;
+    this.openQueued(item.entry);
+    this.dirty();
+  }
+
+  queueListFold(id: number): void {
+    const o = this.overlay;
+    if (o?.kind !== 'queuelist') return;
+    const item = this.queueListShown(o).find((shown) => shown.entry.id === id);
+    if (!item) return;
+    o.selected = item.entry.id;
+    this.toggleQueueFold(item.entry.id);
+  }
+
+  private toggleQueueFold(id: number): void {
+    if (!this.queueFolded.delete(id)) this.queueFolded.add(id);
+    this.dirty();
+  }
+
+  queueListScroll(dy: number): boolean {
+    const o = this.overlay;
+    if (o?.kind !== 'queuelist') return false;
+    const n = this.queueListShown(o).length;
+    o.scroll = Math.max(0, Math.min(Math.max(0, n - this.queueListRows()), o.scroll + dy));
+    this.dirty();
+    return true;
+  }
+
+  queueListButton(label: string): void {
+    const o = this.overlay;
+    if (o?.kind !== 'queuelist') return;
+    const shown = this.queueListShown(o);
+    const at = queueIndex(o, shown);
+    const entry = at === null ? undefined : shown[at].entry;
+    if (label === 'done') return this.closeOverlay();
+    if (label === 'new') this.openQueueForm();
+    else if (label === 'start now' && entry?.repeat) this.runQueue(this.addRun(entry, this.now(), 'pending'));
+    else if (label === 'start now' && entry && !entry.routine && entry.state !== 'started') this.runQueue(entry);
+    else if ((label === 'pause' || label === 'resume') && entry?.repeat) this.pauseQueued(entry, label === 'pause');
+    else if (label === 'remove' && entry) this.removeQueued(...this.removal(entry));
+    else if (label === 'clear started') this.removeQueued(queueClearable, 'cleared {n} started');
+    this.dirty();
+  }
+
+  private queueListKey(o: QueueListDialog, k: Key): boolean {
+    const shown = this.queueListShown(o);
+    const rows = this.queueListRows();
+    const at = queueIndex(o, shown);
+    const moves: Record<string, number> = { ArrowDown: 1, ArrowUp: -1, PageDown: rows, PageUp: -rows, Home: -shown.length, End: shown.length };
+    const ch = this.typed(k);
+    if (k.key === 'Escape') this.closeOverlay();
+    else if (k.key === 'Enter' && at !== null) this.openQueued(shown[at].entry);
+    else if (k.key in moves) moveQueueList(o, shown, moves[k.key], rows);
+    else if (k.key === 'ArrowLeft' || k.key === 'ArrowRight') {
+      const routine = foldAsked(o, shown, k.key === 'ArrowLeft');
+      if (routine !== null) this.toggleQueueFold(routine);
+    } else if (k.key === 'Backspace' || ch) this.queueListFilter(o, k.key === 'Backspace' ? o.filter.slice(0, -1) : o.filter + ch);
+    this.dirty();
+    return true;
+  }
+
+  private queueListFilter(o: QueueListDialog, filter: string): void {
+    o.filter = filter;
+    o.scroll = 0;
+    o.selected = this.queueListShown(o)[0]?.entry.id ?? null;
   }
 
   private setAccount(source: Remote, on: boolean): void {
@@ -4185,7 +4283,7 @@ export class App {
   }
 
   issuesView(o: IssuesOverlay): IssuesView {
-    const tabs = [...this.config.sources.map((s) => SOURCE_NAMES[s]), 'Queue'];
+    const tabs = this.config.sources.map((s) => SOURCE_NAMES[s]);
     const toggles = [
       { label: 'closed', on: o.closed },
       { label: o.mine ? 'people: assignee me' : 'people', on: o.mine },
@@ -4249,7 +4347,6 @@ export class App {
         picking: true,
       };
     }
-    if (source === QUEUE) return this.queueView(o, tabs);
     if (isRemote(source) && !this.config.accounts[source]) {
       const remote = REMOTES[source];
       const step = o.token.step ?? 'token';
@@ -4376,12 +4473,6 @@ export class App {
       o.agentPick.selected = i;
       return this.issuesButton('choose');
     }
-    if (this.issuesSource(o) === QUEUE) {
-      const entry = this.queueShown(o)[i];
-      if (!entry) return;
-      o.selected = i;
-      return this.openQueued(entry);
-    }
     const issue = this.issuesList(o)[i];
     if (!issue) return;
     o.selected = i;
@@ -4394,7 +4485,7 @@ export class App {
   issuesScroll(dy: number): boolean {
     const o = this.overlay;
     if (o?.kind !== 'issues') return false;
-    const n = this.issuesSource(o) === QUEUE ? this.queueShown(o).length : this.issuesList(o).length;
+    const n = this.issuesList(o).length;
     o.scroll = Math.max(0, Math.min(Math.max(0, n - 1), o.scroll + dy));
     this.dirty();
     return true;
@@ -4412,16 +4503,6 @@ export class App {
     const o = this.overlay;
     if (o?.kind !== 'issues') return;
     if (label === 'cancel') return this.closeOverlay();
-    if (this.issuesSource(o) === QUEUE && !o.detail && !o.agentPick) {
-      const entry = this.queueSelected(o);
-      if (label === 'new') this.openQueueForm();
-      else if (label === 'start now' && entry?.repeat) this.runQueue(this.addRun(entry, this.now(), 'pending'));
-      else if (label === 'start now' && entry && !entry.routine && entry.state !== 'started') this.runQueue(entry);
-      else if ((label === 'pause' || label === 'resume') && entry?.repeat) this.pauseQueued(entry, label === 'pause');
-      else if (label === 'remove' && entry) this.removeQueued(...this.removal(entry));
-      else if (label === 'clear started') this.removeQueued((item) => !item.repeat && (item.routine ? item.state !== 'pending' : item.state === 'started' || item.state === 'answered'), 'cleared {n} started');
-      return;
-    }
     if (label === 'back' && o.naming) {
       o.naming = null;
       return this.dirty();
@@ -4631,16 +4712,13 @@ export class App {
     }
   }
 
-  closeQueueForm(scheduled: boolean): void {
+  closeQueueForm(saved?: number): void {
     const back = this.queueBack;
     this.queueBack = null;
-    if (back && scheduled) {
-      back.tab = this.config.sources.length;
-      back.detail = null;
-      back.agentPick = null;
-      back.filter = '';
-      back.selected = 0;
-      back.scroll = 0;
+    if (back?.kind === 'issues' && saved !== undefined) return this.openQueue(saved);
+    if (back?.kind === 'queuelist' && saved !== undefined) {
+      back.selected = saved;
+      if (!this.queueListShown(back).some((item) => item.entry.id === saved)) back.filter = '';
     }
     this.overlay = back;
     this.dirty();
@@ -4670,7 +4748,8 @@ export class App {
       o.branch = entry.branch;
     }
     o.cursor = [...o.prompt].length;
-    this.queueBack = this.overlay?.kind === 'issues' ? this.overlay : null;
+    if (entry) revealPrompt(rect(0, 0, this.cols, this.rows), o);
+    this.queueBack = this.overlay?.kind === 'issues' || this.overlay?.kind === 'queuelist' ? this.overlay : null;
     this.overlay = o;
     this.queueModes(o);
     if (entry) {
@@ -4772,7 +4851,7 @@ export class App {
     if (old) this.disarmQueued(old);
     if (old?.paused) entry.paused = true;
     if (!entry.paused) this.armQueued(entry);
-    this.closeQueueForm(true);
+    this.closeQueueForm(entry.id);
     this.notify(routine ? `scheduled routine ${entry.id}, next at ${queueWhen(at)}` : `scheduled queue entry ${entry.id}`);
     this.dirty();
   }
@@ -4809,8 +4888,8 @@ export class App {
   private queueKey(o: QueueForm, k: Key): boolean {
     const screen = rect(0, 0, this.cols, this.rows);
     const width = Math.max(1, queueTextRect(screen, o, o.focus).w);
-    const step = queueFormKey(o, k, width, queueListRows(screen, o));
-    if (step === 'cancel') this.closeQueueForm(false);
+    const step = queueFormKey(o, k, width, queueListRows(screen, o), screen);
+    if (step === 'cancel') this.closeQueueForm();
     else if (step === 'submit') this.submitQueue();
     else if (step === 'agent') this.queueModes(o);
     else if (step === 'when' || step === 'place') {
@@ -5220,17 +5299,9 @@ export class App {
     if (this.overlay?.kind === 'keys') this.overlay = null;
     const o = this.overlay;
     if (o) {
-      if (o.kind === 'queue') {
-        const focus = o.focus;
-        if (isText(focus) && !queueOpened(o)) {
-          const chars = [...o[focus]];
-          const typed = [...text.replace(/\s+/g, ' ')];
-          chars.splice(o.cursor, 0, ...typed);
-          o[focus] = chars.join('');
-          o.cursor += typed.length;
-        }
-      }
+      if (o.kind === 'queue') queuePaste(rect(0, 0, this.cols, this.rows), o, text);
       else if (o.kind === 'bot') botFormPaste(o, text);
+      else if (o.kind === 'queuelist') this.queueListFilter(o, o.filter + text.replace(/\p{Cc}/gu, ''));
       else if (o.kind === 'newWorkspace' || o.kind === 'rename' || o.kind === 'newGroup') nameEdit(o, (f) => insertText(f, text.replace(/\s+/g, ' ')));
       else if (o.kind === 'search') o.query += text;
       else if (o.kind === 'picker') o.filter += text;
@@ -5322,6 +5393,7 @@ export class App {
 
   private overlayKey(o: Overlay, k: Key): boolean {
     if (o.kind === 'queue') return this.queueKey(o, k);
+    if (o.kind === 'queuelist') return this.queueListKey(o, k);
     if (o.kind === 'botroutines') {
       botRoutinesKey(this, o, k);
       this.dirty();

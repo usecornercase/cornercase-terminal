@@ -51,6 +51,7 @@ mod the_direction {
             tunnels: vec![info(5173, 5174, 7, "window", None), info(9223, 9222, 33, "hold", Some(Direction::Reverse))],
             windows: 1,
             takers: 0,
+            machine_tunnels: Vec::new(),
         };
 
         let written = serde_json::to_string_pretty(&list).expect("json");
@@ -63,7 +64,7 @@ mod the_direction {
     #[test]
     fn a_forward_request_keeps_the_bytes_older_servers_get() {
         let hold = TunnelHold { port: 5173, local: 5174, direction: None };
-        let port = TunnelPort { port: 5173, direction: None };
+        let port = TunnelPort { port: 5173, direction: None, machine: None };
 
         assert_eq!(serde_json::to_string(&hold).expect("json"), r#"{"port":5173,"local":5174}"#);
         assert_eq!(serde_json::to_string(&port).expect("json"), r#"{"port":5173}"#);
@@ -72,7 +73,7 @@ mod the_direction {
     #[test]
     fn a_reverse_request_says_so() {
         let hold = TunnelHold { port: 9223, local: 9222, direction: Some(Direction::Reverse) };
-        let port = TunnelPort { port: 9223, direction: Some(Direction::Reverse) };
+        let port = TunnelPort { port: 9223, direction: Some(Direction::Reverse), machine: None };
 
         assert_eq!(serde_json::to_string(&hold).expect("json"), r#"{"port":9223,"local":9222,"direction":"reverse"}"#);
         assert_eq!(serde_json::to_string(&port).expect("json"), r#"{"port":9223,"direction":"reverse"}"#);

@@ -1,17 +1,18 @@
 ---
 source: src/ui/tests/queue.rs
+assertion_line: 51
 expression: t.backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                              "
-"     ╭─ Issues · shop ────────────────────────────────────────────────────────────────────────────────────────────╮     "
-" Proj│  All   GitHub   Queue                                                                                      │     "
+"     ╭─ Queue ────────────────────────────────────────────────────────────────────────────────────────────────────╮     "
+" Proj│ ›                                                                                                          │     "
 "     │                                                                                                            │     "
-"▌ sho│ ›                                                                                                          │     "
+"▌ sho│ ▌  2026-10-14 14:30  #482 Fix the login form                          pending · claude · shop › issue-482  │     "
+"     │    2026-10-14 15:00  Update the docs                                      started · pane 7 · codex · shop  │     "
+"  + N│    2026-10-14 16:00  Fix logout                                       failed · codex is not installed · …  │     "
+"     │    2026-10-14 17:00  Review the tests                                               missed · claude · api  │     "
 "     │                                                                                                            │     "
-"  + N│ ▌2026-10-14 14:30  #482 Fix the login form                           pending · claude · shop › issue-482   │     "
-"     │  2026-10-14 15:00  Update the docs                                       started · pane 7 · codex · shop   │     "
-"     │  2026-10-14 16:00  Fix logout                                        failed · codex is not installed · …   │     "
-"     │  2026-10-14 17:00  Review the tests                                                missed · claude · api   │     "
+"     │                                                                                                            │     "
 "     │                                                                                                            │     "
 "     │                                                                                                            │     "
 "     │                                                                                                            │     "
@@ -23,6 +24,6 @@ expression: t.backend()
 "     │                                                                                                            │     "
 "     │                                                                                                            │     "
 "     │ enter edits it · start now runs it at once                                                                 │     "
-" ────│                                                         new   start now   remove   clear started   cancel  │     "
+" ────│                                                           new   start now   remove   clear started   done  │     "
 "  Wor╰────────────────────────────────────────────────────────────────────────────────────────────────────────────╯     "
 "  More ▴                 Help  │                         │                                                              "

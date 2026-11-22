@@ -301,14 +301,12 @@ function opened(app: App): void {
   press(app, 'routines');
 }
 
-test('the Queue tab lists no bot routine and ends with a line saying where they are', () => {
+test('the Queue window lists no bot routine and ends with a line saying where they are', () => {
   const app = new App();
   app.virtual = true;
   app.resize(140, 38);
   world(app);
-  app.openIssues();
-  app.advance(1000);
-  app.issuesTab(app.config.sources.length);
+  app.openQueue();
   app.render();
   const text = screen(app);
   assert.doesNotMatch(text, /Review PRs/);

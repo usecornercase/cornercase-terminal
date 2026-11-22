@@ -145,3 +145,51 @@ mod combo {
         assert_eq!((c.label(), c.options().len()), (Some("default"), 2));
     }
 }
+
+mod chosen {
+    use super::*;
+
+    #[test]
+    fn the_selection_follows_its_id_when_rows_arrive_around_it() {
+        let chosen = Chosen::new(Some(12));
+        assert_eq!(chosen.index(&[10, 11, 12]), Some(2));
+        assert_eq!(chosen.index(&[9, 12, 10, 11]), Some(1));
+    }
+
+    #[test]
+    fn a_missing_selection_falls_back_to_the_first_row() {
+        let chosen = Chosen::new(Some(99));
+        assert_eq!(chosen.index(&[10, 11]), Some(0));
+        assert_eq!(chosen.index(&[]), None);
+    }
+
+    #[test]
+    fn moving_scrolls_to_keep_the_selection_in_view() {
+        let ids: Vec<u64> = (0..10).collect();
+        let mut chosen = Chosen::new(None);
+        chosen.move_by(6, &ids, 3);
+        assert_eq!((chosen.selected, chosen.scroll), (Some(6), 4));
+        chosen.move_by(isize::MIN, &ids, 3);
+        assert_eq!((chosen.selected, chosen.scroll), (Some(0), 0));
+    }
+
+    #[test]
+    fn a_wheel_scroll_stops_following_until_the_next_move() {
+        let ids: Vec<u64> = (0..10).collect();
+        let mut chosen = Chosen::new(Some(0));
+        chosen.scroll_by(4, ids.len(), 3);
+        chosen.fit(&ids, 3);
+        assert_eq!(chosen.scroll, 4);
+        chosen.move_by(1, &ids, 3);
+        chosen.fit(&ids, 3);
+        assert_eq!((chosen.selected, chosen.scroll), (Some(1), 1));
+    }
+
+    #[test]
+    fn choosing_outside_the_rows_changes_nothing() {
+        let mut chosen = Chosen::new(Some(11));
+        assert_eq!(chosen.choose(5, &[10, 11]), None);
+        assert_eq!(chosen.selected, Some(11));
+        assert_eq!(chosen.choose(0, &[10, 11]), Some(10));
+    }
+}

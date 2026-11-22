@@ -96,7 +96,7 @@ impl App {
         self.messages.toast = Some(Toast::new(format!("{why}; {NOTHING_SENT}"), ui::ToastIcon::Bug));
     }
 
-    pub(super) fn unlinked(&self, held: &Held) -> String {
+    pub(in crate::app) fn unlinked(&self, held: &Held) -> String {
         let why = match held.status.down {
             Some(Down::Unreachable(_)) | None => format!("{} unreachable", held.name),
             Some(_) => self.machines.reason(held).unwrap_or_else(|| OLDER.into()),
@@ -117,12 +117,12 @@ impl App {
     }
 
     pub(in crate::app) fn remote_menu(&mut self, aim: Aim, at: Position) {
-        self.noted_menu(aim.link, vec![MenuAction::RemoteRename(aim)], at);
+        self.noted_menu(aim.link, &[MenuAction::RemoteRename(aim), MenuAction::RemotePorts(aim)], at);
     }
 
-    pub(super) fn noted_menu(&mut self, link: u64, entries: Vec<MenuAction>, at: Position) {
+    pub(super) fn noted_menu(&mut self, link: u64, actions: &[MenuAction], at: Position) {
         let note = (!self.linked(link)).then_some(MenuAction::MachineNote(link));
-        let actions = note.into_iter().chain(entries).collect();
+        let actions = note.into_iter().chain(actions.iter().copied()).collect();
         self.overlay = Some(Overlay::Menu { at, actions });
     }
 
@@ -133,6 +133,7 @@ impl App {
                 !self.linked(aim.link) || self.machines.acting.busy(aim.link, aim.workspace)
             }
             MenuAction::RemoteAgentFold(aim) => !self.linked(aim.link),
+            MenuAction::RemotePorts(aim) => !self.linked(aim.link),
             other => self.remote_tab_disabled(other),
         }
     }
@@ -143,6 +144,7 @@ impl App {
                 Some(self.held_by(link).map_or_else(|| UNLISTED.into(), |held| self.unlinked(held)))
             }
             MenuAction::RemoteRename(_) => Some(RENAME_WORKSPACE_LABEL.into()),
+            MenuAction::RemotePorts(_) => Some("ports".into()),
             MenuAction::RemoteAgentFold(aim) => Some(folding(aim.collapse).into()),
             other => Self::remote_tab_label(other),
         }
@@ -152,7 +154,11 @@ impl App {
         match action {
             MenuAction::RemoteRename(aim) if !self.remote_disabled(action) => self.remote_rename(aim),
             MenuAction::RemoteAgentFold(aim) if !self.remote_disabled(action) => self.send_agent_fold(aim),
-            MenuAction::RemoteRename(_) | MenuAction::RemoteAgentFold(_) | MenuAction::MachineNote(_) => {}
+            MenuAction::RemotePorts(aim) if !self.remote_disabled(action) => self.open_remote_ports(aim),
+            MenuAction::RemoteRename(_)
+            | MenuAction::RemotePorts(_)
+            | MenuAction::RemoteAgentFold(_)
+            | MenuAction::MachineNote(_) => {}
             other => return self.remote_tab_action(other),
         }
         None
