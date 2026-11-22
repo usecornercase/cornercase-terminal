@@ -308,3 +308,53 @@ mod notes {
         assert!(flags_named(&text).iter().any(|(path, flag)| path == &["bot", "secret", "ask"] && flag == "about"));
     }
 }
+
+mod the_settings_a_continued_conversation_is_told {
+    use super::*;
+
+    fn told(bot: &Bot, briefed: &Bot) -> Bot {
+        Bot { briefed: Some(Briefed::of(briefed)), ..bot.clone() }
+    }
+
+    #[test]
+    fn nothing_is_said_when_the_conversation_was_told_the_settings_it_has() {
+        let bot = named(Access::Full);
+        assert_eq!(settings(&told(&bot, &bot)), None);
+    }
+
+    #[test]
+    fn a_changed_access_says_what_it_allows_now_and_nothing_else() {
+        let bot = named(Access::Full);
+        let text = settings(&told(&bot, &named(Access::Cornercase))).expect("a change");
+        assert!(text.starts_with("## Your settings now"), "{text}");
+        assert!(text.ends_with(FULL), "{text}");
+        assert!(!text.contains("You are PRs") && !text.contains("How to see") && !text.contains(FOLLOW), "{text}");
+        let back = settings(&told(&named(Access::Cornercase), &bot)).expect("a change");
+        assert!(back.contains(REACH) && back.contains(BOUNDED) && !back.contains(FULL), "{back}");
+    }
+
+    #[test]
+    fn an_access_that_changes_what_the_bot_can_read_says_how_it_sees_the_work_now() {
+        let gemini = Bot { agent: String::from("gemini"), ..named(Access::Cornercase) };
+        let full = Bot { access: Access::Full, ..gemini.clone() };
+        let text = settings(&told(&full, &gemini)).expect("a change");
+        assert!(text.contains(SEE) && text.contains(SEE_GIT) && text.ends_with(FULL), "{text}");
+    }
+
+    #[test]
+    fn a_new_name_and_following_turned_off_are_said_each() {
+        let bot = Bot { name: String::from("Reviews"), follow: false, ..named(Access::Cornercase) };
+        let text = settings(&told(&bot, &named(Access::Cornercase))).expect("a change");
+        assert!(text.contains("You are Reviews") && text.ends_with(NOT_FOLLOWING), "{text}");
+        assert!(!text.contains(REACH), "{text}");
+    }
+
+    #[test]
+    fn a_conversation_whose_settings_are_not_known_is_told_all_of_them() {
+        let bot = named(Access::Full);
+        let text = settings(&bot).expect("unknown");
+        for part in ["You are PRs", SEE, FULL, FOLLOW] {
+            assert!(text.contains(part), "{part} in {text}");
+        }
+    }
+}

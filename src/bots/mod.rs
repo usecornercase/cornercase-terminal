@@ -69,6 +69,21 @@ pub(crate) struct Bot {
     pub(crate) follow: bool,
     #[serde(default, skip_serializing_if = "ChatApps::is_away")]
     pub(crate) chat_apps: ChatApps,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) briefed: Option<Briefed>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct Briefed {
+    pub(crate) name: String,
+    pub(crate) access: Access,
+    pub(crate) follow: bool,
+}
+
+impl Briefed {
+    pub(crate) fn of(bot: &Bot) -> Self {
+        Self { name: bot.name.clone(), access: bot.access, follow: bot.follow }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -186,6 +201,7 @@ pub(crate) fn sample(id: &str, name: &str) -> Bot {
         conversation: None,
         follow: true,
         chat_apps: ChatApps::Away,
+        briefed: None,
     }
 }
 

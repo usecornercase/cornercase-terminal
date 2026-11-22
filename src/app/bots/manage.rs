@@ -208,6 +208,7 @@ impl App {
             conversation: None,
             follow: new.follow.unwrap_or(true),
             chat_apps: ChatApps::Away,
+            briefed: None,
         };
         let edit = EditBot {
             model: new.model.clone(),

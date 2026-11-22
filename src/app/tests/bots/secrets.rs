@@ -41,6 +41,7 @@ pub(in crate::app::tests) fn turn() -> crate::app::bots::Turn {
         dropped: Vec::new(),
         started: Instant::now(),
         steps: 0,
+        briefed: crate::bots::Briefed::of(&crate::bots::sample("prs", "PRs")),
     }
 }
 
