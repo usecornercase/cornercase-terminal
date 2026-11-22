@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.115
+
+- **A bot learns when you change its settings.** After you change a bot's access, its name or whether it follows the agents it starts, its next message tells its conversation what holds now. Before, the chat went on with what it was told when the conversation began: a bot given full access still said it could only use cornercase and write in its folder. A bot whose conversation began on an earlier version is told its settings once, at its next message.
+
 ## 0.13.114
 
 - **Open, close and rename a machine's tabs from your sidebar.** A machine's workspace now has a `+ Tab` row, and its tabs a `×` and a ` ⋯ ` menu with **rename tab** and **close tab**, as yours. The `×` asks first when the machine reports a recognized agent status for the tab, idle and done included, and in the compact layout; a shell tab closes at once.

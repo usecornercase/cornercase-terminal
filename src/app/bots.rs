@@ -80,6 +80,7 @@ pub(super) struct Turn {
     pub(super) dropped: Vec<u64>,
     pub(super) started: Instant,
     pub(super) steps: usize,
+    pub(super) briefed: crate::bots::Briefed,
 }
 
 pub(super) struct Run {

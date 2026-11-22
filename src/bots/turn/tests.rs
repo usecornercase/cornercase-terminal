@@ -7,8 +7,10 @@ use crate::bots::sample;
 use crate::test_util::{TempDir, fake_program};
 
 fn input(folder: &Path, conversation: Option<&str>) -> Input {
+    let bot = sample("prs", "PRs");
+    let briefed = conversation.map(|_| crate::bots::Briefed::of(&bot));
     Input {
-        bot: Bot { conversation: conversation.map(str::to_string), ..sample("prs", "PRs") },
+        bot: Bot { conversation: conversation.map(str::to_string), briefed, ..bot },
         folder: folder.to_path_buf(),
         text: String::from("hello"),
         session: Session::Chat,
@@ -151,6 +153,21 @@ fn what_the_routines_answered_is_put_in_front_of_a_resumed_message_once_given() 
     let asked = ask(&Input { told, ..input(&made, Some("s1")) }, None, None);
     assert!(asked.prompt.starts_with("## Since your last message"), "{}", asked.prompt);
     assert!(asked.prompt.ends_with("## The user says\n\nhello"));
+    assert_eq!(asked.conversation.as_deref(), Some("s1"));
+}
+
+#[test]
+fn a_continued_message_is_told_the_settings_that_changed_before_the_routines_and_what_the_user_says() {
+    let dir = TempDir::new();
+    let made = folder::create(dir.path(), &sample("prs", "PRs"), "").expect("create");
+    let told = Some(String::from("## Since your last message, your routines answered\n\n[A, 09:00]\nx"));
+    let mut edited = input(&made, Some("s1"));
+    edited.bot.access = headless::Access::Full;
+    let asked = ask(&Input { told, ..edited }, None, None);
+    let at = |needle: &str| asked.prompt.find(needle).unwrap_or_else(|| panic!("{needle} in {}", asked.prompt));
+    assert!(asked.prompt.starts_with("## Your settings now"), "{}", asked.prompt);
+    assert!(at("Your access is `full`") < at("## Since your last message"));
+    assert!(asked.prompt.ends_with("## The user says\n\nhello"), "{}", asked.prompt);
     assert_eq!(asked.conversation.as_deref(), Some("s1"));
 }
 

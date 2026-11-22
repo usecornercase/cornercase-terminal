@@ -454,5 +454,6 @@ mod routines_dialog;
 pub(in crate::app::tests) mod secrets;
 mod secrets_window;
 mod setup;
+mod told_settings;
 mod views;
 mod window;
