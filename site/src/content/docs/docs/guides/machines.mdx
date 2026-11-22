@@ -189,7 +189,7 @@ With a machine's workspace picked, ` Changes ` and ` Files ` show that workspace
 - **The machine sees it** as a tunnel held by a program (`cornercase tunnels` there lists it as a `hold`), so `cornercase tunnel close 5173` on the machine ends it here too, with `vps closed the tunnel of its port 5173`.
 - **every port** lists every port of the machine, as `cornercase ports --all` does there, each with the machine's project and workspace (`web › web-shop · pane 31 · dev`) or `no workspace`. Your own computer's ports are never mixed in. **More ▴ › ports** opens the dialog on the machine's workspace when the window shows one.
 - **go** shows the machine's tab that started the program, and **stop** asks first, then has the machine stop it with its own checks (`stopped node (pid 48211) on port 5173 on vps`).
-- **When the machine goes down**, the dialog says why and sends nothing; when the machine restarts, or the workspace closes there, the dialog closes.
+- **When the machine goes down**, the dialog says why and sends nothing; when the machine restarts, the dialog closes, and when the workspace closes there it closes too, unless it shows every port.
 
 Scripts tunnel a machine's port the same way with [`cornercase tunnel open 5173 --machine vps`](../scripts-and-agents/#tunnels), and list a machine's ports with `cornercase --remote vps ports`.
 
