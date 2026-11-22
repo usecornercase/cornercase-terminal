@@ -57,6 +57,7 @@ impl Acting {
     }
 
     #[cfg(test)]
+    #[cfg(unix)]
     pub(in crate::app) fn waiting(&self) -> usize {
         self.busy.len()
     }
