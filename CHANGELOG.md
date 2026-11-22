@@ -2,6 +2,14 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.111
+
+- **Bots have a page of their own.** **Bots ›**, at the right of the Projects title, opens it in every layout, also before you make your first bot. While a bot answers it shows the spinner, and while answers wait for you how many, for every bot together.
+- **On the page** your bots take the place of the projects list and the Agents section, with **+ New** under them, the chat takes the place of the panes and the bot's card the place of the workspaces. It opens on the bot you read last, or the first one, and **‹ Projects** takes you back. The Bots section between the lists and the Agents section is gone, and its fold with it.
+- **With no chat chosen** the page says what a bot is, has **+ New bot** and three ideas, PRs, News and Releases, that open the form with the name and what it is for filled in, so a first bot is two clicks away. With bots, it asks you to pick one. Removing the bot you are reading leaves you on the page.
+- **In compact mode** Bots › is always in the projects menu and opens the list of your bots, or that page while you have none.
+- Nothing changes for scripts: `cornercase bot list --json`, the `bot` events and `shown_bot` in `cornercase status --json` already carry what the page shows.
+
 ## 0.13.110
 
 - **Send your flows to your machines.** Settings › Flows has **sync**, which sends the selected flow of yours to every machine shown in Settings › Machines, and **sync all**, which sends all of them, so starting a flow on a machine runs the version you just saved. Both show while a machine is linked, and then say what each machine got or why it did not (`vps: sent Duo`). A machine still on an older cornercase gets nothing until you update it there. Nothing is sent on its own and nothing is deleted there; your default flow, your order and the built-in flows you deleted stay on each computer.
