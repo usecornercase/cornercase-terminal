@@ -105,7 +105,7 @@ Once a machine is linked, your server reads what it has, and the sidebar shows i
 - **A project on the machine with no clone here** is a row of its own at the end of the list, outside your groups, with the machine's tag.
 - **Its tabs show what their agents are doing**, with the same icons and the model and context line as yours.
 - **A machine that is down keeps its rows**, dimmed, and an agent's tab says what it was doing and when the machine was last seen: `working · seen 2 min ago`.
-- **A machine's workspace has a `×` and a ` ⋯ ` menu**, as yours do: see [Acting on a machine's workspace](#acting-on-a-machines-workspace). Its tabs have no buttons, no row has `+ Tab`, and they can't be dragged. Folding a workspace works: it is kept by your server, not on the machine, until your server restarts.
+- **A machine's workspace has a `×` and a ` ⋯ ` menu**, as yours do: see [Acting on a machine's workspace](#acting-on-a-machines-workspace). Its tabs have them too, and it has a `+ Tab` row: see [Acting on a machine's tabs](#acting-on-a-machines-tabs). They can't be dragged. Folding a workspace works: it is kept by your server, not on the machine, until your server restarts.
 - **Its agents are in the agents section** too, when you turn it on: see [Its agents in the agents section](#its-agents-in-the-agents-section).
 
 ### Acting on a machine's workspace
@@ -120,6 +120,17 @@ Hover over a machine's workspace (in compact mode its buttons always show) and u
 - **If the machine restarted** after you opened a dialog, the dialog closes, or, if you confirm first, nothing is changed there and a toast says so, since its workspaces may have new ids by then.
 
 A rename or a close gives up after 15 seconds, the check after a minute and a removal after 10 minutes, with `it did not answer in time`; a removal that took longer goes on on the machine. Scripts can do the same with [`--remote`](../scripts-and-agents/#machines), and with [`--boot`](../scripts-and-agents/#arrange) the machine refuses when it restarted since they read the id, as it does for the window.
+
+### Acting on a machine's tabs
+
+A machine's workspace has a `+ Tab` row under its tabs, and each tab a `×` and a ` ⋯ ` on hover (always, in compact mode), as yours. They send the machine the same requests a script would, as for its workspace:
+
+- **`+ Tab`** opens a tab in that workspace on the machine, with the machine's default shell and accounts. Once the machine lists it, the window shows it, unless you picked something else in the meantime.
+- **` ⋯ `**, or a right-click on the tab's row, opens a menu with **rename tab** and **close tab**. Leave the name empty to go back to the program's name.
+- **`×`** closes a tab running only a shell at once, as yours does. A tab with a recognized agent status, idle and done included, asks first, and so does every `×` in compact mode: `Close the tab claude on vps? The programs running in it are stopped.`
+- **While the machine closes a tab**, its row reads `closing…` and takes no clicks until the machine no longer lists it. While a rename or a close waits, the tab's menu is greyed out and its `×` says `claude on vps is still waiting for its last action` with `nothing was sent`. While it closes, the prefix key's **split right**, **split down** and **close pane** say the same.
+- **If the machine refuses**, a toast says so with its words: `could not open a tab in notes on vps: …`, `could not close claude on vps: …`. If it restarted, `vps restarted; nothing was changed there`. If it is down, the buttons are dimmed, the menu says `vps unreachable` above greyed items, and `×` and `+ Tab` say `vps unreachable; nothing was sent`.
+- **With the tabs above the pane** (**settings → UI → tabs** set to *top*), the sidebar lists no tabs, and the bar above the pane shows this computer's tabs: a machine's tabs are then reached with the [prefix key's menu](#working-in-a-machines-tab) only.
 
 ### Its agents in the agents section
 
@@ -167,7 +178,7 @@ Once its screen shows, the tab works as one of yours, on the machine:
 
 Before its first screen arrives, and while the machine is down, nothing you type, click or scroll there is sent, or kept for later: a toast says `vps unreachable: nothing was sent`. When the program in a pane doesn't take what you send, the toast says so too.
 
-While a machine's workspace shows, the sidebar, the tools, the tabs above the pane and the prefix key's menu still work; what that menu does to a tab or a pane, such as a split, first goes back to this computer. The project here it pairs with becomes the active one, and the tabs above the pane keep showing that project's workspace you were on here. **Changes** and **Files** show the machine's workspace, as the next section describes. Click anything of this computer to go back to it.
+While a machine's workspace shows, the sidebar, the tools, the tabs above the pane and the prefix key's menu still work. That menu's **new tab**, **split right**, **split down**, **close pane**, **rename tab**, the arrows (move to the pane on that side), **rename workspace** and **close workspace** act on the machine's tab, and the machine's workspace stays picked: a split focuses the new pane once the machine answers, **close pane** asks first (`Close the pane running zsh on vps?`, or about the whole tab when it has one pane), a pane the machine hasn't listed yet, right after a split for instance, says `vps has not listed that pane yet; nothing was sent` and closes neither it nor its tab, and a pane too small to split says so with the machine's words. Before its first screen arrives they send nothing and say so. Its other actions, such as **mark for review** or the next tab, first go back to this computer. The project here it pairs with becomes the active one, and the tabs above the pane keep showing that project's workspace you were on here. **Changes** and **Files** show the machine's workspace, as the next section describes. Click anything of this computer to go back to it.
 
 ### Changes and files of a machine's workspace
 
@@ -210,7 +221,7 @@ Scripts get them from [`cornercase events --notices`](../scripts-and-agents/#fol
 - **Every project** in Changes lists only this computer's projects.
 - A project on a machine with no workspaces can't be picked.
 - Starting work from a project that is only on the machine, [scheduling](../queue/) an agent there, and sending a TODO, a Telegram or a Discord message to an agent there.
-- Closing or renaming a machine's tabs, `+ Tab`, splitting or closing its panes, and the prefix key's menu acting there.
+- Reordering a machine's tabs, its pane's right-click menu and moving its panes, and a machine's tabs in the tabs above the pane.
 - In the agents section, closing a machine's agents, marking them as pending review and viewing their context.
 - In a machine's tab: clicking a path, the pane's right-click menu, moving panes, the accounts row, opening links, and pictures.
 - Picking a machine's workspace with ` go ` or `focus --machine` doesn't scroll the tree, or the workspaces column, to its row.

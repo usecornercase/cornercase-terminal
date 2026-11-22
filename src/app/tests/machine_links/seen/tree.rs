@@ -37,10 +37,22 @@ fn lists_a_machine_s_workspaces_under_their_project_and_its_own_projects_last() 
 
     let rows = ui::tree_rows(&rig.app.tree_shape());
 
-    let tail = [TreeRow::Project(1), TreeRow::Workspace(1, 0), TreeRow::Tab(1, 0, 0), TreeRow::Tab(1, 0, 1)];
+    let tail = [
+        TreeRow::Project(1),
+        TreeRow::Workspace(1, 0),
+        TreeRow::Tab(1, 0, 0),
+        TreeRow::Tab(1, 0, 1),
+        TreeRow::NewTab(1, 0),
+    ];
     assert!(rows.ends_with(&tail), "{rows:?}");
-    let theirs = [TreeRow::Workspace(0, w), TreeRow::Tab(0, w, 0), TreeRow::Tab(0, w, 1), TreeRow::NewWorkspace(0)];
-    assert!(rows.windows(4).any(|window| window == theirs), "{rows:?}");
+    let theirs = [
+        TreeRow::Workspace(0, w),
+        TreeRow::Tab(0, w, 0),
+        TreeRow::Tab(0, w, 1),
+        TreeRow::NewTab(0, w),
+        TreeRow::NewWorkspace(0),
+    ];
+    assert!(rows.windows(5).any(|window| window == theirs), "{rows:?}");
     let tree = rig.app.tree_view();
     let tag = |p: usize, w: usize| tree.workspaces[p].get(w).and_then(|e| e.machine.as_ref()).map(|m| m.name.clone());
     assert_eq!((tag(0, w), tag(1, 0), tag(0, 0)), (Some("vps".into()), Some("vps".into()), None));

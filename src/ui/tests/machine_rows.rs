@@ -90,7 +90,7 @@ fn beside() -> View<'static> {
     with_machines(Sidebar::SideBySide, None)
 }
 
-fn hovered_in(view: fn() -> View<'static>, text: &str) -> String {
+fn hovered_in(view: impl Fn() -> View<'static>, text: &str) -> String {
     let t = render_sized(&view(), W, TALL);
     let v = View { hover: Some(find(&t, text)), ..view() };
     row_of(&render_sized(&v, W, TALL), text)
@@ -155,28 +155,68 @@ fn a_fallen_machine_s_spinner_stands_still() {
     assert!(spinners[0].contains("⠸ claude") && spinners[1].contains("⠋ claude"), "{spinners:?}");
 }
 
-#[test]
-fn a_machine_s_workspaces_have_no_new_tab() {
-    let t = rendered(Sidebar::SideBySide, None);
-    let tabs = (0..TALL).filter(|&y| row_text(&t, Rect::new(0, y, W, 1)).contains("└ + Tab")).count();
+fn new_tabs(t: &Terminal<TestBackend>) -> Vec<bool> {
+    let dim = |y| t.backend().buffer()[(find_in_row(t, y, "+ Tab"), y)].modifier.contains(Modifier::DIM);
+    (0..TALL).filter(|&y| row_text(t, Rect::new(0, y, W, 1)).contains("└ + Tab")).map(dim).collect()
+}
 
-    assert_eq!(tabs, 1);
+fn find_in_row(t: &Terminal<TestBackend>, y: u16, text: &str) -> u16 {
+    let row = row_text(t, Rect::new(0, y, W, 1));
+    let at = row.find(text).expect("the text is in the row");
+    u16::try_from(row[..at].chars().count()).expect("a column")
+}
+
+#[test]
+fn a_machine_s_workspaces_have_a_new_tab_dim_while_the_machine_is() {
+    let t = rendered(Sidebar::SideBySide, None);
+
+    assert_eq!(new_tabs(&t), [false, false, true]);
+}
+
+#[test]
+fn a_machine_s_workspace_being_removed_draws_no_new_tab() {
+    let mut v = beside();
+    v.workspaces[1].removing = true;
+
+    let t = render_sized(&v, W, TALL);
+
+    let row = (0..TALL).map(|y| row_text(&t, Rect::new(0, y, W, 1))).find(|row| row.contains("removing…"));
+    assert!(row.is_some());
+    assert_eq!(new_tabs(&t).len(), 2);
 }
 
 #[rstest]
 #[case::side_by_side(beside)]
 #[case::tree(in_tree)]
-fn a_machine_s_workspace_has_buttons_on_hover_and_its_tabs_do_not(#[case] view: fn() -> View<'static>) {
+fn a_machine_s_workspace_and_its_tabs_have_buttons_on_hover(#[case] view: fn() -> View<'static>) {
     let shown = ["login", "api-vps", "zsh"].map(|text| buttons(&hovered_in(view, text)));
 
-    assert_eq!(shown, [(true, true), (true, true), (false, false)]);
+    assert_eq!(shown, [(true, true), (true, true), (true, true)]);
 }
 
 #[test]
-fn a_machine_s_workspace_shows_its_buttons_in_the_compact_menu_and_its_tabs_do_not() {
+fn a_machine_s_workspace_and_its_tabs_show_their_buttons_in_the_compact_menu() {
     let t = rendered(Sidebar::SideBySide, Some(Nav::Workspaces));
 
-    assert_eq!((buttons(&row_of(&t, "api-vps")), buttons(&row_of(&t, "zsh"))), ((true, true), (false, false)));
+    assert_eq!((buttons(&row_of(&t, "api-vps")), buttons(&row_of(&t, "zsh"))), ((true, true), (true, true)));
+}
+
+#[rstest]
+#[case::side_by_side(beside)]
+#[case::tree(in_tree)]
+fn a_machine_s_tab_being_closed_says_so_and_has_no_buttons_on_hover(#[case] view: fn() -> View<'static>) {
+    let closing = || {
+        let mut v = view();
+        v.workspaces[1].tabs[1].closing = true;
+        if let Some(tree) = v.tree.as_mut() {
+            tree.workspaces[0][1].tabs[1].closing = true;
+        }
+        v
+    };
+
+    let row = hovered_in(closing, "closing…");
+
+    assert!(row.contains("zsh") && buttons(&row) == (false, false), "{row}");
 }
 
 #[test]
@@ -282,11 +322,12 @@ fn renders_a_machine_s_rows_in_the_tree() {
 }
 
 #[test]
-fn a_machine_s_rows_in_the_tree_have_no_new_rows_nor_arrow_on_its_project() {
+fn a_machine_s_rows_in_the_tree_add_tabs_but_no_new_rows_nor_arrow_on_its_project() {
     let t = render_sized(&in_tree(), W, TALL);
     let count = |text: &str| (0..TALL).filter(|&y| row_text(&t, Rect::new(0, y, W, 1)).contains(text)).count();
 
-    assert_eq!((count("└ + Tab"), count(NEW_BUTTON)), (1, 2));
+    assert_eq!((count("└ + Tab"), count(NEW_BUTTON)), (5, 2));
+    assert!(row_of(&t, "zsh").contains('├'), "{}", row_of(&t, "zsh"));
     assert!(!row_of(&t, "blog").contains('▾'), "{}", row_of(&t, "blog"));
     assert!(t.backend().buffer()[find(&t, "api-nas")].modifier.contains(Modifier::DIM));
 }

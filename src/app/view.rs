@@ -97,6 +97,7 @@ impl App {
             running: t.running(),
             details: self.tab_details(t),
             others: t.others(),
+            closing: false,
         }
     }
 

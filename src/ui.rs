@@ -328,7 +328,7 @@ impl View<'_> {
         let lines = self.workspaces.iter().map(WorkspaceEntry::tab_lines).collect();
         TabLines::new(lines, self.tab_bar.is_none())
             .folded(self.workspaces.iter().map(|w| w.collapsed).collect())
-            .bare(self.workspaces.iter().map(|w| w.machine.is_some()).collect())
+            .theirs(self.workspaces.iter().map(|w| w.machine.is_some()).collect())
     }
 
     fn bots_page(&self) -> bool {

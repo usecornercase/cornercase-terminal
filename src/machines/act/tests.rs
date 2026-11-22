@@ -57,6 +57,42 @@ mod an_act {
         json!({"item": {"workspace": 3}, "remove_worktree": true, "force": false, "unlock": true}),
         REMOVE,
     )]
+    #[case::new_tab(
+        Act::NewTab,
+        "new-tab",
+        json!({"workspace": 3, "name": null, "command": null, "focus": false, "profile": null, "accounts": {}}),
+        QUICK,
+    )]
+    #[case::rename_tab(
+        Act::RenameTab { tab: 5, name: "logs".into() },
+        "rename",
+        json!({"item": {"tab": 5}, "name": "logs"}),
+        QUICK,
+    )]
+    #[case::close_tab(
+        Act::CloseTab(5),
+        "close",
+        json!({"item": {"tab": 5}, "remove_worktree": false, "force": false, "unlock": false}),
+        QUICK,
+    )]
+    #[case::split_right(
+        Act::Split { pane: 9, down: false },
+        "split",
+        json!({"pane": 9, "down": false, "command": null, "focus": false}),
+        QUICK,
+    )]
+    #[case::split_down(
+        Act::Split { pane: 9, down: true },
+        "split",
+        json!({"pane": 9, "down": true, "command": null, "focus": false}),
+        QUICK,
+    )]
+    #[case::close_pane(
+        Act::ClosePane(9),
+        "close",
+        json!({"item": {"pane": 9}, "remove_worktree": false, "force": false, "unlock": false}),
+        QUICK,
+    )]
     fn asks_for_its_workspace_with_the_boot_it_was_seen_with(
         #[case] act: Act,
         #[case] command: &str,
@@ -76,8 +112,27 @@ mod an_act {
     #[case::check(Act::Check, "check")]
     #[case::close(Act::Close, "close")]
     #[case::remove(Act::Remove { force: true, unlock: true }, "remove")]
+    #[case::new_tab(Act::NewTab, "open a tab in")]
+    #[case::rename_tab(Act::RenameTab { tab: 5, name: String::new() }, "rename")]
+    #[case::close_tab(Act::CloseTab(5), "close")]
+    #[case::split(Act::Split { pane: 9, down: true }, "split")]
+    #[case::close_pane(Act::ClosePane(9), "close")]
     fn is_named_by_its_verb(#[case] act: Act, #[case] verb: &str) {
         assert_eq!(act.verb(), verb);
+    }
+
+    #[rstest]
+    #[case::rename(Act::Rename("api".into()), "rename", Scope::Workspace)]
+    #[case::check(Act::Check, "check", Scope::Workspace)]
+    #[case::close(Act::Close, "close", Scope::Workspace)]
+    #[case::remove(Act::Remove { force: false, unlock: false }, "remove", Scope::Workspace)]
+    #[case::new_tab(Act::NewTab, "new-tab", Scope::Workspace)]
+    #[case::rename_tab(Act::RenameTab { tab: 5, name: String::new() }, "rename-tab", Scope::Tab(5))]
+    #[case::close_tab(Act::CloseTab(5), "close-tab", Scope::Tab(5))]
+    #[case::split(Act::Split { pane: 9, down: false }, "split", Scope::Pane(9))]
+    #[case::close_pane(Act::ClosePane(9), "close-pane", Scope::Pane(9))]
+    fn is_logged_by_its_name_and_aims_at_its_scope(#[case] act: Act, #[case] name: &str, #[case] scope: Scope) {
+        assert_eq!((act.name(), act.scope()), (name, scope));
     }
 
     #[test]

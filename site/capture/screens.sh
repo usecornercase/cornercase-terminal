@@ -946,7 +946,7 @@ screen_machines_sidebar() {
   cc_click 'fix/login'
   cc_wait 'running cargo test' 30
   cc_hover 'Workspaces'
-  cc_wait '▌     Opus 5.5 · 31%           │'
+  cc_wait '▌ │   Opus 5.5 · 31%           │'
   cc_shot machines-sidebar
 }
 

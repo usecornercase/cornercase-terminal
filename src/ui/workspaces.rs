@@ -37,6 +37,7 @@ const BEHIND_ICON: &str = "↓";
 const SHARED_ICON: &str = "⇄";
 
 const REMOVING_LABEL: &str = "removing…";
+const CLOSING_LABEL: &str = "closing…";
 const SETTING_UP_LABEL: &str = "setting up…";
 
 const CONTEXT_SEPARATOR: &str = " · ";
@@ -60,29 +61,25 @@ pub struct TabLines {
     lines: Vec<Vec<u16>>,
     listed: bool,
     folded: Vec<bool>,
-    bare: Vec<bool>,
+    theirs: Vec<bool>,
 }
 
 impl TabLines {
     pub(crate) fn new(lines: Vec<Vec<u16>>, listed: bool) -> Self {
         let lines = if listed { lines } else { vec![Vec::new(); lines.len()] };
-        Self { lines, listed, folded: Vec::new(), bare: Vec::new() }
+        Self { lines, listed, folded: Vec::new(), theirs: Vec::new() }
     }
 
     pub(crate) fn folded(self, folded: Vec<bool>) -> Self {
         Self { folded, ..self }
     }
 
-    pub(crate) fn bare(self, bare: Vec<bool>) -> Self {
-        Self { bare, ..self }
-    }
-
-    fn adds_tabs(&self, w: usize) -> bool {
-        self.listed && self.bare.get(w) != Some(&true)
+    pub(crate) fn theirs(self, theirs: Vec<bool>) -> Self {
+        Self { theirs, ..self }
     }
 
     pub(crate) fn ours(&self) -> usize {
-        self.bare.iter().position(|bare| *bare).unwrap_or(self.lines.len())
+        self.theirs.iter().position(|theirs| *theirs).unwrap_or(self.lines.len())
     }
 
     pub(crate) fn is_folded(&self, w: usize) -> bool {
@@ -107,7 +104,7 @@ pub(crate) fn workspace_rows(tabs: &TabLines) -> Vec<WorkspaceRow> {
                 .into_iter()
                 .chain(std::iter::once(WorkspaceRow::Workspace(w)))
                 .chain((0..lines.len()).filter(move |_| open).map(move |t| WorkspaceRow::Tab(w, t)))
-                .chain((tabs.adds_tabs(w) && open).then_some(WorkspaceRow::NewTab(w)))
+                .chain((tabs.listed && open).then_some(WorkspaceRow::NewTab(w)))
         })
         .collect()
 }
@@ -255,6 +252,7 @@ pub(crate) struct TabEntry {
     pub(crate) running: bool,
     pub(crate) details: Details,
     pub(crate) others: usize,
+    pub(crate) closing: bool,
 }
 
 impl TabEntry {
@@ -304,7 +302,7 @@ impl From<&str> for TabEntry {
 
 impl From<String> for TabEntry {
     fn from(name: String) -> Self {
-        Self { name, status: None, running: false, details: Details::default(), others: 0 }
+        Self { name, status: None, running: false, details: Details::default(), others: 0, closing: false }
     }
 }
 
@@ -385,11 +383,13 @@ impl WorkspacePaint<'_> {
                 }
             }
             WorkspaceRow::NewTab(w) => {
-                if !view.workspaces[w].removing {
+                let entry = &view.workspaces[w];
+                if !entry.removing {
                     let style = button_style(view, r, dim(view.muted), Color::Cyan);
                     draw_button(f, r, "   ", "+ Tab", style);
                 }
                 draw_guide(f, view.line(), guide, r, Guide::End);
+                dim_row(f, r, entry.machine.as_ref());
             }
         }
     }
@@ -601,11 +601,21 @@ pub(super) fn draw_tab_band(
     (tab, machine): (&TabEntry, Option<&MachineTag>),
     active: bool,
 ) {
-    let style = Style::default().fg(if active { Color::Reset } else { view.soft });
+    let colour = match (tab.closing, active) {
+        (true, _) => view.muted,
+        (false, true) => Color::Reset,
+        (false, false) => view.soft,
+    };
+    let style = Style::default().fg(colour);
     let indent = band.lead_width() + ICON_WIDTH;
     let max = band.room().saturating_sub(ICON_WIDTH);
-    let others = (tab.others > 0).then(|| Span::styled(format!("+{}", tab.others), Style::default().fg(view.muted)));
-    let marks = Tags::fit(others.into_iter().collect(), max);
+    let mark = if tab.closing {
+        Some(CLOSING_LABEL.to_string())
+    } else {
+        (tab.others > 0).then(|| format!("+{}", tab.others))
+    };
+    let marks =
+        Tags::fit(mark.map(|mark| Span::styled(mark, Style::default().fg(view.muted))).into_iter().collect(), max);
     let name = if marks.is_empty() {
         truncate_right(&tab.name, max)
     } else {
@@ -625,7 +635,7 @@ pub(super) fn draw_tab_band(
         let line = DetailLine { row: band.r, buttons, details, agent: note.as_deref(), indent };
         draw_details(f, view.muted, line);
     }
-    if machine.is_none() {
+    if !tab.closing {
         draw_row_buttons(f, view, band.r, band.pitch, band.bg);
     }
     dim_row(f, band.r, machine);

@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.114
+
+- **Open, close and rename a machine's tabs from your sidebar.** A machine's workspace now has a `+ Tab` row, and its tabs a `×` and a ` ⋯ ` menu with **rename tab** and **close tab**, as yours. The `×` asks first when the machine reports a recognized agent status for the tab, idle and done included, and in the compact layout; a shell tab closes at once.
+- **The prefix key's menu works on a machine's tab**: **new tab**, **split right**, **split down**, **close pane**, **rename tab**, the arrows between panes, **rename workspace** and **close workspace** act there, and the machine's workspace stays picked.
+- While the machine closes a tab, its row reads `closing…`. A refusal shows the machine's own words (`could not split the pane on vps: pane 3 is too small to split right`), and a machine that is down or restarted says that nothing was sent or changed.
+
 ## 0.13.113
 
 - **A roomier bot chat.** The conversation keeps to a centred column in a wide window, your messages are bubbles with room around the text, the bot's name is in bold above its answers, and **routines**, **new conversation**, **retry**, **show** and **stop** look like buttons and light up under the pointer.
