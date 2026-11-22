@@ -26,6 +26,12 @@ fn split_listing(panes: &[u64]) -> Streaming {
     streaming
 }
 
+fn alone(mut frame: Value, pane: u64) -> Value {
+    frame["ok"]["panes"][0]["pane"] = json!(pane);
+    frame["ok"]["layout"] = json!({"leaf": pane});
+    frame
+}
+
 fn by_keys(app: &mut App, codes: &[KeyCode]) {
     app.config.prefix_key = "ctrl+]".into();
     send_key(app, KeyCode::Char(']'), KeyModifiers::CONTROL);
@@ -173,10 +179,7 @@ fn a_split_answered_after_another_tab_was_picked_does_not_pull_the_view_back() {
     let mut orders = reach(&streaming.seeing.ends);
     assert_eq!(request(&mut orders)["args"]["item"], serde_json::to_value(Item::Tab(11)).expect("an item"));
     say(&mut orders, &json!({"ok": {"tab": 11}}));
-    let mut frame = There { tab: 11, ..THERE }.complete(2, 1, "other");
-    frame["ok"]["panes"][0]["pane"] = json!(12);
-    frame["ok"]["layout"] = json!({"leaf": 12});
-    say(&mut streaming.surface, &frame);
+    say(&mut streaming.surface, &alone(There { tab: 11, ..THERE }.complete(2, 1, "other"), 12));
     streaming.seeing.rig.until("the other tab shows", |app| {
         app.watched().and_then(|watched| watched.screen.as_deref()).is_some_and(|screen| screen.tab == 11)
     });
@@ -185,5 +188,78 @@ fn a_split_answered_after_another_tab_was_picked_does_not_pull_the_view_back() {
     let pane = streaming.seeing.rig.app.layout(AREA).pane;
     mouse(&mut streaming.seeing.rig.app, MouseEventKind::ScrollUp, Position::new(pane.x + 3, pane.y + 1));
 
+    assert_eq!(request(&mut orders)["command"], "scroll");
+}
+
+#[rstest]
+#[case::split(KeyCode::Char('|'))]
+#[case::close_pane(KeyCode::Char('x'))]
+fn a_pane_of_a_tab_being_closed_there_is_left_alone_and_says_so(#[case] key: KeyCode) {
+    let mut streaming = split_there();
+    let aim = Aim { link: 1, era: streaming.seeing.rig.app.machines.held()[0].era, workspace: 10 };
+    streaming.seeing.rig.app.send_act(aim, Act::CloseTab(13));
+
+    by_keys(&mut streaming.seeing.rig.app, &[key]);
+
+    let toast = toast(&streaming.seeing.rig.app).unwrap_or_default();
+    assert!(toast.ends_with("is still waiting for its last action; nothing was sent"), "{toast}");
+    assert_eq!((opened(&streaming.seeing.rig.app), streaming.seeing.rig.app.machines.acting.waiting()), (None, 1));
+}
+
+#[test]
+fn closing_the_only_pane_of_a_frame_the_machine_has_not_listed_yet_does_not_close_its_tab() {
+    let mut streaming = streaming();
+    listing(&mut streaming, &[1]);
+    say(&mut streaming.surface, &alone(THERE.complete(1, 1, "moved on"), 2));
+    streaming.seeing.rig.until("the frame arrives", |app| shown(app).as_deref() == Some("moved on"));
+
+    by_keys(&mut streaming.seeing.rig.app, &[KeyCode::Char('x')]);
+
+    assert_eq!(opened(&streaming.seeing.rig.app), None);
+    assert_eq!(toast(&streaming.seeing.rig.app), Some("vps has not listed that pane yet; nothing was sent"));
+}
+
+const RESTARTED: &str = "vps-2";
+
+fn restarted(streaming: &mut Streaming) -> (UnixStream, UnixStream, UnixStream) {
+    let report =
+        control::Report { boot: RESTARTED.into(), ..worked(report(&[("web-shop", Some(SHOP)), ("blog", None)])) };
+    serve(&mut streaming.seeing.theirs, 3, report);
+    streaming.seeing.rig.until("the machine restarts", |app| {
+        app.machines.held()[0].seen.as_ref().is_some_and(|seen| seen.boot == RESTARTED)
+    });
+    let again = There { boot: RESTARTED, ..THERE };
+    let mut view = reach(&streaming.seeing.ends);
+    assert_eq!(request(&mut view)["command"], "view");
+    say(&mut view, &again.view_line(1));
+    let mut surface = reach(&streaming.seeing.ends);
+    assert_eq!(request(&mut surface)["command"], "surface");
+    let copies = copies(&streaming.seeing.ends);
+    say(&mut surface, &again.complete(1, 1, "restarted"));
+    streaming.seeing.rig.until("the new boot's frame arrives", |app| shown(app).as_deref() == Some("restarted"));
+    (view, surface, copies)
+}
+
+#[test]
+fn a_split_answered_after_the_machine_restarted_focuses_nothing() {
+    let mut streaming = split_there();
+    by_keys(&mut streaming.seeing.rig.app, &[KeyCode::Char('|')]);
+    let (mut line, _) = asked(&streaming);
+    let _streamed = restarted(&mut streaming);
+
+    say(&mut line, &json!({"ok": {"workspace": 10, "tab": 13, "pane": 1}}));
+    let rig = &mut streaming.seeing.rig;
+    loop {
+        let event = rig.rx.recv_timeout(Duration::from_secs(10)).expect("the split's answer");
+        let answer = matches!(event, AppEvent::Machine(MachineEvent::Acted(_)));
+        rig.app.handle_event(event, AREA).expect("handle event");
+        if answer {
+            break;
+        }
+    }
+    let pane = rig.app.layout(AREA).pane;
+    mouse(&mut rig.app, MouseEventKind::ScrollUp, Position::new(pane.x + 3, pane.y + 1));
+
+    let mut orders = reach(&streaming.seeing.ends);
     assert_eq!(request(&mut orders)["command"], "scroll");
 }

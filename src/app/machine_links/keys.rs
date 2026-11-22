@@ -50,12 +50,12 @@ impl App {
         let (tab, framed) = (screen.tab, screen.panes.len());
         let listed =
             self.remote_tab_info(aim, tab).map(|info| (info.panes.len(), info.panes.iter().any(|p| p.id == pane)));
-        if listed.map_or(framed, |(panes, _)| panes).max(framed) == 1 {
-            return self.remote_close_tab(TabAim { aim, tab }, true);
-        }
-        if !listed.is_some_and(|(_, known)| known) {
+        let Some((panes, true)) = listed else {
             let machine = self.held_by(aim.link).map(|held| held.name.clone()).unwrap_or_default();
             return self.not_sent(&format!("{machine} {UNLISTED_PANE}"));
+        };
+        if panes.max(framed) == 1 {
+            return self.remote_close_tab(TabAim { aim, tab }, true);
         }
         match self.aimed(aim, Scope::Pane(pane)) {
             Ok(_) => self.overlay = Some(Dialog::open(aim, Kind::ClosePane { tab, pane })),

@@ -13,7 +13,7 @@ use crate::app::overlay::Overlay;
 use crate::app::toast::Toast;
 use crate::app::worktrees;
 use crate::control::contract::{Code, Refusal};
-use crate::control::{self, WorkspaceInfo};
+use crate::control::{self, TabInfo, WorkspaceInfo};
 use crate::log::{self, Job, Level};
 use crate::machines::act::{Act, Scope, WARNING};
 use crate::machines::link::Down;
@@ -184,10 +184,8 @@ impl App {
         {
             return Err(waiting(&workspace.name));
         }
-        if let Scope::Tab(tab) = scope
-            && acting.busy_tab(aim.link, tab)
-        {
-            return Err(waiting(&label));
+        if let Some(tab) = waits_on(acting, aim.link, workspace, scope) {
+            return Err(waiting(tab));
         }
         Ok(Target { machine: held.name.clone(), destination: held.destination.clone(), boot: seen.boot.clone(), label })
     }
@@ -253,7 +251,9 @@ impl App {
                 }
             }
             Act::Split { pane: split, .. } => {
-                let shown = self.shown_remote().is_some_and(|s| (s.link, s.workspace) == (aim.link, aim.workspace));
+                let current = self.held_by(aim.link).is_some_and(|held| held.era == aim.era);
+                let shown =
+                    current && self.shown_remote().is_some_and(|s| (s.link, s.workspace) == (aim.link, aim.workspace));
                 let framed = self.watched().and_then(Watched::live).map(|(_, screen)| &screen.panes);
                 let there = framed.is_some_and(|panes| panes.iter().any(|framed| framed.pane == *split));
                 let watched = self.machines.watched.as_mut().filter(|_| shown && there);
@@ -282,6 +282,15 @@ fn labelled(held: &Held, workspace: &WorkspaceInfo, scope: Scope) -> Result<Stri
             if panes.any(|pane| pane.id == id) { Ok(PANE.into()) } else { Err(gone("pane", held)) }
         }
     }
+}
+
+fn waits_on<'a>(acting: &Acting, link: u64, workspace: &'a WorkspaceInfo, scope: Scope) -> Option<&'a str> {
+    let waits = |tab: &TabInfo| match scope {
+        Scope::Workspace => false,
+        Scope::Tab(id) => tab.id == id && acting.busy_tab(link, id),
+        Scope::Pane(id) => tab.panes.iter().any(|pane| pane.id == id) && acting.closing(link, tab.id),
+    };
+    workspace.tabs.iter().find(|tab| waits(tab)).map(|tab| tab.name.as_str())
 }
 
 fn gone(what: &str, held: &Held) -> String {
@@ -330,3 +339,6 @@ pub(super) fn refused(verb: &str, named: &str, machine: &str, refusal: &Refusal)
     };
     Toast::new(message, ui::ToastIcon::Bug)
 }
+
+#[cfg(test)]
+mod tests;
