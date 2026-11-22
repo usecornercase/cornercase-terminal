@@ -196,7 +196,7 @@ export type MenuAction =
 
 export type HelpItem = 'tour' | 'catalogue' | 'docs' | 'keys' | 'bug';
 
-export type MoreItem = 'settings' | 'usage' | 'processes' | 'new bot…' | 'queue' | 'quit';
+export type MoreItem = 'settings' | 'usage' | 'processes' | 'ports' | 'new bot…' | 'queue' | 'quit';
 
 export interface PickItem {
   value: string;

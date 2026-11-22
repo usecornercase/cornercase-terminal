@@ -368,7 +368,7 @@ impl App {
             MenuAction::StartFlow(project) => self.open_start_flow(self.start_flow_in(project)),
             MenuAction::ProjectSettings(project) => self.open_project_settings(project),
             MenuAction::Worktrees(project) => self.open_worktrees(Some(project)),
-            MenuAction::Ports(workspace) => self.open_ports(workspace),
+            MenuAction::Ports(workspace) => self.open_ports(Some(workspace)),
             MenuAction::RunSetup(workspace) => self.run_setup(workspace, area),
             MenuAction::OpenIn(subject) => self.open_in_menu(subject, at),
             MenuAction::OpenWith(subject, opener) => self.open_with(subject, opener),

@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use super::{Action, Dialog, Hit, Step};
+use super::{Action, Asked, Dialog, Hit, Scope, Step};
 use crate::ports::{Place, Port};
 
 fn port(pid: i32, number: u16) -> Port {
@@ -11,7 +11,7 @@ fn port(pid: i32, number: u16) -> Port {
         program: Some("node".into()),
         args: Vec::new(),
         started: Some(7),
-        place: Place::default(),
+        place: Place { workspace: Some(1), ..Place::default() },
     }
 }
 
@@ -88,4 +88,71 @@ fn a_failed_scan_keeps_the_last_rows() {
     let mut dialog = dialog();
     dialog.listed(Err("no".into()));
     assert_eq!((dialog.rows.len(), dialog.failed.as_deref()), (3, Some("no")));
+}
+
+mod every_port {
+    use super::*;
+
+    fn outside(pid: i32, number: u16) -> Port {
+        Port { place: Place { workspace: None, ..Place::default() }, ..port(pid, number) }
+    }
+
+    fn every() -> Dialog {
+        let mut dialog = Dialog::new(1, 1);
+        dialog.rescope(Scope::Every, 2);
+        dialog.listed(Ok(vec![port(10, 3000), outside(11, 5432), port(12, 6006)]));
+        dialog
+    }
+
+    #[test]
+    fn is_chosen_by_its_tab_or_by_tab_and_asks_for_every_port() {
+        let mut dialog = Dialog::new(1, 1);
+        assert_eq!((dialog.scope, dialog.asked()), (Scope::Workspace, Asked::Workspace(1)));
+        assert_eq!(dialog.click(Hit::Scope(Scope::Workspace)), Action::None);
+        assert_eq!(dialog.click(Hit::Scope(Scope::Every)), Action::Scope(Scope::Every));
+        assert_eq!(dialog.key(key(KeyCode::Tab), 10), Action::Scope(Scope::Every));
+        dialog.rescope(Scope::Every, 2);
+        assert_eq!((dialog.asked(), dialog.generation, dialog.workspace), (Asked::Every, 2, Some(1)));
+        assert_eq!(dialog.key(key(KeyCode::BackTab), 10), Action::Scope(Scope::Workspace));
+    }
+
+    #[test]
+    fn starts_on_every_port_with_no_workspace_and_this_workspace_asks_nothing() {
+        let mut dialog = Dialog::on(None, 1, None);
+        assert_eq!((dialog.scope, dialog.asked()), (Scope::Every, Asked::Every));
+        dialog.rescope(Scope::Workspace, 2);
+        assert_eq!(dialog.asked(), Asked::Nothing);
+    }
+
+    #[test]
+    fn a_new_scope_drops_the_rows_of_the_last_one() {
+        let mut dialog = every();
+        dialog.click(Hit::Tick(0));
+        dialog.rescope(Scope::Workspace, 3);
+        assert_eq!((dialog.rows.len(), dialog.loaded, dialog.ticked()), (0, false, 0));
+    }
+
+    #[test]
+    fn never_stops_a_program_of_no_workspace() {
+        let mut dialog = every();
+        dialog.click(Hit::Tick(1));
+        assert_eq!(dialog.ticked(), 0);
+        dialog.click(Hit::StopRow(1));
+        assert_eq!(dialog.step, Step::List);
+        dialog.listed(Ok(vec![port(10, 3000), port(11, 5432)]));
+        dialog.click(Hit::Tick(1));
+        dialog.listed(Ok(vec![port(10, 3000), outside(11, 5432)]));
+        assert_eq!(dialog.ticked(), 0);
+    }
+
+    #[test]
+    fn stops_only_the_ticked_ports() {
+        let mut dialog = every();
+        dialog.click(Hit::Stop);
+        assert_eq!(dialog.step, Step::List);
+        dialog.click(Hit::Tick(0));
+        dialog.click(Hit::Tick(2));
+        dialog.click(Hit::Stop);
+        assert_eq!(stopped(&dialog.click(Hit::Stop)), [3000, 6006]);
+    }
 }

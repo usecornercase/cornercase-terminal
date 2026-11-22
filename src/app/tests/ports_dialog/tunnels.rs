@@ -1,6 +1,7 @@
 use super::*;
 use crate::app::toast::{TunnelButton, UNDO_FOR};
 use crate::app::tunnels::Origin;
+use crate::ports::dialog::Scope;
 use crate::protocol::{Holding, Machines, Tunnel, TunnelOrder, TunnelState};
 use crate::ui::PortTunnel;
 
@@ -48,6 +49,17 @@ fn lan_port(pid: i32, number: u16) -> Port {
 
 mod the_row {
     use super::*;
+
+    #[test]
+    fn of_a_program_of_no_workspace_under_every_port_offers_one_too() {
+        let (mut app, _rx, _dirs) = remote_with(true, Vec::new());
+        opened(&mut app);
+        click_row(&mut app, Hit::Scope(Scope::Every));
+        let generation = dialog(&mut app).generation;
+        listed(&mut app, generation, vec![Port { place: Place::default(), ..port(10, 5432) }]);
+
+        assert_eq!(first_row(&app).tunnel, Some(PortTunnel::Offered));
+    }
 
     #[test]
     fn of_a_closed_tunnel_offers_one_again() {

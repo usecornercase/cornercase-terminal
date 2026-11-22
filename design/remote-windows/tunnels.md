@@ -47,7 +47,7 @@ The window opens a browser only for a port it tunnels: `Browse` for any other po
 
 ## The dialog and the toasts
 
-In the Ports dialog of a remote window, a program listening on every address, `127.0.0.1` or `::1` gets ` tunnel ` (not tunnelled), or ` close tunnel ` and the mark `⇄ …` (opening) or `⇄ :LOCAL` (up), with ` open ` (the window can browse) and ` copy ` of `http://localhost:LOCAL`. A LAN-only listener gets none: the far end is always `localhost`. A local window's dialog is unchanged.
+In the Ports dialog of a remote window, a program listening on every address, `127.0.0.1` or `::1` gets ` tunnel ` (not tunnelled), or ` close tunnel ` and the mark `⇄ …` (opening) or `⇄ :LOCAL` (up), with ` open ` (the window can browse) and ` copy ` of `http://localhost:LOCAL`. A LAN-only listener gets none: the far end is always `localhost` (GPUI offers it one, which would come up and reach nothing). The same rule holds for every row under ` every port `, a program of no workspace included (see Ports › This workspace or every port). A local window's dialog is unchanged.
 
 A click that comes up says `port 5173 is tunnelled to localhost:5174 (5173 is taken here)` with ` open `; a request that comes up says `a program tunnelled port 5173 to localhost:5174` with ` close `; a failure always shows `could not tunnel port 5173: <ssh's line>`, so a tunnel that cannot come up is never silent. A tunnel that drops after it was up shows nothing: it is retried, and `cornercase tunnels` shows it down meanwhile.
 

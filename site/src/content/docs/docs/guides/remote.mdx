@@ -62,7 +62,7 @@ A port a dev server listens on there can be [tunnelled to your laptop](#tunnel-a
 
 ## Tunnel a port to your laptop
 
-A dev server in a pane of `devbox` listens on that machine's own `localhost`, which is not your laptop's. Open the workspace's **ports** dialog (right-click or ` ⋯ ` on its row, then **ports**) in a window from `cornercase remote`, and a program that listens on every address, `127.0.0.1` or `::1` has a **tunnel** button. It runs your own `ssh` to forward that port to your laptop:
+A dev server in a pane of `devbox` listens on that machine's own `localhost`, which is not your laptop's. Open the workspace's **ports** dialog (right-click or ` ⋯ ` on its row, then **ports**, or **More ▴ › ports**; its **every port** lists all of `devbox`'s) in a window from `cornercase remote`, and a program that listens on every address, `127.0.0.1` or `::1` has a **tunnel** button. It runs your own `ssh` to forward that port to your laptop:
 
 ```text
 ssh -N -T -o BatchMode=yes -o ExitOnForwardFailure=yes -o ControlPath=none \

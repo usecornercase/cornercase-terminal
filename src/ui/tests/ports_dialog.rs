@@ -1,6 +1,9 @@
 use ratatui::style::Color;
 
 use super::*;
+use crate::ports::dialog::Scope;
+
+const EMPTY: &str = "Nothing in this workspace is listening on a port.";
 
 const BIG: (u16, u16) = (120, 30);
 
@@ -8,7 +11,7 @@ const SMALL: (u16, u16) = (60, 28);
 
 fn row(url: &str, command: &str, pid: i32, place: &str) -> PortRow {
     PortRow {
-        ticked: false,
+        tick: Some(false),
         url: url.into(),
         command: command.into(),
         pid,
@@ -22,10 +25,12 @@ fn row(url: &str, command: &str, pid: i32, place: &str) -> PortRow {
 fn ports() -> Ports {
     Ports {
         title: "Ports › feat/checkout".into(),
+        scope: Scope::Workspace,
+        listening: Some(4),
         rows: vec![
             row("http://localhost:3000", "node next dev", 48211, "pane 12 · dev"),
             PortRow {
-                ticked: true,
+                tick: Some(true),
                 ..row("http://localhost:5173", "node vite", 48390, "agent claude · pane 9 · claude")
             },
             PortRow {
@@ -38,7 +43,7 @@ fn ports() -> Ports {
         scroll: 0,
         ticked: 1,
         note: None,
-        empty: false,
+        empty: None,
         confirm: None,
         compact: false,
     }
@@ -85,16 +90,20 @@ fn ports_list() {
 
 #[test]
 fn ports_list_looking() {
-    let p =
-        Ports {
-            rows: Vec::new(), ticked: 0, selected: None, note: Some(Note::Busy("looking for ports…")), ..ports()
-        };
+    let p = Ports {
+        rows: Vec::new(),
+        ticked: 0,
+        selected: None,
+        listening: None,
+        note: Some(Note::Busy("looking for ports…")),
+        ..ports()
+    };
     insta::assert_snapshot!(snapshot(p, BIG));
 }
 
 #[test]
 fn ports_empty() {
-    let p = Ports { rows: Vec::new(), ticked: 0, selected: None, empty: true, ..ports() };
+    let p = Ports { rows: Vec::new(), ticked: 0, selected: None, listening: Some(0), empty: Some(EMPTY), ..ports() };
     insta::assert_snapshot!(snapshot(p, BIG));
 }
 
@@ -138,7 +147,7 @@ fn a_window_that_cannot_open_has_no_open_button_and_a_row_without_a_pane_no_go()
 
 #[test]
 fn stop_is_off_without_ports_and_back_answers_in_the_confirmation() {
-    let p = Ports { rows: Vec::new(), ticked: 0, selected: None, empty: true, ..ports() };
+    let p = Ports { rows: Vec::new(), ticked: 0, selected: None, empty: Some(EMPTY), ..ports() };
     let area = settings_area(screen(BIG));
     let stop = Position::new(area.right() - 14, area.bottom() - 2);
     assert_ne!(ports_hit(screen(BIG), &p, stop), Some(PortsHit::Stop));
@@ -195,4 +204,64 @@ fn a_tunnelled_row_offers_tunnel_or_close_tunnel() {
     assert!(hits(1).contains(&PortsHit::CloseTunnel(1)) && !hits(1).contains(&PortsHit::Open(1)));
     assert!(hits(2).contains(&PortsHit::CloseTunnel(2)) && hits(2).contains(&PortsHit::Open(2)));
     assert!(!hits(3).contains(&PortsHit::Tunnel(3)) && !hits(3).contains(&PortsHit::CloseTunnel(3)));
+}
+
+fn every() -> Ports {
+    Ports {
+        title: "Ports".into(),
+        scope: Scope::Every,
+        listening: Some(3),
+        rows: vec![
+            row("http://localhost:3000", "node next dev", 48211, "web-shop › feat/checkout · pane 12 · dev"),
+            PortRow {
+                go: false,
+                tick: None,
+                ..row("http://localhost:5432", "postgres -D /usr/local/var", 812, "no workspace")
+            },
+            row("http://localhost:8000", "python3 -m http.server", 51300, "blog › main · pane 3 · serve"),
+        ],
+        selected: Some(1),
+        ticked: 0,
+        note: Some(Note::Info("Only a workspace's programs can be stopped here.".into())),
+        ..ports()
+    }
+}
+
+#[test]
+fn ports_every() {
+    insta::assert_snapshot!(snapshot(every(), BIG));
+}
+
+mod every_port {
+    use super::*;
+
+    #[test]
+    fn its_tabs_pick_the_scope() {
+        let p = ports();
+        let area = settings_area(screen(BIG));
+        let (_, list) = ports_room(screen(BIG), false);
+        let hit = |x: u16| ports_hit(screen(BIG), &p, Position::new(x, list.y - 2));
+        assert_eq!(hit(area.x + 4), Some(PortsHit::Scope(Scope::Workspace)));
+        assert_eq!(hit(area.x + 22), Some(PortsHit::Scope(Scope::Every)));
+        assert_eq!(hit(area.x + 40), None);
+    }
+
+    #[test]
+    fn a_row_of_no_workspace_has_no_tick_and_no_stop() {
+        let p = every();
+        let r = at(&p, BIG, 1);
+        let hits: Vec<PortsHit> =
+            (r.x..r.right()).filter_map(|x| ports_hit(screen(BIG), &p, Position::new(x, r.y))).collect();
+        assert!(!hits.iter().any(|hit| matches!(hit, PortsHit::Tick(_) | PortsHit::StopRow(_))), "{hits:?}");
+        assert!(hits.contains(&PortsHit::Copy(1)));
+    }
+
+    #[test]
+    fn its_stop_button_waits_for_a_tick() {
+        let area = settings_area(screen(BIG));
+        let stop = Position::new(area.right() - 12, area.bottom() - 2);
+        assert_eq!(ports_hit(screen(BIG), &every(), stop), None);
+        let ticked = Ports { ticked: 1, ..every() };
+        assert_eq!(ports_hit(screen(BIG), &ticked, stop), Some(PortsHit::Stop));
+    }
 }
