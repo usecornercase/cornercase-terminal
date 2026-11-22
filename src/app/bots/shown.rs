@@ -304,8 +304,11 @@ impl App {
         let focused = self.chat_typing();
         let shown = self.panels.bots.shown.as_mut()?;
         let empty = shown.lines.is_empty() && thinking.is_none();
-        let (rows, news) =
-            if empty { (ui::empty_rows(body.width, tone), false) } else { shown.visible(&facts, body, tone) };
+        let (rows, news) = if empty {
+            (ui::empty_rows(body.width, body.height, tone), false)
+        } else {
+            shown.visible(&facts, body, tone)
+        };
         let live = &self.panels.bots.live[at];
         let view = ui::ChatView {
             name: live.bot.name.clone(),

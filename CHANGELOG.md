@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.113
+
+- **A roomier bot chat.** The conversation keeps to a centred column in a wide window, your messages are bubbles with room around the text, the bot's name is in bold above its answers, and **routines**, **new conversation**, **retry**, **show** and **stop** look like buttons and light up under the pointer.
+- **The message field** is a band of its own at the bottom, with a row of room above it, and **send** fills in once there is something to send.
+- **The examples** in a new bot's empty chat are buttons, one per row with room between them.
+- **A clearer New bot form.** What the bot is for comes right after its name, every field lines up at the same width with a row between them when the window is tall enough, the label of the field you are in turns cyan, and the note under Access says what the access you chose lets the bot do, in red only for full access. A refusal shows next to **create**, and when you edit a bot its agent says it cannot change.
+
 ## 0.13.112
 
 - **Bots have a page of their own.** **Bots ›**, at the right of the Projects title, opens it in every layout, also before you make your first bot. While a bot answers it shows the spinner, and while answers wait for you how many, for every bot together.

@@ -6,9 +6,10 @@ use crate::editor::Editor;
 const TONE: Tone = Tone { muted: Color::DarkGray, surface: DARK_SURFACE };
 const CHAT_W: u16 = 80;
 const CHAT_H: u16 = 24;
+const ROW_W: u16 = CHAT_W - 4;
 
 fn markdown(source: &str) -> Vec<Text<'static>> {
-    crate::highlight::markdown::render(source, usize::from(CHAT_W) - 2)
+    crate::highlight::markdown::render(source, usize::from(ROW_W))
 }
 
 fn you(text: &str, stamp: &str) -> ChatEntry {
@@ -27,7 +28,7 @@ fn chat(entries: &[ChatEntry]) -> ChatView {
     ChatView {
         name: "prs".into(),
         detail: "claude · opus · high · home".into(),
-        rows: chat_rows(entries, CHAT_W - 2, TONE),
+        rows: chat_rows(entries, ROW_W, TONE),
         empty: false,
         thinking: None,
         news: false,
@@ -39,7 +40,11 @@ fn chat(entries: &[ChatEntry]) -> ChatView {
 }
 
 fn drawn(chat: ChatView) -> Terminal<TestBackend> {
-    let view = View { chat: Some(chat), ..view(&[]) };
+    drawn_hovering(chat, None)
+}
+
+fn drawn_hovering(chat: ChatView, hover: Option<Position>) -> Terminal<TestBackend> {
+    let view = View { chat: Some(chat), hover, ..view(&[]) };
     let area = Rect::new(0, 0, CHAT_W, CHAT_H);
     let mut t = Terminal::new(TestBackend::new(CHAT_W, CHAT_H)).expect("test backend");
     t.draw(|f| bots::chat::draw(f, &view, view.chat.as_ref().expect("a chat"), area, 1)).expect("draw");
@@ -73,7 +78,7 @@ fn a_run_of_steps_folds_to_the_last_three_under_a_count() {
 fn an_unfolded_run_shows_every_step() {
     let texts: Vec<String> = (1..=5).map(|n| format!("step {n}")).collect();
     let refs: Vec<&str> = texts.iter().map(String::as_str).collect();
-    let rows = chat_rows(&[steps(&refs, true)], CHAT_W - 2, TONE);
+    let rows = chat_rows(&[steps(&refs, true)], ROW_W, TONE);
     assert_eq!(rows.len(), 5);
 }
 
@@ -96,7 +101,7 @@ fn a_stopping_turn_shows_no_stop_button() {
 #[test]
 fn the_empty_state_says_what_a_bot_is_and_offers_four_examples() {
     let mut view = chat(&[]);
-    view.rows = empty_rows(CHAT_W - 2, TONE);
+    view.rows = empty_rows(ROW_W, CHAT_H, TONE);
     view.empty = true;
     insta::assert_snapshot!(drawn(view).backend());
 }
@@ -129,15 +134,15 @@ fn view_input(lines: usize) -> Editor {
 #[test]
 fn a_you_bubble_is_at_most_eighty_percent_wide_and_right_aligned() {
     let long = "word ".repeat(60);
-    let rows = chat_rows(&[you(&long, "09:12")], CHAT_W - 2, TONE);
+    let rows = chat_rows(&[you(&long, "09:12")], ROW_W, TONE);
     let widest = rows.iter().map(|row| row.line.width()).max().unwrap_or_default();
-    assert!(widest <= usize::from(CHAT_W - 2));
+    assert!(widest <= usize::from(ROW_W));
     assert!(rows.iter().all(|row| row.line.spans[0].content.len() >= 12));
 }
 
 #[test]
 fn a_link_in_an_answer_is_found_under_a_click() {
-    let rows = chat_rows(&[bot("see https://example.com/a for it")], CHAT_W - 2, TONE);
+    let rows = chat_rows(&[bot("see https://example.com/a for it")], ROW_W, TONE);
     let row = rows.iter().find(|row| row.line.to_string().contains("example")).expect("the row");
     let col = row.line.to_string().find("example").expect("a column");
     assert_eq!(bots::chat::link_at(row, col).as_deref(), Some("https://example.com/a"));
@@ -180,7 +185,7 @@ mod whole_address {
 
 #[test]
 fn the_retry_button_is_only_on_the_error_row() {
-    let rows = chat_rows(&[ChatEntry::Error { id: 3, text: "boom".into(), retry: true }], CHAT_W - 2, TONE);
+    let rows = chat_rows(&[ChatEntry::Error { id: 3, text: "boom".into(), retry: true }], ROW_W, TONE);
     assert_eq!(rows[0].hit.as_ref().map(|(hit, _)| hit.clone()), Some(RowHit::Retry(3)));
 }
 
@@ -200,12 +205,72 @@ fn a_hit_test_finds_the_controls_and_the_rows() {
 fn an_example_in_the_empty_state_is_hit() {
     let pane = Rect::new(0, 0, CHAT_W, CHAT_H);
     let mut view = chat(&[]);
-    view.rows = empty_rows(CHAT_W - 2, TONE);
+    view.rows = empty_rows(ROW_W, CHAT_H, TONE);
     view.empty = true;
     let areas = chat_areas(pane, 1, 1);
     let top = row_y(areas.lines, view.rows.len(), true, view.rows.len() - 1);
     let hit = chat_hit(&areas, &view, Position::new(areas.lines.x + 30, top));
     assert_eq!(hit, Some(ChatHit::Row(RowHit::Example(3))));
+}
+
+#[test]
+fn a_hovered_example_fills_cyan_and_the_others_keep_the_surface() {
+    let mut view = chat(&[]);
+    view.rows = empty_rows(ROW_W, CHAT_H, TONE);
+    view.empty = true;
+    let areas = chat_areas(Rect::new(0, 0, CHAT_W, CHAT_H), 1, 1);
+    let last = row_y(areas.lines, view.rows.len(), true, view.rows.len() - 1);
+    let first = row_y(areas.lines, view.rows.len(), true, view.rows.len() - 7);
+    let x = areas.lines.x + 30;
+    let t = drawn_hovering(view, Some(Position::new(x, last)));
+    let buffer = t.backend().buffer();
+    assert_eq!(buffer[(x, last)].bg, Color::Cyan);
+    assert_eq!(buffer[(x, first)].bg, DARK_SURFACE);
+}
+
+#[test]
+fn the_send_button_fills_once_there_is_a_draft() {
+    let areas = chat_areas(Rect::new(0, 0, CHAT_W, CHAT_H), 1, 1);
+    let at = (areas.send.x + 1, areas.input_text.y);
+    let empty = drawn(chat(&[]));
+    assert_eq!(empty.backend().buffer()[at].bg, DARK_SURFACE);
+    let mut typed = chat(&[]);
+    typed.input = Editor::new("hi");
+    assert_eq!(drawn(typed).backend().buffer()[at].bg, Color::Cyan);
+}
+
+#[test]
+fn a_wide_pane_keeps_the_chat_in_a_centred_column() {
+    let areas = chat_areas(Rect::new(0, 0, 300, CHAT_H), 1, 1);
+    assert!(areas.lines.width <= 110, "{areas:?}");
+    assert_eq!(areas.lines.x, 300 - areas.lines.right());
+    assert_eq!(areas.input.x, areas.lines.x);
+}
+
+#[rstest]
+#[case::eight_rows(8, 6)]
+#[case::five_rows(5, 3)]
+#[case::six_rows(6, 2)]
+fn a_low_pane_keeps_the_draft_inside_the_band(#[case] height: u16, #[case] rows: u16) {
+    let pane = Rect::new(0, 0, 60, height);
+    let areas = chat_areas(pane, rows, 1);
+    assert!(areas.input_text.bottom() < areas.input.bottom(), "{areas:?}");
+    assert!(areas.input_text.y > areas.input.y, "{areas:?}");
+    let mut view = chat(&[]);
+    view.input = Editor::new(&(1..=rows).map(|n| format!("line {n}")).collect::<Vec<_>>().join("\n"));
+    let mut t = Terminal::new(TestBackend::new(60, height)).expect("test backend");
+    let shown = View { chat: Some(view), ..super::view(&[]) };
+    t.draw(|f| bots::chat::draw(f, &shown, shown.chat.as_ref().expect("a chat"), pane, 1)).expect("draw");
+    let cursor = t.get_cursor_position().expect("a cursor");
+    assert!(cursor.y < areas.input.bottom() - 1, "{cursor:?} {areas:?}");
+}
+
+#[test]
+fn a_tall_pane_leaves_a_row_above_the_field_and_a_low_one_does_not() {
+    let tall = chat_areas(Rect::new(0, 0, CHAT_W, CHAT_H), 1, 1);
+    assert_eq!(tall.input.y - tall.lines.bottom(), 1);
+    let low = chat_areas(Rect::new(0, 0, CHAT_W, 10), 1, 1);
+    assert_eq!(low.input.y, low.lines.bottom());
 }
 
 #[test]
@@ -286,7 +351,7 @@ fn a_run_is_one_block_even_with_a_chat_turn_between_its_lines() {
 
 #[test]
 fn an_unfolded_run_shows_its_steps() {
-    let rows = entry_rows(&ChatEntry::Run(RunBlock { open: true, ..run_block() }), CHAT_W - 2, TONE);
+    let rows = entry_rows(&ChatEntry::Run(RunBlock { open: true, ..run_block() }), ROW_W, TONE);
     let text: Vec<String> =
         rows.iter().map(|row| row.line.spans.iter().map(|s| s.content.as_ref()).collect()).collect();
     assert!(text.iter().any(|row| row.starts_with("▸ gh pr list")), "{text:?}");
@@ -295,21 +360,20 @@ fn an_unfolded_run_shows_its_steps() {
 #[test]
 fn a_failed_run_offers_run_again() {
     let block = RunBlock { answer: None, error: Some("claude is not installed".into()), again: true, ..run_block() };
-    let rows = entry_rows(&ChatEntry::Run(block), CHAT_W - 2, TONE);
+    let rows = entry_rows(&ChatEntry::Run(block), ROW_W, TONE);
     let last = rows.last().expect("a row");
     let text: String = last.line.spans.iter().map(|span| span.content.as_ref()).collect();
     assert!(text.ends_with(" run again "), "{text}");
     assert_eq!(last.hit.as_ref().map(|(hit, _)| hit.clone()), Some(RowHit::RunAgain(12)));
     let without = RunBlock { again: false, ..run_block() };
-    let rows =
-        entry_rows(&ChatEntry::Run(RunBlock { answer: None, error: Some("x".into()), ..without }), CHAT_W - 2, TONE);
+    let rows = entry_rows(&ChatEntry::Run(RunBlock { answer: None, error: Some("x".into()), ..without }), ROW_W, TONE);
     assert!(rows.iter().all(|row| row.hit.is_none() || matches!(row.hit, Some((RowHit::Unfold(_), _)))));
 }
 
 #[test]
 fn a_run_that_is_answering_says_so() {
     let block = RunBlock { answer: None, answering: true, ..run_block() };
-    let rows = entry_rows(&ChatEntry::Run(block), CHAT_W - 2, TONE);
+    let rows = entry_rows(&ChatEntry::Run(block), ROW_W, TONE);
     let text: String = rows.last().expect("a row").line.spans.iter().map(|span| span.content.as_ref()).collect();
     assert_eq!(text, "answering…");
 }
@@ -548,7 +612,7 @@ fn agent_entries() -> Vec<ChatEntry> {
 
 #[test]
 fn an_agent_the_bot_started_is_drawn_with_its_link_or_closed() {
-    let rows = chat_rows(&agent_entries(), CHAT_W - 2, TONE);
+    let rows = chat_rows(&agent_entries(), ROW_W, TONE);
     let text: Vec<String> =
         rows.iter().map(|row| row.line.spans.iter().map(|span| span.content.as_ref()).collect()).collect();
     assert!(text[0].ends_with("fix/ci-482  show ") || text[0].ends_with(" show "), "{text:?}");
@@ -595,7 +659,7 @@ fn a_long_notice_wraps_and_keeps_its_reason() {
 
 #[test]
 fn an_ask_waiting_has_a_give_button_after_its_text() {
-    let rows = chat_rows(&[ChatEntry::Asking { text: "asks for a secret: pw".into(), ask: 4 }], CHAT_W - 2, TONE);
+    let rows = chat_rows(&[ChatEntry::Asking { text: "asks for a secret: pw".into(), ask: 4 }], ROW_W, TONE);
     let (hit, cols) = rows[0].hit.clone().expect("a button");
     assert_eq!(hit, RowHit::Give(4));
     let text: String = rows[0].line.spans.iter().map(|span| span.content.as_ref()).collect();

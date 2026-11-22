@@ -28,7 +28,7 @@ pub(super) fn run_rows(block: &RunBlock, width: usize, tone: Tone) -> Vec<ChatRo
     }
     if let Some(error) = &block.error {
         let again = block.again.then_some((RowHit::RunAgain(block.run), "run again"));
-        rows.extend(error_rows(error, again, width));
+        rows.extend(error_rows(error, again, width, tone));
     }
     if let Some(end) = &block.end {
         rows.extend(notice_rows(end, width, tone));
