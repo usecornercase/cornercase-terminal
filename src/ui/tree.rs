@@ -5,7 +5,7 @@ use ratatui::text::Span;
 
 use super::View;
 use super::drop::{Drag, Spot, landed};
-use super::layout::Areas;
+use super::layout::{Areas, PROJECTS_TITLE};
 #[cfg(test)]
 use super::rows::row_close_button;
 use super::rows::{
@@ -329,7 +329,7 @@ impl TreePaint<'_> {
 }
 
 pub(super) fn draw_tree(f: &mut Frame, view: &View, areas: &Areas) {
-    draw_title(f, view.muted, areas.title, "Projects");
+    draw_title(f, view.muted, areas.title, PROJECTS_TITLE);
     let Some(tree) = &view.tree else { return };
     let shape = &tree.shape;
     let rows = tree_rows(shape);

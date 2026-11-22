@@ -278,6 +278,21 @@ test('scrolling up shows ↓ new when a line arrives, and a click goes back down
   assert.doesNotMatch(screen(app), /↓ new/);
 });
 
+test('the Bots button drops its marks before they cover the Projects title', () => {
+  const app = panes(140);
+  app.widths = { ...app.widths, projects: 22 };
+  app.bots.list[0].unread = 2;
+  app.bots.list[1].turn = { since: 0, steps: 0, stopping: false };
+  app.render();
+  const a = app.areas();
+  assert.equal(a.botsButton.w, 8);
+  const row = screen(app).split('\n')[a.title.y].slice(0, a.title.w);
+  assert.equal(row, ' Projects     Bots › ');
+  app.widths = { ...app.widths, projects: 32 };
+  app.render();
+  assert.match(screen(app).split('\n')[app.areas().title.y], / Projects +\S ●3 Bots › /);
+});
+
 test('at the landing’s 32 rows the Bots button opens a page with a bot to click', () => {
   const app = panes(120, 32);
   press(app, 'Bots ›');

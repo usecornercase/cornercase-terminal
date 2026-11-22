@@ -8,7 +8,7 @@ use ratatui::widgets::Clear;
 
 use super::View;
 use super::drop::landed;
-use super::layout::Areas;
+use super::layout::{Areas, PROJECTS_TITLE};
 use super::rows::{
     Band, GAP, RowButton, Rows, Tags, arrow, draw_hidden, draw_landing, draw_rail, draw_row_buttons, marker,
     row_button, row_close_button, row_rect,
@@ -132,7 +132,7 @@ pub(super) fn group_header(group: &GroupEntry, max: usize) -> Span<'static> {
 }
 
 pub(super) fn draw_sidebar(f: &mut Frame, view: &View, areas: &Areas) {
-    draw_title(f, view.muted, areas.title, "Projects");
+    draw_title(f, view.muted, areas.title, PROJECTS_TITLE);
     let sidebar = view.sidebar_rows();
     let base = project_rows(areas.list, areas.pitch, &sidebar, view.projects_scroll);
     let landing = view.sidebar_landing();

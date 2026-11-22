@@ -197,14 +197,20 @@ export function marksWidth(thinking: boolean, unread: number): number {
   return (thinking ? 2 : 0) + (unread ? (unread > 9 ? 4 : 3) : 0);
 }
 
-function botsButton(title: Rect, marks: number, taken: number): Rect {
-  const w = Math.min(buttonWidth(BOTS_LABEL) + marks, title.w);
+export const PROJECTS_TITLE = 'Projects';
+const COMPACT_BOTS_PAD = 2;
+export const botsPad = (compact: boolean): number => (compact ? COMPACT_BOTS_PAD : 0);
+
+function botsButton(title: Rect, marks: number, pad: number, taken: number): Rect {
+  const plain = buttonWidth(BOTS_LABEL) + pad;
+  const room = Math.max(0, title.w - taken - buttonWidth(PROJECTS_TITLE));
+  const w = Math.min(plain + marks <= room ? plain + marks : plain, title.w);
   return rect(Math.max(0, right(title) - taken - w), title.y, w, title.h);
 }
 
 function withBots(areas: Areas, bots: BotsShape | null): Areas {
   if (!bots) return areas;
-  if (!bots.page) return { ...areas, botsButton: bots.offered ? botsButton(areas.title, bots.marks, 0) : EMPTY };
+  if (!bots.page) return { ...areas, botsButton: bots.offered ? botsButton(areas.title, bots.marks, 0, 0) : EMPTY };
   const { title, list } = areas;
   const page = rect(title.x, title.y, title.w, Math.max(0, bottom(list) - title.y));
   const back = rect(title.x, title.y, Math.min(buttonWidth(BACK_LABEL), title.w), title.h);
@@ -586,7 +592,7 @@ function compact(cols: number, rows: number, changes: boolean, agents: boolean, 
     bots: listed(below),
     botsTitle: listed(title),
     botsList: listed(rect(0, agentsY, cols, Math.max(1, bottom(menu) - agentsY))),
-    botsButton: listed(botsButton(title, (bots?.marks ?? 0) + 2, agents ? buttonWidth(AGENTS_LABEL) + 3 : 0)),
+    botsButton: listed(botsButton(title, bots?.marks ?? 0, COMPACT_BOTS_PAD, agents ? buttonWidth(AGENTS_LABEL) + 3 : 0)),
     changes: changes ? below : EMPTY,
     changesBorder: EMPTY,
     changesButton: rect(Math.max(0, cols - searchWidth - 3 * COMPACT_BUTTON_WIDTH), 0, Math.min(COMPACT_BUTTON_WIDTH, Math.max(0, cols - searchWidth - 2 * COMPACT_BUTTON_WIDTH)), pitch),

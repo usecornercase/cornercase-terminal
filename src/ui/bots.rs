@@ -6,7 +6,7 @@ use ratatui::widgets::{Block, Paragraph};
 
 use super::View;
 use super::chrome::{BACK_LABEL, draw_back};
-use super::layout::Areas;
+use super::layout::{Areas, bots_pad};
 use super::rows::{Rows, Tags, draw_hidden, draw_menu_in, draw_rail, marker, row_menu_button};
 use super::sidebar::draw_new_project;
 use super::theme::{BRAND_COLOR, WAITING_COLOR, status_icon};
@@ -92,7 +92,7 @@ fn unread_span(count: usize) -> Span<'static> {
 
 pub(super) fn draw_bots(f: &mut Frame, view: &View, bots: &BotsView, areas: &Areas) {
     if !areas.bots_button.is_empty() {
-        draw_bots_button(f, view, bots, areas.bots_button);
+        draw_bots_button(f, view, bots, (areas.bots_button, areas.compact()));
     }
     if areas.bots.is_empty() {
         return;
@@ -121,7 +121,7 @@ fn draw_header(f: &mut Frame, view: &View, areas: &Areas) {
     draw_title(f, view.muted, rest, TITLE);
 }
 
-fn draw_bots_button(f: &mut Frame, view: &View, bots: &BotsView, r: Rect) {
+fn draw_bots_button(f: &mut Frame, view: &View, bots: &BotsView, (r, compact): (Rect, bool)) {
     let hovered = sidebar_hovered(view, r);
     let style = button_style(view, r, Style::default().fg(Color::Cyan), Color::Cyan);
     if hovered && r.height > 1 {
@@ -129,7 +129,7 @@ fn draw_bots_button(f: &mut Frame, view: &View, bots: &BotsView, r: Rect) {
     }
     let lit = |span: Span<'static>| if hovered { Span::styled(span.content, style) } else { span };
     let mut spans = vec![Span::styled(" ", style)];
-    if r.width >= button_width(BOTS_LABEL) + bots.marks() {
+    if r.width >= button_width(BOTS_LABEL) + bots_pad(compact) + bots.marks() {
         if bots.thinking() {
             spans.extend([lit(status_icon(view.muted, Status::Working, view.spin)), Span::styled(" ", style)]);
         }

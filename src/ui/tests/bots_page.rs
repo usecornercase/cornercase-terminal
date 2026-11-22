@@ -78,6 +78,37 @@ mod the_button {
         assert_eq!(row_text(&t, a.bots_button), " ⠋ ●2 Bots › ");
     }
 
+    fn title_row(t: &Terminal<TestBackend>, a: &Areas) -> String {
+        row_text(t, middle(a.title))
+    }
+
+    #[test]
+    fn drops_its_marks_before_they_cover_the_projects_title() {
+        let widths = Widths { projects: 22, ..Widths::default() };
+        let screen = Screen { bots: BotsShape { marks: marks_width(true, 2), ..offered(false) }, ..Screen::default() };
+        let a = full_layout(TALL, widths, screen);
+        assert_eq!(a.bots_button.width, 8);
+        let t = render_sized(&View { widths, ..shown(Sidebar::SideBySide, entries(), false) }, W, TALL.height);
+        assert_eq!(title_row(&t, &a), " Projects     Bots › ");
+        assert_eq!(row_text(&t, a.bots_button), " Bots › ");
+    }
+
+    #[test]
+    fn drops_its_marks_in_a_narrow_compact_menu_too() {
+        let narrow = Rect { width: 36, ..SMALL };
+        let screen = Screen {
+            agents: true,
+            bots: BotsShape { marks: marks_width(true, 2), ..offered(false) },
+            ..Screen::default()
+        };
+        let a = full_layout(narrow, Widths::default(), screen).shown(Some(Nav::Projects));
+        assert!(a.bots_button.x >= a.title.x + 10 && a.bots_button.width == 10, "{:?}", a.bots_button);
+        let agents = Some(AgentsView { entries: Vec::new(), scroll: 0 });
+        let v = View { nav: Some(Nav::Projects), agents, ..shown(Sidebar::SideBySide, entries(), false) };
+        let text = title_row(&render_sized(&v, narrow.width, narrow.height), &a);
+        assert!(text.contains(" Projects") && text.contains("Bots ›") && !text.contains('●'), "{text}");
+    }
+
     #[test]
     fn says_9_plus_past_nine_unread() {
         assert_eq!(marks_width(false, 12), 4);

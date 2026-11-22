@@ -23,6 +23,10 @@ pub(crate) const COMPACT_BUTTON_WIDTH: u16 = 7;
 
 pub(super) const HEADER_HEIGHT: u16 = 2;
 
+pub(super) const PROJECTS_TITLE: &str = "Projects";
+
+const COMPACT_BOTS_PAD: u16 = 2;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Border {
     Projects,
@@ -224,7 +228,7 @@ impl Areas {
     #[must_use]
     fn with_bots(self, bots: BotsShape) -> Self {
         if !bots.page {
-            let button = if bots.offered { bots_button(self.title, bots.marks, 0) } else { Rect::default() };
+            let button = if bots.offered { bots_button(self.title, bots.marks, 0, 0) } else { Rect::default() };
             return Self { bots_button: button, ..self };
         }
         let hidden = Rect::default();
@@ -243,8 +247,14 @@ impl Areas {
     }
 }
 
-fn bots_button(title: Rect, marks: u16, taken: u16) -> Rect {
-    let width = (button_width(BOTS_LABEL) + marks).min(title.width);
+pub(super) fn bots_pad(compact: bool) -> u16 {
+    if compact { COMPACT_BOTS_PAD } else { 0 }
+}
+
+fn bots_button(title: Rect, marks: u16, pad: u16, taken: u16) -> Rect {
+    let plain = button_width(BOTS_LABEL) + pad;
+    let room = title.width.saturating_sub(taken + button_width(PROJECTS_TITLE));
+    let width = if plain + marks <= room { plain + marks } else { plain }.min(title.width);
     Rect { x: title.right().saturating_sub(taken + width), width, ..title }
 }
 
@@ -545,7 +555,7 @@ fn compact_bots(menu: Rect, title: Rect, screen: Screen) -> [Rect; 4] {
     let [bots_title, _, bots_list] =
         Layout::vertical([Constraint::Length(COMPACT_PITCH), Constraint::Length(GAP), Constraint::Min(1)]).areas(menu);
     let taken = if screen.agents { button_width(AGENTS_LABEL) + 3 } else { 0 };
-    let button = bots_button(title, screen.bots.marks + 2, taken);
+    let button = bots_button(title, screen.bots.marks, COMPACT_BOTS_PAD, taken);
     let shown = |r: Rect| if screen.bots.offered { r } else { Rect::default() };
     [shown(menu), shown(bots_title), shown(bots_list), shown(button)]
 }
