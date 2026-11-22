@@ -19,6 +19,15 @@ const MAX_INPUT = 6;
 const FOLD = 3;
 const MENU_LEFT_OUT = 'this needs cornercase on your computer: the demo has no bot menu';
 const NEW_BUTTON = '+ New';
+const COLUMN = 110;
+const MARGIN = 2;
+const AIRY_FROM = 14;
+const PAD = 2;
+const BUBBLE_PAD = 2;
+const EXAMPLE_MARK = ' › ';
+const LIT: Style = { fg: 0, bg: 6, add: BOLD };
+
+const pill = (p: Painter): Style => ({ fg: 6, bg: p.surface });
 
 interface Act {
   x: number;
@@ -155,20 +164,23 @@ export function drawBots(p: Painter, areas: Areas): void {
 }
 
 function youRows(p: Painter, bot: Bot, l: ChatLine, w: number): Row[] {
-  const max = Math.max(6, Math.floor(w * 0.8));
-  const lines = wrapText(l.text, max - 2);
+  const room = Math.max(1, Math.min(w, Math.max(8, Math.floor(w * 0.8))) - 2 * BUBBLE_PAD);
+  const lines = wrapText(l.text, room);
   const tag = bot.held.has(l.id) ? 'held' : clock(l.at);
   const last = [...lines[lines.length - 1]].length;
-  const inline = last + 1 + tag.length <= max - 2;
-  const longest = Math.max(...lines.map((t) => [...t].length), inline ? last + 1 + tag.length : tag.length);
-  const bw = Math.min(max, longest + 2);
-  const bg: Style = { bg: p.surface };
-  const rows: Row[] = lines.map((text) => ({ x: w - bw, w: bw, bg, line: [seg(' '), seg(text), seg(' '.repeat(Math.max(0, bw - 2 - [...text].length))), seg(' ')] }));
-  const end = rows[rows.length - 1];
-  const dim: Style = { ...DARK, bg: p.surface };
-  if (inline) end.line = [seg(' '), seg(lines[lines.length - 1]), seg(' '.repeat(bw - 2 - last - tag.length)), seg(tag, dim), seg(' ')];
-  else rows.push({ x: w - bw, w: bw, bg, line: [seg(' '.repeat(Math.max(0, bw - 1 - tag.length))), seg(tag, dim), seg(' ')] });
-  return rows;
+  const cells: [string, string][] = lines.map((text) => [text, '']);
+  if (last + 1 + tag.length <= room) cells[cells.length - 1][1] = tag;
+  else cells.push(['', tag]);
+  const wide = Math.max(1, Math.min(room, Math.max(...cells.map(([t, s]) => [...t].length + (s ? 1 : 0) + s.length))));
+  const outer = wide + 2 * BUBBLE_PAD;
+  const x = Math.max(0, w - outer);
+  const side = ' '.repeat(BUBBLE_PAD);
+  const edge = (glyph: string): Row => ({ x, w: outer, line: [seg(glyph.repeat(outer), { fg: p.surface })] });
+  const rows = cells.map(([text, stamp]): Row => {
+    const gap = ' '.repeat(Math.max(0, wide - [...text].length - stamp.length));
+    return { x, w: outer, bg: { bg: p.surface }, line: [seg(side + text + gap), seg(stamp + side, { ...DARK, bg: p.surface })] };
+  });
+  return [edge('▄'), ...rows, edge('▀')];
 }
 
 function stepRows(p: Painter, bot: Bot, run: ChatLine[], w: number): Row[] {
@@ -187,15 +199,15 @@ function errorRows(p: Painter, bot: Bot, l: ChatLine, w: number, last: boolean):
   const rows: Row[] = wrapText(l.text, w).map((t) => ({ x: 0, w, line: [seg(t, RED)] }));
   if (!last || bot.turn) return rows;
   const end = rows[rows.length - 1];
-  const x = width(end.line) + 1;
+  const x = width(end.line) + 2;
   const label = ' retry ';
-  end.line = [...end.line, seg(' '), seg(label, { ...CYAN, add: BOLD })];
+  end.line = [...end.line, seg('  '), seg(label, pill(p))];
   end.acts = [{ x, w: label.length, fn: () => p.app.bots.retry(bot) }];
   return rows;
 }
 
 function botRows(l: ChatLine, bot: Bot, w: number): Row[] {
-  const head: Row = { x: 0, w, line: [seg(`${bot.name} · ${clock(l.at)}`, DARK)] };
+  const head: Row = { x: 0, w, line: [seg(bot.name, { add: BOLD }), seg(` · ${clock(l.at)}`, DARK)] };
   return [head, ...markdown(l.text, w).map((line): Row => ({ x: 0, w, line }))];
 }
 
@@ -209,8 +221,8 @@ function thinkingRow(p: Painter, bot: Bot, w: number): Row {
   return {
     x: 0,
     w,
-    line: [seg(spin(p), { fg: 3 }), seg(head, DARK), seg('  '), seg(label, CYAN)],
-    acts: [{ x: [...head].length + 3, w: label.length, fn: () => p.app.bots.stop(bot) }],
+    line: [seg(spin(p), { fg: 3 }), seg(head, DARK), seg('   '), seg(label, pill(p))],
+    acts: [{ x: [...head].length + 4, w: label.length, fn: () => p.app.bots.stop(bot) }],
   };
 }
 
@@ -234,8 +246,8 @@ function runRows(p: Painter, bot: Bot, lines: ChatLine[], w: number): Row[] {
       const label = ' run again ';
       const rest = wrapText(l.text, w).map((t) => ({ x: 0, w, line: [seg(t, RED)] }));
       const end = rest[rest.length - 1];
-      const x = width(end.line) + 1;
-      end.line = [...end.line, seg(' '), seg(label, { ...CYAN, add: BOLD })];
+      const x = width(end.line) + 2;
+      end.line = [...end.line, seg('  '), seg(label, pill(p))];
       rows.push(...rest.slice(0, -1), { ...end, acts: [{ x, w: label.length, fn: () => p.app.notify(RUN_LEFT_OUT) }] });
     }
   }
@@ -251,7 +263,7 @@ function agentRows(p: Painter, bot: Bot, l: ChatLine, w: number): Row[] {
   const room = Math.max(0, w - SHOW_LEFT_OUT.length - 1);
   const text = truncateRight(l.text, room);
   const rest = [...text].slice(1).join('');
-  const head: Line = [seg(glyph, tone), seg(rest, l.kind === 'started' ? DARK : {}), seg(' '), seg(SHOW_LEFT_OUT, CYAN)];
+  const head: Line = [seg(glyph, tone), seg(rest, l.kind === 'started' ? DARK : {}), seg(' '), seg(SHOW_LEFT_OUT, pill(p))];
   const rows: Row[] = [{ x: 0, w, line: head }];
   if (l.body === undefined || l.kind === 'started') return rows;
   const body = l.kind === 'finished' ? markdown(l.body, Math.max(1, w - 2)) : l.body.split('\n').map((t): Line => [seg(t)]);
@@ -304,15 +316,18 @@ function chatRows(p: Painter, bot: Bot, w: number): Row[] {
   return rows;
 }
 
-function emptyRows(p: Painter, bot: Bot, w: number): Row[] {
+function emptyRows(p: Painter, bot: Bot, w: number, h: number): Row[] {
   const intro = ['A bot is an agent of your own. It belongs to no project and keeps a memory.', 'It answers here when you write to it, and on a schedule it sets itself. Try:'];
   const rows: Row[] = intro.flatMap((line) => wrapText(line, Math.max(1, w))).map((t) => ({ x: Math.floor((w - [...t].length) / 2), w, line: [seg(t, DARK)] }));
-  rows.push({ x: 0, w, line: [] });
-  for (const text of EXAMPLES) {
-    const shown = truncateRight(text, w);
-    const x = Math.floor((w - [...shown].length) / 2);
-    rows.push({ x, w: w - x, line: [seg(shown, CYAN)], acts: [{ x: 0, w: [...shown].length, fn: () => p.app.bots.example(bot, text) }] });
-  }
+  const longest = Math.max(...EXAMPLES.map((text) => [...text].length));
+  const wide = Math.min(w, longest + EXAMPLE_MARK.length + 2);
+  const lead = Math.floor((w - wide) / 2);
+  const spaced = rows.length + 2 * EXAMPLES.length <= h;
+  EXAMPLES.forEach((text, i) => {
+    if (i === 0 || spaced) rows.push({ x: 0, w, line: [] });
+    const shown = truncateRight(text, Math.max(0, wide - EXAMPLE_MARK.length - 1));
+    rows.push({ x: lead, w: wide, bg: { bg: p.surface }, line: [seg(EXAMPLE_MARK, CYAN), seg(shown)], acts: [{ x: 0, w: wide, fn: () => p.app.bots.example(bot, text) }] });
+  });
   return rows;
 }
 
@@ -325,45 +340,59 @@ interface Layout {
   send: Rect;
 }
 
+function column(area: Rect): Rect {
+  const margin = Math.min(MARGIN, Math.floor(area.w / 4));
+  const room = Math.max(0, area.w - 2 * margin);
+  const w = Math.min(room, COLUMN);
+  return rect(area.x + margin + Math.floor((room - w) / 2), area.y, w, area.h);
+}
+
 function chatLayout(area: Rect, pitch: number, bot: Bot): Layout {
+  const inner = column(area);
   const sendW = buttonWidth(SEND);
-  const tw = Math.max(1, area.w - 2 - sendW - 1);
+  const tw = Math.max(1, inner.w - 2 * PAD - sendW - 1);
   const rowsNeeded = Math.max(1, Math.min(MAX_INPUT, fieldLines(bot.draft, tw).length));
-  const h = Math.max(rowsNeeded, pitch);
-  const input = rect(area.x, bottom(area) - h, area.w, h);
-  const header = rect(area.x, area.y, area.w, pitch);
-  const rule = rect(area.x, area.y + pitch, area.w, 1);
-  const top = rule.y + 1;
+  const header = rect(inner.x, inner.y, inner.w, pitch);
+  const rule = rect(inner.x, inner.y + pitch, inner.w, 1);
+  const inputY = Math.max(bottom(inner) - Math.max(rowsNeeded + 2, pitch), bottom(rule));
+  const input = rect(inner.x, inputY, inner.w, bottom(inner) - inputY);
+  const air = inner.h >= AIRY_FROM ? 1 : 0;
+  const top = Math.min(bottom(rule) + air, input.y);
   return {
     header,
     rule,
-    lines: rect(area.x + 1, top, Math.max(0, area.w - 2), Math.max(0, input.y - 1 - top)),
+    lines: rect(inner.x, top, inner.w, Math.max(0, input.y - air - top)),
     input,
-    text: rect(area.x + 2, input.y, tw, rowsNeeded),
-    send: rect(right(area) - sendW - 1, input.y, sendW, pitch > 1 ? h : 1),
+    text: rect(input.x + PAD, Math.min(input.y + 1, bottom(input)), tw, rowsNeeded),
+    send: rect(right(input) - PAD - sendW, input.y, sendW, input.h),
   };
+}
+
+function headerPill(p: Painter, r: Rect, label: string, busy: boolean): void {
+  const fill: Style = { bg: p.surface };
+  p.button(r, '', label, busy ? { ...fill, ...DARK } : p.buttonStyle(r, { ...fill, ...CYAN }, 6));
 }
 
 function drawHeader(p: Painter, l: Layout, bot: Bot): void {
   const app = p.app;
   const h = l.header;
-  const menu = rect(right(h) - 4, h.y, 3, h.h);
+  const menu = rect(right(h) - 3, h.y, 3, h.h);
   const wide = buttonWidth(NEW_CONVERSATION);
   const fresh = rect(menu.x - 1 - wide, h.y, wide, h.h);
   const routinesW = buttonWidth(ROUTINES);
   const routinesAt = fresh.x - 1 - routinesW;
   const routines = routinesAt < h.x + NAME_ROOM ? rect(0, 0, 0, 0) : rect(routinesAt, h.y, routinesW, h.h);
-  const room = Math.max(0, (isEmpty(routines) ? fresh.x : routines.x) - h.x - 2);
-  const name = truncateRight(bot.name, room);
-  const line: Line = [seg(' '), seg(name, { add: BOLD })];
-  const rest = room - [...name].length - 2;
-  if (rest > 3) line.push(seg('  '), seg(truncateRight(details(bot), rest), DARK));
-  p.band(h, line, {});
-  p.button(routines, '', ROUTINES, p.buttonStyle(routines, CYAN, 6));
+  const room = Math.max(0, (isEmpty(routines) ? fresh.x : routines.x) - h.x);
+  const name = truncateRight(bot.name, Math.max(0, room - 1));
+  const line: Line = [seg(name, { add: BOLD })];
+  const rest = room - [...name].length - 4;
+  if (rest > 3) line.push(seg('   '), seg(truncateRight(details(bot), rest), DARK));
+  p.band(rect(h.x, h.y, room, h.h), line, {});
+  headerPill(p, routines, ROUTINES, false);
   p.region({ r: routines, click: () => app.openBotRoutines(bot.id), cursor: 'pointer' });
-  p.button(fresh, '', NEW_CONVERSATION, bot.turn ? DARK : p.buttonStyle(fresh, CYAN, 6));
+  headerPill(p, fresh, NEW_CONVERSATION, !!bot.turn);
   p.region({ r: fresh, click: () => app.bots.newConversation(bot), cursor: 'pointer' });
-  p.button(menu, '', '⋯', p.buttonStyle(menu, CYAN, 6));
+  headerPill(p, menu, '⋯', false);
   p.region({ r: menu, click: () => app.notify(MENU_LEFT_OUT), cursor: 'pointer' });
   p.span(l.rule.x, l.rule.y, '─'.repeat(l.rule.w), { fg: p.lineColour });
 }
@@ -371,7 +400,7 @@ function drawHeader(p: Painter, l: Layout, bot: Bot): void {
 function drawLines(p: Painter, area: Rect, bot: Bot): void {
   const app = p.app;
   const empty = !bot.lines.length && !bot.turn;
-  const rows = empty ? emptyRows(p, bot, area.w) : chatRows(p, bot, area.w);
+  const rows = empty ? emptyRows(p, bot, area.w, area.h) : chatRows(p, bot, area.w);
   const max = Math.max(0, rows.length - area.h);
   if (bot.anchor !== null) {
     const at = rows.findIndex((r) => r.run === bot.anchor);
@@ -387,7 +416,11 @@ function drawLines(p: Painter, area: Rect, bot: Bot): void {
     if (!row) continue;
     const r = rect(area.x + row.x, area.y + y, row.w, 1);
     p.line(r, row.line, row.bg);
-    for (const a of row.acts ?? []) p.region({ r: rect(r.x + a.x, r.y, a.w, 1), click: a.fn, cursor: 'pointer' });
+    for (const a of row.acts ?? []) {
+      const at = rect(r.x + a.x, r.y, a.w, 1);
+      if (p.sidebarHovered(at)) p.g.fill(at, LIT);
+      p.region({ r: at, click: a.fn, cursor: 'pointer' });
+    }
   }
   if (bot.scroll > 0 && bot.below) {
     const label = ' ↓ new ';
@@ -401,7 +434,13 @@ function drawInput(p: Painter, l: Layout, bot: Bot): void {
   const app = p.app;
   const bg: Style = { bg: p.surface };
   const t = l.text;
-  p.g.fill(l.input, bg);
+  const input = l.input;
+  const band = input.h >= 3 ? rect(input.x, input.y + 1, input.w, input.h - 2) : input;
+  if (band !== input) {
+    p.span(input.x, input.y, '▄'.repeat(input.w), { fg: p.surface }, input.w);
+    p.span(input.x, bottom(input) - 1, '▀'.repeat(input.w), { fg: p.surface }, input.w);
+  }
+  p.g.fill(band, bg);
   const draft = bot.draft;
   const lines = fieldLines(draft, t.w);
   const [line, col] = fieldPosition(draft, t.w);
@@ -425,7 +464,9 @@ function drawInput(p: Painter, l: Layout, bot: Bot): void {
       spot: (x, y) => [start + (y - t.y), Math.max(0, x - t.x)],
     },
   });
-  p.button(l.send, '', SEND, p.buttonStyle(l.send, CYAN, 6));
+  const idle: Style = draft.chars.length ? { fg: 0, bg: 6, add: BOLD } : { ...DARK, bg: p.surface };
+  const send = rect(l.send.x, Math.max(band.y, bottom(t) - 1), l.send.w, 1);
+  p.button(send, '', SEND, p.buttonStyle(l.send, idle, 6));
   p.region({ r: l.send, click: () => app.bots.send(bot, draft.chars.join('')), cursor: 'pointer' });
 }
 

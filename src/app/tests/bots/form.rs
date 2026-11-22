@@ -155,6 +155,8 @@ fn the_agent_is_not_focusable_when_editing() {
     let mut c = chat(ANSWER);
     c.app.open_bot_form(Some(c.app.panels.bots.live[0].key));
     send_key(&mut c.app, KeyCode::Tab, KeyModifiers::NONE);
+    assert_eq!(bot_form(&c.app).focus, Field::About);
+    send_key(&mut c.app, KeyCode::Tab, KeyModifiers::NONE);
     assert_eq!(bot_form(&c.app).focus, Field::Model);
 }
 
@@ -162,9 +164,7 @@ fn the_agent_is_not_focusable_when_editing() {
 fn a_paste_into_what_it_is_for_keeps_its_line_breaks() {
     let mut c = chat(ANSWER);
     plus(&mut c);
-    for _ in 0..6 {
-        send_key(&mut c.app, KeyCode::Tab, KeyModifiers::NONE);
-    }
+    send_key(&mut c.app, KeyCode::Tab, KeyModifiers::NONE);
     assert_eq!(bot_form(&c.app).focus, Field::About);
     c.app.handle_event(AppEvent::Input(Event::Paste("a\nb".into())), AREA).expect("paste");
     assert_eq!(bot_form(&c.app).about.text(), "a\nb");
@@ -193,7 +193,8 @@ fn a_paired_chat_app_makes_the_chat_apps_row_a_list_and_its_choice_is_saved() {
     messenger::set_up(&mut c.app, crate::messenger::Via::Telegram, "1:t", "cornercase_bot", Some(paired));
     c.app.open_bot_form(Some(c.app.panels.bots.live[0].key));
     assert!(bot_form(&c.app).chat_ready);
-    assert!(drawn(&mut c.app).contains("Chat apps while away"));
+    let text = drawn(&mut c.app);
+    assert!(text.lines().any(|line| line.contains("Chat apps") && line.contains("while away")), "{text}");
     let Some(Overlay::BotForm(form)) = &mut c.app.overlay else { panic!("form") };
     form.chat_apps.choose(1);
     send_key(&mut c.app, KeyCode::Enter, KeyModifiers::NONE);

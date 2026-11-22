@@ -14,7 +14,7 @@ use crate::editor::{Editor, wrap_text};
 use crate::text::{plural, truncate_right};
 use crate::ui::View;
 use crate::ui::theme::status_icon;
-use crate::ui::widgets::{EditorField, button_style, draw_button, draw_editor, first_line, middle};
+use crate::ui::widgets::{EditorField, button_style, draw_button, draw_editor, first_line, middle, sidebar_hovered};
 
 pub(crate) const EXAMPLES: [&str; 4] = [
     "Which of my open pull requests are blocked, and why?",
@@ -31,7 +31,10 @@ pub(crate) const INTRO: [&str; 2] = [
 pub(crate) const STEPS_SHOWN: usize = 3;
 
 const MAX_INPUT: u16 = 6;
-const MARGIN: u16 = 1;
+const MARGIN: u16 = 2;
+const COLUMN: u16 = 110;
+const AIRY_FROM: u16 = 14;
+const PAD: u16 = 2;
 const SEND: &str = "send";
 const SEND_WIDTH: u16 = 6;
 const NEW_CONVERSATION: &str = "new conversation";
@@ -45,6 +48,10 @@ const NEWS_WIDTH: u16 = 7;
 const STOP_WIDTH: u16 = 6;
 const BUBBLE_SHARE: usize = 80;
 const MIN_BUBBLE: usize = 8;
+const BUBBLE_PAD: usize = 2;
+const TOP_HALF: &str = "▄";
+const BOTTOM_HALF: &str = "▀";
+const EXAMPLE_MARK: &str = " › ";
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Tone {
@@ -143,19 +150,31 @@ pub(crate) struct ChatAreas {
     pub(crate) send: Rect,
 }
 
-pub(crate) fn chat_areas(pane: Rect, input_rows: u16, pitch: u16) -> ChatAreas {
-    let margin = MARGIN.min(pane.width / 2);
-    let inner = Rect { x: pane.x + margin, width: pane.width.saturating_sub(2 * margin), ..pane };
-    let rows = input_rows.clamp(1, MAX_INPUT).max(pitch);
-    let header = Rect { height: pitch.min(inner.height), ..inner };
-    let rule = Rect { y: header.bottom(), height: 1.min(inner.bottom().saturating_sub(header.bottom())), ..inner };
-    let input_y = inner.bottom().saturating_sub(rows).max(rule.bottom());
-    let input = Rect { y: input_y, height: inner.bottom().saturating_sub(input_y), ..inner };
-    let lines = Rect { y: rule.bottom(), height: input.y.saturating_sub(rule.bottom()), ..inner };
-    let send_width = SEND_WIDTH.min(inner.width);
-    let send = Rect { x: inner.right() - send_width, width: send_width, height: pitch.min(input.height), ..input };
-    let field = Rect { width: inner.width.saturating_sub(send_width + 1), ..input };
-    let input_text = Rect { x: field.x + 1, width: field.width.saturating_sub(1), ..field };
+fn column(pane: Rect) -> Rect {
+    let margin = MARGIN.min(pane.width / 4);
+    let room = pane.width.saturating_sub(2 * margin);
+    let width = room.min(COLUMN);
+    Rect { x: pane.x + margin + (room - width) / 2, width, ..pane }
+}
+
+fn composer(inner: Rect, top: u16, rows: u16, pitch: u16) -> (Rect, Rect, Rect) {
+    let height = (rows + 2).max(pitch);
+    let y = inner.bottom().saturating_sub(height).max(top);
+    let input = Rect { y, height: inner.bottom().saturating_sub(y), ..inner };
+    let send_width = SEND_WIDTH.min(input.width);
+    let send =
+        Rect { x: input.right().saturating_sub(send_width + PAD), width: send_width, ..input }.intersection(input);
+    let text_y = (input.y + 1).min(input.bottom());
+    let input_text = Rect {
+        x: input.x + PAD.min(input.width),
+        y: text_y,
+        width: input.width.saturating_sub(2 * PAD + send_width + 1),
+        height: rows.min(input.bottom().saturating_sub(text_y)),
+    };
+    (input, input_text, send)
+}
+
+fn header_buttons(header: Rect) -> (Rect, Rect, Rect) {
     let menu = Rect { x: header.right().saturating_sub(MENU_WIDTH), width: MENU_WIDTH.min(header.width), ..header };
     let new_conversation = Rect {
         x: menu.x.saturating_sub(NEW_CONVERSATION_WIDTH + 1).max(header.x),
@@ -169,7 +188,20 @@ pub(crate) fn chat_areas(pane: Rect, input_rows: u16, pitch: u16) -> ChatAreas {
     } else {
         Rect { x: routines_x, width: ROUTINES_WIDTH, ..header }.intersection(header)
     };
-    ChatAreas { header, routines, new_conversation, menu, rule, lines, input, field, input_text, send }
+    (routines, new_conversation, menu)
+}
+
+pub(crate) fn chat_areas(pane: Rect, input_rows: u16, pitch: u16) -> ChatAreas {
+    let inner = column(pane);
+    let rows = input_rows.clamp(1, MAX_INPUT);
+    let header = Rect { height: pitch.min(inner.height), ..inner };
+    let rule = Rect { y: header.bottom(), height: 1.min(inner.bottom().saturating_sub(header.bottom())), ..inner };
+    let (input, input_text, send) = composer(inner, rule.bottom(), rows, pitch);
+    let air = u16::from(inner.height >= AIRY_FROM);
+    let top = (rule.bottom() + air).min(input.y);
+    let lines = Rect { y: top, height: input.y.saturating_sub(air).saturating_sub(top), ..inner };
+    let (routines, new_conversation, menu) = header_buttons(header);
+    ChatAreas { header, routines, new_conversation, menu, rule, lines, input, field: input, input_text, send }
 }
 
 pub(crate) fn input_rows(input: &Editor, pane: Rect) -> u16 {
@@ -187,7 +219,7 @@ pub(crate) fn thinking_row(lines: Rect) -> Rect {
 }
 
 fn thinking_prefix(thinking: &Thinking) -> usize {
-    3 + thinking.text.width() + 3
+    2 + thinking.text.width() + 3
 }
 
 pub(crate) fn stop_button(lines: Rect, thinking: &Thinking) -> Rect {
@@ -219,44 +251,59 @@ fn pad(width: usize, used: usize) -> String {
 }
 
 fn bubble_width(body: usize) -> usize {
-    (body * BUBBLE_SHARE / 100).max(MIN_BUBBLE).min(body).saturating_sub(2).max(1)
+    (body * BUBBLE_SHARE / 100).max(MIN_BUBBLE).min(body).saturating_sub(2 * BUBBLE_PAD).max(1)
 }
 
-fn you_rows(text: &str, stamp: &str, width: usize, tone: Tone) -> Vec<ChatRow> {
-    let mut lines = wrap_text(text, bubble_width(width));
+fn bubble_cells(text: &str, stamp: &str, room: usize) -> Vec<(String, String)> {
+    let mut lines = wrap_text(text, room);
     if lines.is_empty() {
         lines.push(String::new());
     }
-    let room = bubble_width(width);
-    let stamp_width = stamp.width();
-    let fits = lines.last().is_some_and(|last| last.width() + 1 + stamp_width <= room);
+    let fits = lines.last().is_some_and(|last| last.width() + 1 + stamp.width() <= room);
     let mut cells: Vec<(String, String)> = lines.into_iter().map(|line| (line, String::new())).collect();
-    if fits {
-        if let Some(last) = cells.last_mut() {
-            last.1 = stamp.to_string();
-        }
-    } else {
-        cells.push((String::new(), stamp.to_string()));
+    match cells.last_mut() {
+        Some(last) if fits => last.1 = stamp.to_string(),
+        _ => cells.push((String::new(), stamp.to_string())),
     }
+    cells
+}
+
+fn you_rows(text: &str, stamp: &str, width: usize, tone: Tone) -> Vec<ChatRow> {
+    let room = bubble_width(width);
+    let cells = bubble_cells(text, stamp, room);
     let inner = cells.iter().map(|(text, stamp)| text.width() + usize::from(!stamp.is_empty()) + stamp.width());
     let wide = inner.max().unwrap_or(1).min(room).max(1);
-    let fill = Style::default().bg(tone.surface);
-    cells
-        .into_iter()
-        .map(|(text, stamp)| {
-            let gap = wide.saturating_sub(text.width() + stamp.width());
-            let spans = vec![
-                Span::raw(pad(width, wide + 2)),
-                Span::styled(format!(" {text}{}", " ".repeat(gap)), fill),
-                Span::styled(format!("{stamp} "), fill.fg(tone.muted)),
-            ];
-            ChatRow::plain(Line::from(spans))
-        })
-        .collect()
+    let outer = wide + 2 * BUBBLE_PAD;
+    let (fill, side) = (Style::default().bg(tone.surface), " ".repeat(BUBBLE_PAD));
+    let edge = |glyph: &str| {
+        let spans =
+            vec![Span::raw(pad(width, outer)), Span::styled(glyph.repeat(outer), Style::default().fg(tone.surface))];
+        ChatRow::plain(Line::from(spans))
+    };
+    let mut rows = vec![edge(TOP_HALF)];
+    rows.extend(cells.into_iter().map(|(text, stamp)| {
+        let gap = wide.saturating_sub(text.width() + stamp.width());
+        ChatRow::plain(Line::from(vec![
+            Span::raw(pad(width, outer)),
+            Span::styled(format!("{side}{text}{}", " ".repeat(gap)), fill),
+            Span::styled(format!("{stamp}{side}"), fill.fg(tone.muted)),
+        ]))
+    }));
+    rows.push(edge(BOTTOM_HALF));
+    rows
+}
+
+fn head_line(head: &str, tone: Tone) -> Line<'static> {
+    let (name, when) = head.rsplit_once(" · ").unwrap_or((head, ""));
+    let mut spans = vec![Span::styled(name.to_string(), Style::default().add_modifier(Modifier::BOLD))];
+    if !when.is_empty() {
+        spans.push(Span::styled(format!(" · {when}"), dim(tone)));
+    }
+    Line::from(spans)
 }
 
 pub(super) fn bot_rows(id: u64, head: &str, body: &[Line<'static>], tone: Tone) -> Vec<ChatRow> {
-    let mut rows = vec![ChatRow::plain(Line::from(Span::styled(head.to_string(), dim(tone))))];
+    let mut rows = vec![ChatRow::plain(head_line(head, tone))];
     rows.extend(body.iter().cloned().map(|line| ChatRow::whole(line, RowHit::Link(id))));
     rows
 }
@@ -281,24 +328,28 @@ pub(super) fn step_rows(
     rows
 }
 
-pub(super) fn error_rows(text: &str, again: Option<(RowHit, &'static str)>, width: usize) -> Vec<ChatRow> {
+pub(super) fn error_rows(text: &str, again: Option<(RowHit, &'static str)>, width: usize, tone: Tone) -> Vec<ChatRow> {
     let red = Style::default().fg(Color::Red);
     let mut rows: Vec<ChatRow> = wrap_text(text, width.max(1))
         .into_iter()
         .map(|line| ChatRow::plain(Line::from(Span::styled(line, red))))
         .collect();
     if let Some((hit, label)) = again {
-        with_button(&mut rows, hit, label);
+        with_button(&mut rows, hit, label, tone);
     }
     rows
 }
 
-fn with_button(rows: &mut [ChatRow], hit: RowHit, label: &str) {
+pub(super) fn pill(tone: Tone) -> Style {
+    Style::default().fg(Color::Cyan).bg(tone.surface)
+}
+
+fn with_button(rows: &mut [ChatRow], hit: RowHit, label: &str, tone: Tone) {
     if let Some(last) = rows.last_mut() {
-        let start = u16::try_from(last.line.width() + 1).unwrap_or(u16::MAX);
+        let start = u16::try_from(last.line.width() + 2).unwrap_or(u16::MAX);
         let width = u16::try_from(label.width() + 2).unwrap_or(u16::MAX);
         let shown = format!(" {label} ");
-        last.line.spans.extend([Span::raw(" "), Span::styled(shown, Style::default().fg(Color::Cyan))]);
+        last.line.spans.extend([Span::raw("  "), Span::styled(shown, pill(tone))]);
         last.hit = Some((hit, start..start.saturating_add(width)));
     }
 }
@@ -316,8 +367,8 @@ pub(super) fn notice_rows(text: &str, width: usize, tone: Tone) -> Vec<ChatRow> 
 
 fn asking_rows(text: &str, ask: u64, width: usize, tone: Tone) -> Vec<ChatRow> {
     const GIVE: &str = "give…";
-    let mut rows = notice_rows(text, width.saturating_sub(GIVE.width() + 3), tone);
-    with_button(&mut rows, RowHit::Give(ask), GIVE);
+    let mut rows = notice_rows(text, width.saturating_sub(GIVE.width() + 4), tone);
+    with_button(&mut rows, RowHit::Give(ask), GIVE, tone);
     rows
 }
 
@@ -327,7 +378,9 @@ pub(crate) fn entry_rows(entry: &ChatEntry, width: u16, tone: Tone) -> Vec<ChatR
         ChatEntry::You { text, stamp } => you_rows(text, stamp, width, tone),
         ChatEntry::Bot { id, head, body } => bot_rows(*id, head, body, tone),
         ChatEntry::Steps { first, texts, open } => step_rows(*first, texts, (*open, STEPS_SHOWN), width, tone),
-        ChatEntry::Error { id, text, retry } => error_rows(text, retry.then_some((RowHit::Retry(*id), "retry")), width),
+        ChatEntry::Error { id, text, retry } => {
+            error_rows(text, retry.then_some((RowHit::Retry(*id), "retry")), width, tone)
+        }
         ChatEntry::Notice(text) => notice_rows(text, width, tone),
         ChatEntry::Asking { text, ask } => asking_rows(text, *ask, width, tone),
         ChatEntry::Run(block) => run_rows(block, width, tone),
@@ -335,7 +388,21 @@ pub(crate) fn entry_rows(entry: &ChatEntry, width: u16, tone: Tone) -> Vec<ChatR
     }
 }
 
-pub(crate) fn empty_rows(width: u16, tone: Tone) -> Vec<ChatRow> {
+fn example_row(i: usize, (lead, wide): (usize, usize), tone: Tone) -> ChatRow {
+    let fill = Style::default().bg(tone.surface);
+    let room = wide.saturating_sub(EXAMPLE_MARK.width() + 1);
+    let text = truncate_right(EXAMPLES[i], room);
+    let spans = vec![
+        Span::raw(" ".repeat(lead)),
+        Span::styled(EXAMPLE_MARK, fill.fg(Color::Cyan)),
+        Span::styled(format!("{text}{}", pad(wide.saturating_sub(EXAMPLE_MARK.width()), text.width())), fill),
+    ];
+    let start = u16::try_from(lead).unwrap_or(u16::MAX);
+    let end = start.saturating_add(u16::try_from(wide).unwrap_or(u16::MAX));
+    ChatRow { line: Line::from(spans), hit: Some((RowHit::Example(i), start..end)) }
+}
+
+pub(crate) fn empty_rows(width: u16, height: u16, tone: Tone) -> Vec<ChatRow> {
     let width = usize::from(width);
     let centred = |text: &str, style: Style| {
         let lead = width.saturating_sub(text.width()) / 2;
@@ -346,10 +413,15 @@ pub(crate) fn empty_rows(width: u16, tone: Tone) -> Vec<ChatRow> {
         .flat_map(|text| wrap_text(text, width.max(1)))
         .map(|text| ChatRow::plain(centred(&text, dim(tone))))
         .collect();
-    rows.push(ChatRow::blank());
-    for (i, example) in EXAMPLES.iter().enumerate() {
-        let text = truncate_right(example, width);
-        rows.push(ChatRow::whole(centred(&text, Style::default().fg(Color::Cyan)), RowHit::Example(i)));
+    let longest = EXAMPLES.iter().map(|example| example.width()).max().unwrap_or_default();
+    let wide = (longest + EXAMPLE_MARK.width() + 2).min(width);
+    let lead = (width - wide) / 2;
+    let spaced = rows.len() + 2 * EXAMPLES.len() <= usize::from(height);
+    for i in 0..EXAMPLES.len() {
+        if i == 0 || spaced {
+            rows.push(ChatRow::blank());
+        }
+        rows.push(example_row(i, (lead, wide), tone));
     }
     rows
 }
@@ -452,7 +524,7 @@ fn row_hit(body: Rect, chat: &ChatView, pos: Position) -> Option<ChatHit> {
 pub(in crate::ui) fn draw(f: &mut Frame, view: &View, chat: &ChatView, pane: Rect, pitch: u16) {
     let areas = chat_areas(pane, input_rows(&chat.input, pane), pitch);
     draw_header(f, view, chat, &areas);
-    draw_rows(f, chat, &areas);
+    draw_rows(f, view, chat, &areas);
     if let Some(thinking) = &chat.thinking {
         draw_thinking(f, view, thinking, &areas);
     }
@@ -462,51 +534,88 @@ pub(in crate::ui) fn draw(f: &mut Frame, view: &View, chat: &ChatView, pane: Rec
         let style = button_style(view, pill, Style::default().fg(Color::Black).bg(Color::Cyan), Color::Cyan);
         draw_button(f, pill, "", NEWS, style);
     }
+    draw_composer(f, view, chat, &areas);
+}
+
+fn draw_composer(f: &mut Frame, view: &View, chat: &ChatView, areas: &ChatAreas) {
+    let input = areas.input;
+    let band = if input.height >= 3 { Rect { y: input.y + 1, height: input.height - 2, ..input } } else { input };
+    if band != input {
+        let edge = Style::default().fg(view.surface());
+        for (y, glyph) in [(input.y, TOP_HALF), (input.bottom() - 1, BOTTOM_HALF)] {
+            let line = Span::styled(glyph.repeat(usize::from(input.width)), edge);
+            f.render_widget(Paragraph::new(line), Rect { y, height: 1, ..input });
+        }
+    }
     let at = EditorField {
-        field: areas.field,
+        field: band,
         text: areas.input_text,
         focused: chat.focused,
         placeholder: &chat.placeholder,
         top: None,
     };
     draw_editor(f, view, &chat.input, at);
-    let style = button_style(view, areas.send, Style::default().fg(Color::Cyan), Color::Cyan);
-    draw_button(f, areas.send, "", SEND, style);
+    let idle = if chat.input.is_empty() {
+        Style::default().fg(view.muted).bg(view.surface())
+    } else {
+        Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)
+    };
+    let send = Rect { y: areas.input_text.bottom().saturating_sub(1).max(band.y), height: 1, ..areas.send };
+    draw_button(f, send.intersection(band), "", SEND, button_style(view, areas.send, idle, Color::Cyan));
+}
+
+fn header_pill(f: &mut Frame, view: &View, r: Rect, (label, busy): (&str, bool)) {
+    let fill = Style::default().bg(view.surface());
+    let style = if busy { fill.fg(view.muted) } else { button_style(view, r, fill.fg(Color::Cyan), Color::Cyan) };
+    draw_button(f, r, "", label, style);
 }
 
 fn draw_header(f: &mut Frame, view: &View, chat: &ChatView, areas: &ChatAreas) {
     let name_end = if areas.routines.is_empty() { areas.new_conversation.x } else { areas.routines.x };
     let room = usize::from(name_end.saturating_sub(areas.header.x));
     let name = truncate_right(&chat.name, room.saturating_sub(1));
-    let detail = truncate_right(&chat.detail, room.saturating_sub(name.width() + 3));
+    let detail = truncate_right(&chat.detail, room.saturating_sub(name.width() + 4));
     let bold = Style::default().add_modifier(Modifier::BOLD);
-    let mut spans = vec![Span::raw(" "), Span::styled(name, bold)];
+    let mut spans = vec![Span::styled(name, bold)];
     if !detail.is_empty() {
-        spans.extend([Span::raw("  "), Span::styled(detail, Style::default().fg(view.muted))]);
+        spans.extend([Span::raw("   "), Span::styled(detail, Style::default().fg(view.muted))]);
     }
     f.render_widget(
         Paragraph::new(Line::from(spans)),
         middle(Rect { width: name_end.saturating_sub(areas.header.x), ..areas.header }),
     );
-    let routines = areas.routines;
-    let cyan = Style::default().fg(Color::Cyan);
-    draw_button(f, routines, "", &format!("{ROUTINES:^8}"), button_style(view, routines, cyan, Color::Cyan));
-    let new = areas.new_conversation;
-    let idle = if chat.busy { Style::default().fg(view.muted) } else { Style::default().fg(Color::Cyan) };
-    let style = if chat.busy { idle } else { button_style(view, new, idle, Color::Cyan) };
-    draw_button(f, new, "", &format!("{NEW_CONVERSATION:^16}"), style);
-    let menu = areas.menu;
-    draw_button(f, menu, "", "⋯", button_style(view, menu, Style::default().fg(Color::Cyan), Color::Cyan));
+    header_pill(f, view, areas.routines, (&format!("{ROUTINES:^8}"), false));
+    header_pill(f, view, areas.new_conversation, (&format!("{NEW_CONVERSATION:^16}"), chat.busy));
+    header_pill(f, view, areas.menu, ("⋯", false));
     let line = "─".repeat(usize::from(areas.rule.width));
     f.render_widget(Paragraph::new(Span::styled(line, Style::default().fg(view.line()))), areas.rule);
 }
 
-fn draw_rows(f: &mut Frame, chat: &ChatView, areas: &ChatAreas) {
+fn lit_cells(row: &ChatRow, r: Rect) -> Option<Rect> {
+    let (hit, cols) = row.hit.as_ref()?;
+    if matches!(hit, RowHit::Link(_)) {
+        return None;
+    }
+    let (start, end) = if cols.end == u16::MAX {
+        let text: String = row.line.spans.iter().map(|span| span.content.as_ref()).collect();
+        let lead = text.width() - text.trim_start().width();
+        (u16::try_from(lead).unwrap_or(u16::MAX), u16::try_from(text.trim_end().width()).unwrap_or(u16::MAX))
+    } else {
+        (cols.start, cols.end)
+    };
+    (start < end).then(|| Rect { x: r.x.saturating_add(start), width: end - start, ..r }.intersection(r))
+}
+
+fn draw_rows(f: &mut Frame, view: &View, chat: &ChatView, areas: &ChatAreas) {
     let body = body(areas.lines, chat.thinking.is_some());
     let shown = shown_rows(chat, body);
+    let lit = Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD);
     for (i, row) in shown.iter().enumerate() {
-        let y = row_y(body, shown.len(), chat.empty, i);
-        f.render_widget(Paragraph::new(row.line.clone()), Rect { y, height: 1, ..body });
+        let r = Rect { y: row_y(body, shown.len(), chat.empty, i), height: 1, ..body };
+        f.render_widget(Paragraph::new(row.line.clone()), r);
+        if let Some(cells) = lit_cells(row, r).filter(|cells| sidebar_hovered(view, *cells)) {
+            f.buffer_mut().set_style(cells, lit);
+        }
     }
 }
 
@@ -514,9 +623,10 @@ fn draw_thinking(f: &mut Frame, view: &View, thinking: &Thinking, areas: &ChatAr
     let row = thinking_row(areas.lines);
     let icon = status_icon(view.muted, Status::Working, view.spin);
     let text = Span::styled(thinking.text.clone(), Style::default().fg(view.muted));
-    f.render_widget(Paragraph::new(Line::from(vec![Span::raw(" "), icon, Span::raw(" "), text])), row);
+    f.render_widget(Paragraph::new(Line::from(vec![icon, Span::raw(" "), text])), row);
     let stop = stop_button(areas.lines, thinking);
     if !stop.is_empty() {
-        draw_button(f, stop, "", "stop", button_style(view, stop, Style::default().fg(Color::Cyan), Color::Cyan));
+        let idle = Style::default().fg(Color::Cyan).bg(view.surface());
+        draw_button(f, stop, "", "stop", button_style(view, stop, idle, Color::Cyan));
     }
 }

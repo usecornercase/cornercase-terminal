@@ -1,8 +1,8 @@
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use unicode_width::UnicodeWidthStr;
 
-use super::chat::{ChatRow, RowHit, Tone, dim};
+use super::chat::{ChatRow, RowHit, Tone, dim, pill};
 use crate::agents::activity::Status;
 use crate::text::{plural, truncate_right};
 use crate::ui::theme::status_icon;
@@ -51,7 +51,7 @@ fn head_row(line: &ChatAgentLine, width: usize, tone: Tone) -> ChatRow {
         vec![Span::styled(icon, icon_style(line.state, tone)), Span::styled(rest, rest_style), Span::raw(" ")];
     let mut row = ChatRow::plain(Line::default());
     if let Some(pane) = line.link {
-        spans.push(Span::styled(SHOW, Style::default().fg(Color::Cyan)));
+        spans.push(Span::styled(SHOW, pill(tone)));
         let end = start.saturating_add(u16::try_from(SHOW.width()).unwrap_or(u16::MAX));
         row.hit = Some((RowHit::Show(pane), start..end));
     } else {

@@ -37,8 +37,45 @@ fn drawn(form: Form) -> Terminal<TestBackend> {
 }
 
 #[test]
-fn a_new_bot_with_claude_shows_both_access_notes() {
+fn a_new_bot_with_claude_says_what_its_access_lets_it_do() {
     insta::assert_snapshot!(drawn(Form::new(agents(), "claude")).backend());
+}
+
+#[test]
+fn a_tall_window_leaves_a_row_between_fields() {
+    insta::assert_snapshot!(render_sized(&shown(Form::new(agents(), "claude")), 100, 32).backend());
+}
+
+#[test]
+fn a_short_window_packs_the_fields() {
+    let form = Form::new(agents(), "claude");
+    let short = form_dialog::area(Rect::new(0, 0, 100, 18), &form);
+    let tall = form_dialog::area(Rect::new(0, 0, 100, 32), &form);
+    assert!(short.height < tall.height, "{short:?} {tall:?}");
+    let t = render_sized(&shown(form), 100, 18);
+    let text = format!("{}", t.backend());
+    assert!(text.contains("╭─ New bot") && text.contains("create") && text.contains("Chat apps"), "{text}");
+}
+
+#[test]
+fn full_access_warns_in_red_under_the_list() {
+    let mut form = Form::new(agents(), "claude");
+    form.access.choose(1);
+    let view = shown(form);
+    let t = render_sized(&view, 100, 24);
+    let (x, y) = cell_of(&t, "can change any file").expect("the warning");
+    assert_eq!(t.backend().buffer()[(x, y)].fg, Color::Red);
+    let text = format!("{}", t.backend());
+    assert!(!text.contains("writes only in its folder"), "{text}");
+}
+
+fn cell_of(t: &Terminal<TestBackend>, wanted: &str) -> Option<(u16, u16)> {
+    let height = t.backend().buffer().area.height;
+    (0..height).find_map(|y| {
+        let line = row_text(t, Rect::new(0, y, t.backend().buffer().area.width, 1));
+        let at = line.find(wanted)?;
+        Some((u16::try_from(line[..at].chars().count()).ok()?, y))
+    })
 }
 
 #[test]
@@ -117,8 +154,8 @@ fn a_click_on_the_buttons_and_the_fields_hits_them() {
         form_dialog::hit(screen, &form, r.as_position()),
         Some(form_dialog::Hit::Field(Field::Model, 0, _))
     ));
-    let area = form_dialog::area(screen);
-    let corner = Position::new(area.right() - 4, area.bottom() - 2);
+    let area = form_dialog::area(screen, &form);
+    let corner = Position::new(area.right() - 4, area.bottom() - 3);
     assert!(matches!(form_dialog::hit(screen, &form, corner), Some(form_dialog::Hit::Cancel)));
 }
 
@@ -137,9 +174,8 @@ fn the_form_has_the_follow_box() {
 fn with_no_chat_app_paired_the_chat_apps_row_says_where_to_pair_one_in_grey() {
     let view = shown(Form::new(agents(), "claude"));
     let t = render_sized(&view, 100, 24);
-    let line = |y: u16| row_text(&t, Rect::new(0, y, 100, 1));
-    let y = (0..24).find(|&y| line(y).contains("Chat apps pair Telegram or Discord")).expect("the row");
-    let x = line(y).chars().position(|c| c == 'p').and_then(|x| u16::try_from(x).ok()).expect("its text");
+    let (x, y) = cell_of(&t, "pair Telegram or Discord").expect("the row");
+    assert!(row_text(&t, Rect::new(0, y, 100, 1)).contains("Chat apps"));
     assert_eq!(t.backend().buffer()[(x, y)].fg, view.muted);
 }
 
