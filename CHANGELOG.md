@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.111
+
+- **Every port in one list.** The Ports dialog has a row at the top that switches between **this workspace** and **every port** (a click, or `Tab`). **every port** lists every program of yours that listens on a port, each with its project and workspace, or `no workspace` for a database, a server started in another terminal outside your worktrees or a port Docker publishes. **copy** works on every row, **open** where your window can open the address (in a window from `cornercase remote`, once the port is tunnelled), **go** on a row whose program a tab started, and **stop** on the programs of a workspace, a program working in its worktree included even when no tab started it: tick them to stop several, since there is no **stop all** there.
+- **More ▴ › ports** (also behind the icon bar's gear) opens the dialog on the workspace on screen, a linked machine's when the window shows one, or on every port when no project is open.
+- **Tunnel any of them.** In a window from `cornercase remote`, **tunnel** is offered under every port for each program that listens on every address, `127.0.0.1` or `::1`, whatever its workspace, so a server's database or a program outside your workspaces reaches your laptop in one click. A linked machine's every port lists all the ports of that machine, and each of its programs that listens on every address, `127.0.0.1` or `::1` can be tunnelled to this computer, as before.
+- Scripts already get the same list with `cornercase ports --all --json`, each port with its `project`, `workspace` and `pane`.
+
 ## 0.13.110
 
 - **Send your flows to your machines.** Settings › Flows has **sync**, which sends the selected flow of yours to every machine shown in Settings › Machines, and **sync all**, which sends all of them, so starting a flow on a machine runs the version you just saved. Both show while a machine is linked, and then say what each machine got or why it did not (`vps: sent Duo`). A machine still on an older cornercase gets nothing until you update it there. Nothing is sent on its own and nothing is deleted there; your default flow, your order and the built-in flows you deleted stay on each computer.

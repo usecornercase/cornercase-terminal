@@ -5,10 +5,12 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph};
 
 use super::settings::settings_area;
+use super::worktrees::list_rows;
 use super::{
-    Note, draw_note, draw_row_button, draw_secondary, draw_submit, draw_waiting, item_at, list_item_by,
-    list_note_buttons, pick_background, right_aligned, row_button_rects,
+    Note, draw_note, draw_row_button, draw_secondary, draw_submit, draw_tabs, draw_waiting, item_at, list_item_by,
+    pick_background, right_aligned, row_button_rects, tabs_in,
 };
+use crate::ports::dialog::Scope;
 use crate::text::truncate_right;
 use crate::ui::View;
 use crate::ui::widgets::{button_width, hovered, overlay_block, rail};
@@ -19,8 +21,6 @@ const COMPACT_PITCH: u16 = 3;
 
 const PID_WIDTH: usize = 11;
 
-const EMPTY: &str = "Nothing in this workspace is listening on a port.";
-
 const DONE_LABEL: &str = "done";
 
 const BACK_LABEL: &str = "back";
@@ -29,18 +29,20 @@ const STOP_LABEL: &str = "stop";
 
 pub(crate) struct Ports {
     pub(crate) title: String,
+    pub(crate) scope: Scope,
+    pub(crate) listening: Option<usize>,
     pub(crate) rows: Vec<PortRow>,
     pub(crate) selected: Option<usize>,
     pub(crate) scroll: usize,
     pub(crate) ticked: usize,
     pub(crate) note: Option<Note>,
-    pub(crate) empty: bool,
+    pub(crate) empty: Option<&'static str>,
     pub(crate) confirm: Option<ConfirmBody>,
     pub(crate) compact: bool,
 }
 
 pub(crate) struct PortRow {
-    pub(crate) ticked: bool,
+    pub(crate) tick: Option<bool>,
     pub(crate) url: String,
     pub(crate) command: String,
     pub(crate) pid: i32,
@@ -72,6 +74,7 @@ pub(crate) enum PortsHit {
     CloseTunnel(usize),
     Go(usize),
     StopRow(usize),
+    Scope(Scope),
     Stop,
     Done,
     Back,
@@ -117,12 +120,17 @@ pub(crate) fn ports_area(screen: Rect, compact: bool) -> Rect {
 }
 
 pub(crate) fn ports_room(screen: Rect, compact: bool) -> (usize, Rect) {
-    let [list, ..] = rows(ports_area(screen, compact));
+    let [_, list, ..] = rows(ports_area(screen, compact));
     (usize::from(list.height / pitch(compact)), list)
 }
 
-fn rows(area: Rect) -> [Rect; 3] {
-    list_note_buttons(area)
+fn rows(area: Rect) -> [Rect; 4] {
+    list_rows(area)
+}
+
+fn scope_rects(area: Rect) -> Vec<Rect> {
+    let names = Scope::ALL.map(Scope::label);
+    tabs_in(rows(area)[0], &names)
 }
 
 fn pitch(compact: bool) -> u16 {
@@ -138,22 +146,22 @@ fn row_buttons(row: &PortRow, rect: Rect, compact: bool) -> Vec<(RowButton, Rect
         None => None,
     });
     buttons.extend(row.go.then_some(RowButton::Go));
-    buttons.push(RowButton::Stop);
+    buttons.extend(row.tick.map(|_| RowButton::Stop));
     let labels: Vec<&str> = buttons.iter().map(|b| b.label(compact)).collect();
     buttons.into_iter().zip(row_button_rects(rect, &labels)).collect()
 }
 
 fn stop_label(view: &Ports) -> String {
-    match (view.confirm.is_some(), view.ticked) {
-        (true, _) => STOP_LABEL.to_string(),
-        (false, 0) => format!("{STOP_LABEL} all"),
-        (false, n) => format!("{STOP_LABEL} {n}"),
+    match (view.confirm.is_some(), view.ticked, view.scope) {
+        (true, ..) | (false, 0, Scope::Every) => STOP_LABEL.to_string(),
+        (false, 0, Scope::Workspace) => format!("{STOP_LABEL} all"),
+        (false, n, _) => format!("{STOP_LABEL} {n}"),
     }
 }
 
 fn buttons(area: Rect, view: &Ports) -> (Rect, Rect) {
     let stop = stop_label(view);
-    let row = rows(area)[2];
+    let row = rows(area)[3];
     if view.confirm.is_some() {
         let rects = right_aligned(row, &[BACK_LABEL, stop.as_str()], button_width, 1);
         (rects[1], rects[0])
@@ -164,7 +172,8 @@ fn buttons(area: Rect, view: &Ports) -> (Rect, Rect) {
 }
 
 fn can_stop(view: &Ports) -> bool {
-    view.confirm.is_some() || !view.rows.is_empty()
+    let every = view.scope == Scope::Every;
+    view.confirm.is_some() || view.ticked > 0 || (!every && view.rows.iter().any(|row| row.tick.is_some()))
 }
 
 pub(crate) fn ports_hit(screen: Rect, view: &Ports, pos: Position) -> Option<PortsHit> {
@@ -179,27 +188,30 @@ pub(crate) fn ports_hit(screen: Rect, view: &Ports, pos: Position) -> Option<Por
     if view.confirm.is_some() {
         return None;
     }
-    let list = rows(area)[0];
+    if let Some((scope, _)) = Scope::ALL.into_iter().zip(scope_rects(area)).find(|(_, rect)| rect.contains(pos)) {
+        return Some(PortsHit::Scope(scope));
+    }
+    let list = rows(area)[1];
     let (i, rect) = item_at(list, (view.rows.len(), view.scroll), pitch(view.compact), pos)?;
     let row = view.rows.get(i)?;
     if let Some((button, _)) = row_buttons(row, rect, view.compact).into_iter().find(|(_, r)| r.contains(pos)) {
         return Some(button.hit(i));
     }
-    Some(if pos.x < list.x + LEAD { PortsHit::Tick(i) } else { PortsHit::Row(i) })
+    Some(if row.tick.is_some() && pos.x < list.x + LEAD { PortsHit::Tick(i) } else { PortsHit::Row(i) })
 }
 
 pub(in crate::ui) fn draw_ports(f: &mut Frame, view: &View, ports: &Ports) {
     let area = ports_area(f.area(), ports.compact);
     f.render_widget(Clear, area);
     f.render_widget(overlay_block(view.muted, &ports.title), area);
-    let [list, note, _] = rows(area);
-    match &ports.confirm {
-        Some(confirm) => {
-            let scroll = u16::try_from(confirm.scroll).unwrap_or(u16::MAX);
-            let body = Paragraph::new(confirm.lines.clone()).scroll((scroll, 0));
-            f.render_widget(body, list);
-        }
-        None => draw_list(f, view, ports, list),
+    let [_, list, note, _] = rows(area);
+    if let Some(confirm) = &ports.confirm {
+        let scroll = u16::try_from(confirm.scroll).unwrap_or(u16::MAX);
+        let body = Paragraph::new(confirm.lines.clone()).scroll((scroll, 0));
+        f.render_widget(body, list);
+    } else {
+        draw_scope(f, view, ports, area);
+        draw_list(f, view, ports, list);
     }
     draw_note(f, view.muted, ports.note.as_ref(), note);
     let (stop, other) = buttons(area, ports);
@@ -211,9 +223,24 @@ pub(in crate::ui) fn draw_ports(f: &mut Frame, view: &View, ports: &Ports) {
     draw_secondary(f, view, other, if ports.confirm.is_some() { BACK_LABEL } else { DONE_LABEL });
 }
 
+fn draw_scope(f: &mut Frame, view: &View, ports: &Ports, area: Rect) {
+    let active = Scope::ALL.iter().position(|scope| *scope == ports.scope).unwrap_or(0);
+    let rects = scope_rects(area);
+    draw_tabs(f, view, &rects, &Scope::ALL.map(Scope::label), active);
+    let Some(count) = ports.listening else { return };
+    let text = format!("{count} listening");
+    let row = rows(area)[0];
+    let used = rects.last().map_or(row.x, |rect| rect.right() + 2);
+    let width = u16::try_from(text.chars().count()).unwrap_or(u16::MAX);
+    if used.saturating_add(width) <= row.right() {
+        let at = Rect { x: row.right() - width, width, ..row };
+        f.render_widget(Paragraph::new(Span::styled(text, Style::default().fg(view.muted))), at);
+    }
+}
+
 fn draw_list(f: &mut Frame, view: &View, ports: &Ports, list: Rect) {
-    if ports.empty {
-        f.render_widget(Paragraph::new(Span::styled(format!(" {EMPTY}"), Style::default().fg(view.muted))), list);
+    if let Some(empty) = ports.empty {
+        f.render_widget(Paragraph::new(Span::styled(format!(" {empty}"), Style::default().fg(view.muted))), list);
     }
     let step = pitch(ports.compact);
     let longest = |text: fn(&PortRow) -> usize| ports.rows.iter().map(text).max().unwrap_or(0);
@@ -239,8 +266,11 @@ fn draw_row(
     let bg = pick_background(view, selected, rect);
     let dim = bg.fg(view.muted);
     let base = if selected { bg.add_modifier(Modifier::BOLD) } else { bg };
-    let tick =
-        if row.ticked { Span::styled("✓", bg.fg(Color::Green)) } else { Span::styled("○", bg.fg(view.soft)) };
+    let tick = match row.tick {
+        None => Span::styled(" ", bg),
+        Some(true) => Span::styled("✓", bg.fg(Color::Green)),
+        Some(false) => Span::styled("○", bg.fg(view.soft)),
+    };
     let lead = |first: bool| {
         let mark = if first { tick.clone() } else { Span::styled(" ", bg) };
         vec![rail(selected, bg), mark, Span::styled(" ", bg)]

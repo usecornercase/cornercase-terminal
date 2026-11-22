@@ -155,7 +155,7 @@ const HELP_LABELS: Record<HelpItem, string> = {
   keys: 'keys menu',
   bug: 'report a bug',
 };
-const MORE_ITEMS: MoreItem[] = ['settings', 'usage', 'processes', 'new bot…', 'queue', 'quit'];
+const MORE_ITEMS: MoreItem[] = ['settings', 'usage', 'processes', 'ports', 'new bot…', 'queue', 'quit'];
 const CLOSE_AGENT_NEEDS = 'this needs cornercase on your computer: the demo closes no agents';
 const CONTEXT_NEEDS = "this needs cornercase on your computer: the demo's agents are not real Claude Code sessions";
 const AGENT_TITLES: Record<string, string> = { claude: 'Claude Code', codex: 'Codex', gemini: 'Gemini CLI', opencode: 'opencode', grok: 'Grok Build', cursor: 'Cursor CLI', copilot: 'GitHub Copilot CLI', vibe: 'Vibe CLI' };
@@ -1540,6 +1540,7 @@ export class App {
     if (item === 'settings') this.openSettings();
     else if (item === 'usage') this.openUsage();
     else if (item === 'processes') this.bug(PROCESSES_NEED);
+    else if (item === 'ports') this.bug(PORTS_NEED);
     else if (item === 'new bot…') this.openBotForm();
     else if (item === 'queue') this.openQueue();
     else this.quit();
