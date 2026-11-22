@@ -10,6 +10,7 @@ pub(super) enum MoreItem {
     Settings,
     Usage,
     Processes,
+    Ports,
     NewBot,
     Queue,
     Remote,
@@ -22,7 +23,14 @@ impl App {
         let remote = self.remote_button().map(|_| MoreItem::Remote);
         let actions = update
             .into_iter()
-            .chain([MoreItem::NewBot, MoreItem::Queue, MoreItem::Settings, MoreItem::Usage, MoreItem::Processes])
+            .chain([
+                MoreItem::NewBot,
+                MoreItem::Queue,
+                MoreItem::Settings,
+                MoreItem::Usage,
+                MoreItem::Processes,
+                MoreItem::Ports,
+            ])
             .chain(remote)
             .chain([MoreItem::Quit])
             .map(MenuAction::More)
@@ -39,6 +47,7 @@ impl App {
             MoreItem::Settings => "settings".into(),
             MoreItem::Usage => "usage".into(),
             MoreItem::Processes => "processes".into(),
+            MoreItem::Ports => "ports".into(),
             MoreItem::Remote => "remote…".into(),
             MoreItem::Quit => "quit".into(),
         })
@@ -52,6 +61,7 @@ impl App {
             MoreItem::Settings => self.open_settings(),
             MoreItem::Usage => self.open_usage(),
             MoreItem::Processes => self.open_processes(),
+            MoreItem::Ports => self.open_shown_ports(),
             MoreItem::Remote => self.open_remote_menu(at),
             MoreItem::Quit => self.outbox.detach(),
         }

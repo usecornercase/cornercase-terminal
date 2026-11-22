@@ -1211,7 +1211,7 @@ From a pane it lists that pane's workspace, elsewhere the one shown; `--workspac
 
 With `--json` it prints `{"ports": [...]}`, each with every key present (`null` when it does not apply): `port`, `addresses`, `url`, `pid`, `program`, `args` (the program's command line), `project`, `workspace`, `pane`, `via` (`pane`, `agent` or `cwd`; `null` for no workspace) and `agent` (the agent's name when `via` is `agent`), plus `started`, the process's start as the server reads it, left out when unknown (`ports stop` can check it, below). It is the request `{"command": "ports", "args": {"workspace": 4, "all": false}}`, answered once the server has looked; an older server answers that it has no `ports` command.
 
-The text shows each program with its arguments cut to 40 characters; `--json` keeps `args` whole. The [Ports dialog](../projects-workspaces-tabs/#ports-a-workspace-listens-on) in a workspace's menu shows the same list, and a [machine's workspace](../machines/#ports-of-a-machines-workspace) has one too, which asks the machine.
+The text shows each program with its arguments cut to 40 characters; `--json` keeps `args` whole. The [Ports dialog](../projects-workspaces-tabs/#ports-a-workspace-listens-on) in a workspace's menu and in **More ▴** shows the same list, its **every port** the one `--all` gives, and a [machine's workspace](../machines/#ports-of-a-machines-workspace) has one too, which asks the machine.
 
 ```sh
 cornercase ports stop 5173

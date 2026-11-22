@@ -23,9 +23,41 @@ pub(crate) struct There {
     pub(crate) machine: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Scope {
+    Workspace,
+    Every,
+}
+
+impl Scope {
+    pub(crate) const ALL: [Self; 2] = [Self::Workspace, Self::Every];
+
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            Self::Workspace => "this workspace",
+            Self::Every => "every port",
+        }
+    }
+
+    fn other(self) -> Self {
+        match self {
+            Self::Workspace => Self::Every,
+            Self::Every => Self::Workspace,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Asked {
+    Nothing,
+    Workspace(u64),
+    Every,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Dialog {
-    pub(crate) workspace: u64,
+    pub(crate) workspace: Option<u64>,
+    pub(crate) scope: Scope,
     pub(crate) there: Option<There>,
     pub(crate) generation: u64,
     pub(crate) rows: Vec<Row>,
@@ -45,6 +77,7 @@ pub(crate) enum Action {
     Tunnel(usize),
     CloseTunnel(usize),
     Go(usize),
+    Scope(Scope),
     Stop(Vec<Target>),
 }
 
@@ -58,19 +91,28 @@ pub(crate) enum Hit {
     CloseTunnel(usize),
     Go(usize),
     StopRow(usize),
+    Scope(Scope),
     Stop,
     Done,
     Back,
 }
 
+impl Row {
+    pub(crate) fn stoppable(&self) -> bool {
+        self.port.place.workspace.is_some()
+    }
+}
+
 impl Dialog {
+    #[cfg(test)]
     pub(crate) fn new(workspace: u64, generation: u64) -> Self {
-        Self::on(workspace, generation, None)
+        Self::on(Some(workspace), generation, None)
     }
 
-    pub(crate) fn on(workspace: u64, generation: u64, there: Option<There>) -> Self {
+    pub(crate) fn on(workspace: Option<u64>, generation: u64, there: Option<There>) -> Self {
         Self {
             workspace,
+            scope: if workspace.is_some() { Scope::Workspace } else { Scope::Every },
             there,
             generation,
             rows: Vec::new(),
@@ -94,7 +136,8 @@ impl Dialog {
         self.failed = None;
         let was =
             |port: &Port| self.rows.iter().any(|r| r.ticked && r.port.pid == port.pid && r.port.number == port.number);
-        self.rows = ports.into_iter().map(|port| Row { ticked: was(&port), port }).collect();
+        let ticked = |port: &Port| port.place.workspace.is_some() && was(port);
+        self.rows = ports.into_iter().map(|port| Row { ticked: ticked(&port), port }).collect();
         let last = self.rows.len().checked_sub(1);
         self.cursor.selected = last.map(|last| self.cursor.selected.unwrap_or(0).min(last));
         self.cursor.scroll = self.cursor.scroll.min(last.unwrap_or(0));
@@ -102,6 +145,18 @@ impl Dialog {
 
     pub(crate) fn ticked(&self) -> usize {
         self.rows.iter().filter(|row| row.ticked).count()
+    }
+
+    pub(crate) fn asked(&self) -> Asked {
+        match (self.scope, self.workspace) {
+            (Scope::Every, _) => Asked::Every,
+            (Scope::Workspace, Some(workspace)) => Asked::Workspace(workspace),
+            (Scope::Workspace, None) => Asked::Nothing,
+        }
+    }
+
+    pub(crate) fn rescope(&mut self, scope: Scope, generation: u64) {
+        *self = Self { scope, ..Self::on(self.workspace, generation, self.there.take()) };
     }
 
     pub(crate) fn key(&mut self, key: KeyEvent, rows: usize) -> Action {
@@ -120,6 +175,7 @@ impl Dialog {
                 }
                 Action::None
             }
+            (Step::List, KeyCode::Tab | KeyCode::BackTab) => Action::Scope(self.scope.other()),
             (Step::List, KeyCode::Enter) if self.ticked() > 0 => self.confirm(None),
             (Step::Confirm(_), KeyCode::Enter) => self.stop(),
             _ => Action::None,
@@ -143,25 +199,34 @@ impl Dialog {
             Hit::CloseTunnel(row) => return Action::CloseTunnel(row),
             Hit::Go(row) => return Action::Go(row),
             Hit::StopRow(row) => return self.confirm(Some(row)),
+            Hit::Scope(scope) if scope != self.scope => return Action::Scope(scope),
             Hit::Stop => return self.confirm(None),
             Hit::Done => return Action::Close,
-            Hit::Back => {}
+            Hit::Back | Hit::Scope(_) => {}
         }
         Action::None
     }
 
     fn toggle(&mut self, row: usize) {
-        if let Some(row) = self.rows.get_mut(row) {
+        if let Some(row) = self.rows.get_mut(row).filter(|row| row.stoppable()) {
             row.ticked = !row.ticked;
         }
     }
 
     fn confirm(&mut self, row: Option<usize>) -> Action {
-        let ports: Vec<Port> = match row {
-            Some(row) => self.rows.get(row).map(|row| row.port.clone()).into_iter().collect(),
-            None if self.ticked() > 0 => self.rows.iter().filter(|r| r.ticked).map(|r| r.port.clone()).collect(),
-            None => self.rows.iter().map(|r| r.port.clone()).collect(),
+        let (ticks, every) = (self.ticked() > 0, self.scope == Scope::Every);
+        let taken = |at: usize, r: &Row| match row {
+            Some(row) => row == at,
+            None if ticks => r.ticked,
+            None => !every,
         };
+        let ports: Vec<Port> = self
+            .rows
+            .iter()
+            .enumerate()
+            .filter(|(at, r)| r.stoppable() && taken(*at, r))
+            .map(|(_, r)| r.port.clone())
+            .collect();
         if !ports.is_empty() {
             self.step = Step::Confirm(ports);
             self.body = 0;

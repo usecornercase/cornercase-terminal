@@ -17,16 +17,27 @@ use crate::control::contract::Refusal;
 use crate::control::{Item, PortStopped};
 use crate::error::Result;
 use crate::log::{Job, Level};
-use crate::ports::dialog::{Action, Dialog, Hit, Row, Step, There};
+use crate::ports::dialog::{Action, Asked, Dialog, Hit, Row, Scope, Step, There};
 use crate::ports::stop::{self, Stopped, Target};
 use crate::ports::{self, Port, Via};
 use crate::process::command_line;
 use crate::project::Hierarchy;
+use crate::text::CRUMB_SEPARATOR;
 use crate::ui;
 
 pub(in crate::app) const REFRESH_EVERY: Duration = Duration::from_secs(2);
 
 const COMMAND_WIDTH: usize = 40;
+
+const NO_PORTS_HERE: &str = "Nothing in this workspace is listening on a port.";
+
+const NO_PORTS: &str = "Nothing is listening on a port.";
+
+const NO_WORKSPACE: &str = "No workspace on screen. Show one, or list every port.";
+
+const DOCKER: &str = "Ports Docker publishes are held by Docker, so only every port can list them.";
+
+const ONLY_WORKSPACES: &str = "Only a workspace's programs can be stopped here.";
 
 const STOPS: &str = if cfg!(windows) {
     "Each window is asked to close, then what still holds its port after 3 s is ended (at once without a window). \
@@ -50,34 +61,68 @@ pub(crate) enum PortsEvent {
 }
 
 impl App {
-    pub(super) fn open_ports(&mut self, workspace: u64) {
+    pub(super) fn open_ports(&mut self, workspace: Option<u64>) {
         let generation = self.panels.ports.refresh.open();
-        self.overlay = Some(Overlay::Ports(Box::new(Dialog::new(workspace, generation))));
+        self.overlay = Some(Overlay::Ports(Box::new(Dialog::on(workspace, generation, None))));
         self.watch_ports_dialog(Instant::now());
+    }
+
+    pub(super) fn open_shown_ports(&mut self) {
+        if let Some(aim) = self.shown_remote().and_then(|shown| self.aim_at(shown.link, shown.workspace)) {
+            return self.open_remote_ports(aim);
+        }
+        let shown = self.projects.active_workspace(self.active).map(|at| self.projects.workspace(at).id);
+        self.open_ports(shown);
     }
 
     pub(super) fn watch_ports_dialog(&mut self, now: Instant) {
         let Some(Overlay::Ports(dialog)) = &self.overlay else { return };
+        let generation = dialog.generation;
         if let Some(there) = dialog.there.clone() {
-            let (workspace, generation) = (dialog.workspace, dialog.generation);
-            return self.watch_remote_ports(workspace, generation, &there, now);
+            return self.watch_remote_ports(generation, &there, now);
         }
+        let gone = dialog.workspace.is_some_and(|id| self.projects.workspace_by(id).is_none());
+        let only = match self.ports_asked(gone) {
+            Asked::Nothing => return,
+            Asked::Workspace(workspace) => Some(workspace),
+            Asked::Every => None,
+        };
         if !self.panels.ports.refresh.due(now, REFRESH_EVERY) {
-            return;
-        }
-        let (workspace, generation) = (dialog.workspace, dialog.generation);
-        if self.projects.workspace_by(workspace).is_none() {
-            self.overlay = None;
             return;
         }
         self.panels.ports.refresh.begin(now);
         let places = self.port_places();
-        let job = Job::new(Level::Debug, "ports", "list").with("workspace", workspace);
+        let job = Job::new(Level::Debug, "ports", "list").with("all", only.is_none());
         self.spawn_job(
             job,
-            move || Ok(ports::scan(&places, Some(workspace))),
+            move || Ok(ports::scan(&places, only)),
             move |result, _| Some(AppEvent::Ports(PortsEvent::Listed { generation, result })),
         );
+    }
+
+    pub(in crate::app) fn ports_asked(&mut self, gone: bool) -> Asked {
+        let closes = gone && matches!(&self.overlay, Some(Overlay::Ports(dialog)) if dialog.scope == Scope::Workspace);
+        if closes {
+            self.overlay = None;
+            return Asked::Nothing;
+        }
+        let Some(Overlay::Ports(dialog)) = &mut self.overlay else { return Asked::Nothing };
+        if gone {
+            dialog.workspace = None;
+        }
+        let asked = dialog.asked();
+        if asked == Asked::Nothing && !dialog.loaded {
+            dialog.listed(Ok(Vec::new()));
+        }
+        asked
+    }
+
+    fn rescope_ports(&mut self, scope: Scope) {
+        let generation = self.panels.ports.refresh.open();
+        if let Some(Overlay::Ports(dialog)) = &mut self.overlay {
+            dialog.rescope(scope, generation);
+        }
+        self.watch_ports_dialog(Instant::now());
     }
 
     pub(super) fn ports_answered(&mut self, event: PortsEvent) {
@@ -156,21 +201,20 @@ impl App {
     }
 
     pub(super) fn ports_act(&mut self, action: Action) {
-        let (there, row) = match &self.overlay {
-            Some(Overlay::Ports(dialog)) => (dialog.there.clone().map(|there| (there, dialog.workspace)), dialog),
-            _ => return,
-        };
+        let Some(Overlay::Ports(dialog)) = &self.overlay else { return };
+        let there = dialog.there.clone();
         let port = match action {
             Action::Copy(at) | Action::Open(at) | Action::Tunnel(at) | Action::CloseTunnel(at) | Action::Go(at) => {
-                row.rows.get(at).map(|row| row.port.clone())
+                dialog.rows.get(at).map(|row| row.port.clone())
             }
-            Action::None | Action::Close | Action::Stop(_) => None,
+            Action::None | Action::Close | Action::Scope(_) | Action::Stop(_) => None,
         };
         match (action, port, there) {
             (Action::Close, ..) => self.overlay = None,
-            (Action::Stop(targets), _, Some((there, workspace))) => self.stop_remote_ports(&there, workspace, targets),
+            (Action::Scope(scope), ..) => self.rescope_ports(scope),
+            (Action::Stop(targets), _, Some(there)) => self.stop_remote_ports(&there, targets),
             (Action::Stop(targets), _, None) => self.stop_ports(targets),
-            (action, Some(port), Some((there, workspace))) => self.remote_port_act(&there, workspace, &action, &port),
+            (action, Some(port), Some(there)) => self.remote_port_act(&there, &action, &port),
             (action, Some(port), None) => self.port_act(&action, &port),
             _ => {}
         }
@@ -187,11 +231,11 @@ impl App {
                 self.overlay = None;
                 let _ = self.show(Item::Pane(pane));
             }
-            Action::None | Action::Close | Action::Stop(_) => {}
+            Action::None | Action::Close | Action::Scope(_) | Action::Stop(_) => {}
         }
     }
 
-    fn remote_port_act(&mut self, there: &There, workspace: u64, action: &Action, port: &Port) {
+    fn remote_port_act(&mut self, there: &There, action: &Action, port: &Port) {
         match action {
             Action::Copy(_) => self.copy_url(port, self.there_tunnel(there, port)),
             Action::Open(_) => self.open_there_port(there, port),
@@ -199,9 +243,9 @@ impl App {
             Action::CloseTunnel(_) => self.close_there_tunnel_of(&there.machine, port.number),
             Action::Go(_) => {
                 let Some(pane) = port.place.pane else { return };
-                self.go_remote_port(there, workspace, pane);
+                self.go_remote_port(there, pane);
             }
-            Action::None | Action::Close | Action::Stop(_) => {}
+            Action::None | Action::Close | Action::Scope(_) | Action::Stop(_) => {}
         }
     }
 
@@ -237,15 +281,16 @@ impl App {
     }
 
     pub(super) fn ports_view(&self, dialog: &Dialog, area: Rect) -> Box<ui::Ports> {
+        let every = dialog.scope == Scope::Every;
         let title = if let Some(there) = &dialog.there {
-            self.remote_ports_title(there, dialog.workspace)
+            self.remote_ports_title(there, dialog.workspace.filter(|_| !every))
         } else {
-            let label = self.projects.workspace_by(dialog.workspace).map(crate::project::Workspace::label);
-            label.map_or_else(|| "Ports".to_string(), |label| format!("Ports › {label}"))
+            let label = dialog.workspace.filter(|_| !every).and_then(|id| self.projects.workspace_by(id));
+            label.map_or_else(|| "Ports".to_string(), |workspace| format!("Ports › {}", workspace.label()))
         };
         let rows: Vec<ui::PortRow> = match &dialog.there {
-            Some(there) => dialog.rows.iter().map(|row| self.there_port_row(there, dialog.workspace, row)).collect(),
-            None => dialog.rows.iter().map(|row| self.port_row(row)).collect(),
+            Some(there) => dialog.rows.iter().map(|row| self.there_port_row(there, row, every)).collect(),
+            None => dialog.rows.iter().map(|row| self.port_row(row, every)).collect(),
         };
         let compact = area.width < ui::COMPACT_WIDTH;
         let (_, body) = ui::ports_room(area, compact);
@@ -258,7 +303,9 @@ impl App {
         let note = self.ports_note(dialog, confirm.as_ref(), body);
         Box::new(ui::Ports {
             title,
-            empty: dialog.loaded && dialog.rows.is_empty(),
+            scope: dialog.scope,
+            listening: dialog.loaded.then_some(dialog.rows.len()).filter(|_| dialog.failed.is_none()),
+            empty: (dialog.loaded && dialog.rows.is_empty()).then(|| empty_text(dialog)),
             rows,
             selected: dialog.cursor.selected,
             scroll: dialog.cursor.scroll,
@@ -269,7 +316,7 @@ impl App {
         })
     }
 
-    fn port_row(&self, row: &Row) -> ui::PortRow {
+    fn port_row(&self, row: &Row, every: bool) -> ui::PortRow {
         let tunnel = self.port_tunnel(&row.port);
         let holder_opens = self.shown_holder().is_some_and(|holder| holder.browse);
         let open = match tunnel {
@@ -277,29 +324,17 @@ impl App {
             Some(_) => false,
             None => self.can_browse(),
         };
-        ui::PortRow {
-            ticked: row.ticked,
-            url: row.port.url(),
-            command: command_line(row.port.program.as_deref(), &row.port.args, COMMAND_WIDTH),
-            pid: row.port.pid,
-            place: self.port_place(&row.port),
-            go: row.port.place.pane.is_some(),
-            open,
-            tunnel,
-        }
+        ui::PortRow { url: row.port.url(), place: self.port_place(&row.port, every), open, tunnel, ..plain_row(row) }
     }
 
-    fn there_port_row(&self, there: &There, workspace: u64, row: &Row) -> ui::PortRow {
+    fn there_port_row(&self, there: &There, row: &Row, every: bool) -> ui::PortRow {
         let tunnel = self.there_tunnel(there, &row.port);
         ui::PortRow {
-            ticked: row.ticked,
             url: format!("{} on {}", row.port.url(), there.machine),
-            command: command_line(row.port.program.as_deref(), &row.port.args, COMMAND_WIDTH),
-            pid: row.port.pid,
-            place: self.remote_port_place(there, workspace, &row.port),
-            go: row.port.place.pane.is_some(),
+            place: self.remote_port_place(there, &row.port, every),
             open: matches!(tunnel, Some(ui::PortTunnel::Up(_))) && self.can_browse(),
             tunnel,
+            ..plain_row(row)
         }
     }
 
@@ -314,21 +349,35 @@ impl App {
             return (confirm.scroll + usize::from(body.height) < confirm.lines.len())
                 .then(|| ui::Note::Info("↓ scroll for more".into()));
         }
-        (!dialog.loaded).then_some(ui::Note::Busy("looking for ports…"))
+        if !dialog.loaded {
+            return Some(ui::Note::Busy("looking for ports…"));
+        }
+        match dialog.scope {
+            Scope::Workspace => Some(ui::Note::Info(DOCKER.into())),
+            Scope::Every => {
+                dialog.rows.iter().any(|row| !row.stoppable()).then(|| ui::Note::Info(ONLY_WORKSPACES.into()))
+            }
+        }
     }
 
-    fn port_place(&self, port: &Port) -> String {
+    fn port_place(&self, port: &Port, every: bool) -> String {
         let pane = |id: u64| {
             let tab = self.projects.tab_of_pane(id).map(|at| self.projects.tab(at).label(&self.config));
             tab.map_or_else(|| format!("pane {id}"), |tab| format!("pane {id} · {tab}"))
         };
-        place_text(port, pane)
+        let crumb = |id: u64| {
+            let at = self.projects.workspace_index(id)?;
+            let project = self.project_label(&self.projects[at.project()]);
+            Some(format!("{project}{CRUMB_SEPARATOR}{}", self.projects.workspace(at).label()))
+        };
+        scoped_place(port, place_text(port, pane), (every, port.place.workspace.filter(|_| every).and_then(crumb)))
     }
 
     fn any_port_place(&self, dialog: &Dialog, port: &Port) -> String {
+        let every = dialog.scope == Scope::Every;
         match &dialog.there {
-            Some(there) => self.remote_port_place(there, dialog.workspace, port),
-            None => self.port_place(port),
+            Some(there) => self.remote_port_place(there, port, every),
+            None => self.port_place(port, every),
         }
     }
 
@@ -360,6 +409,35 @@ impl App {
     }
 }
 
+fn plain_row(row: &Row) -> ui::PortRow {
+    ui::PortRow {
+        tick: row.stoppable().then_some(row.ticked),
+        url: String::new(),
+        command: command_line(row.port.program.as_deref(), &row.port.args, COMMAND_WIDTH),
+        pid: row.port.pid,
+        place: String::new(),
+        go: row.port.place.pane.is_some(),
+        open: false,
+        tunnel: None,
+    }
+}
+
+fn empty_text(dialog: &Dialog) -> &'static str {
+    match dialog.asked() {
+        Asked::Workspace(_) => NO_PORTS_HERE,
+        Asked::Every => NO_PORTS,
+        Asked::Nothing => NO_WORKSPACE,
+    }
+}
+
+pub(in crate::app) fn scoped_place(port: &Port, how: String, (every, crumb): (bool, Option<String>)) -> String {
+    match (every, port.place.workspace, crumb) {
+        (true, None, _) => "no workspace".into(),
+        (true, Some(_), Some(crumb)) => format!("{crumb} · {how}"),
+        _ => how,
+    }
+}
+
 pub(in crate::app) fn place_text(port: &Port, pane: impl Fn(u64) -> String) -> String {
     match (port.place.via, port.place.pane, port.place.agent.as_deref()) {
         (Some(Via::Agent), Some(id), Some(agent)) => format!("agent {agent} · {}", pane(id)),
@@ -387,6 +465,7 @@ fn hit_of(hit: ui::PortsHit) -> Hit {
         ui::PortsHit::CloseTunnel(row) => Hit::CloseTunnel(row),
         ui::PortsHit::Go(row) => Hit::Go(row),
         ui::PortsHit::StopRow(row) => Hit::StopRow(row),
+        ui::PortsHit::Scope(scope) => Hit::Scope(scope),
         ui::PortsHit::Stop => Hit::Stop,
         ui::PortsHit::Done => Hit::Done,
         ui::PortsHit::Back => Hit::Back,
