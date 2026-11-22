@@ -76,7 +76,6 @@ use interaction::LINES_SCROLL_EVERY;
 use issues_dialog::IssueEvent;
 use launches::LAUNCH_EVERY;
 #[cfg(test)]
-#[cfg(unix)]
 use layout::List;
 use layout::{Scrolls, Side};
 use machine_links::RemoteDrag;
