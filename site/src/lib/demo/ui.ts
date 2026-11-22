@@ -86,6 +86,8 @@ import {
   TODO_LABEL,
   FILES_LABEL,
   todoWithDot,
+  PROJECTS_TITLE,
+  projectsTitleRoom,
 } from './layout';
 import { USAGE, STATS, type UsageWindow } from './data';
 import { render as markdown } from './markdown';
@@ -690,6 +692,11 @@ export class Painter {
     this.line(middle(r), [seg(` ${text}`, { fg: 8, add: BOLD })]);
   }
 
+  private projectsTitle(areas: Areas): void {
+    const room = projectsTitleRoom(areas.title, areas.botsButton);
+    this.title(rect(areas.title.x, areas.title.y, room, areas.title.h), truncateRight(PROJECTS_TITLE, Math.max(0, room - 1)));
+  }
+
   more<R>(list: Rect, rows: Rows, specs: R[], named: (r: R) => boolean): void {
     const [above, under] = rows.hidden();
     const count = (from: number, to: number) => specs.slice(from, to).filter(named).length;
@@ -851,7 +858,7 @@ export class Painter {
 
   private sidebar(areas: Areas): void {
     const app = this.app;
-    this.title(areas.title, 'Projects');
+    this.projectsTitle(areas);
     const all = app.sidebarRows();
     const base = sidebarLayout(areas.list, areas.pitch, all, app.projectsScroll);
     const drag = app.rowDragView();
@@ -884,7 +891,7 @@ export class Painter {
 
   private tree(areas: Areas): void {
     const app = this.app;
-    this.title(areas.title, 'Projects');
+    this.projectsTitle(areas);
     const shape = app.treeShape();
     const base = treeLayout(areas.list, shape, treeRows(shape), app.projectsScroll);
     const drag = app.rowDragView();

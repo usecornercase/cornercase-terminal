@@ -171,14 +171,18 @@ fn keys_in_the_lobby_never_reach_a_pane() {
     app.open_here(AREA).expect("open the first project");
     type_line(&mut app, "echo cat-\"\"starts; cat -v");
     shows(&mut app, &rx, "cat-starts");
+    app.config.prefix_key = "ctrl+]".into();
     press_button(&mut app, AREA);
     send_key(&mut app, KeyCode::Char('q'), KeyModifiers::NONE);
     app.handle_event(AppEvent::Input(Event::Paste("pasted".into())), AREA).expect("paste");
+    for _ in 0..2 {
+        send_key(&mut app, KeyCode::Char(']'), KeyModifiers::CONTROL);
+    }
     press_back(&mut app);
     type_line(&mut app, "markerend");
     shows(&mut app, &rx, "markerend");
     let text = screen(&mut app);
-    assert!(!text.contains("pasted") && !text.contains("qmarker"), "{text}");
+    assert!(!text.contains("pasted") && !text.contains("qmarker") && !text.contains("^]"), "{text}");
 }
 
 mod compact {

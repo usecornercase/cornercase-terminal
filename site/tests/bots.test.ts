@@ -7,7 +7,7 @@ import { type BotForm } from '../src/lib/demo/botform';
 import { EXAMPLES, draftOf } from '../src/lib/demo/bots';
 import { plain } from '../src/lib/demo/markdown';
 import { Rows, layout } from '../src/lib/demo/layout';
-import { projectLabel } from '../src/lib/demo/model';
+import { activePane, projectLabel } from '../src/lib/demo/model';
 import { world } from '../src/lib/demo/world';
 
 const key = (key: string, shift = false) => ({ key, metaKey: false, isComposing: false, ctrlKey: false, altKey: false, shiftKey: shift });
@@ -291,6 +291,22 @@ test('the Bots button drops its marks before they cover the Projects title', () 
   app.widths = { ...app.widths, projects: 32 };
   app.render();
   assert.match(screen(app).split('\n')[app.areas().title.y], / Projects +\S ●3 Bots › /);
+});
+
+test('at the narrowest projects column the Bots button reads Bots beside the whole title', () => {
+  const app = panes(140);
+  app.widths = { ...app.widths, projects: 16 };
+  app.render();
+  const a = app.areas();
+  assert.deepEqual([a.botsButton.x, a.botsButton.w], [a.title.x + 9, 6]);
+  assert.equal(screen(app).split('\n')[a.title.y].slice(0, a.title.w), ' Projects Bots ');
+});
+
+test('in a narrow compact menu the Bots button never shares cells with Agents', () => {
+  for (const cols of [28, 24, 18]) {
+    const a = layout(cols, 30, { projects: 32, workspaces: 26 }, 'projects', false, 'side_by_side', true, false, { offered: true, marks: 5, page: false });
+    assert.ok(a.botsButton.x >= a.title.x && a.botsButton.x + a.botsButton.w <= a.agentsButton.x, String(cols));
+  }
 });
 
 test('at the landing’s 32 rows the Bots button opens a page with a bot to click', () => {
@@ -653,6 +669,26 @@ test('with bots and no chat chosen the page asks to pick one, and keys reach no 
   inputKey(app, key('Escape'));
   assert.equal(app.bots.page, true);
   assert.equal(inputKey(app, key('q')), true);
+});
+
+test('the prefix pressed twice on the Bots page reaches no hidden pane', () => {
+  const app = demo(140);
+  app.config.prefix = 'ctrl+]';
+  const tab = app.tab();
+  const shell = tab && activePane(tab)?.shell;
+  assert.ok(shell);
+  const reached: string[] = [];
+  const key = shell.key.bind(shell);
+  shell.key = (k) => {
+    reached.push(k.key);
+    key(k);
+  };
+  for (let i = 0; i < 2; i++) app.key({ key: ']', ctrl: true, alt: false, shift: false });
+  assert.equal(app.overlay, null);
+  assert.deepEqual(reached, []);
+  app.pressBack();
+  for (let i = 0; i < 2; i++) app.key({ key: ']', ctrl: true, alt: false, shift: false });
+  assert.deepEqual(reached, [']']);
 });
 
 test('below 90 columns Bots › with no bot opens the lobby full screen with Bots as the breadcrumb', () => {

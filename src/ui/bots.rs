@@ -21,6 +21,8 @@ pub(crate) mod run;
 
 pub(crate) const BOTS_LABEL: &str = "Bots ›";
 
+pub(super) const BOTS_SHORT: &str = "Bots";
+
 const TITLE: &str = "Bots";
 
 const MIN_NAME_WIDTH: usize = 4;
@@ -129,7 +131,8 @@ fn draw_bots_button(f: &mut Frame, view: &View, bots: &BotsView, (r, compact): (
     }
     let lit = |span: Span<'static>| if hovered { Span::styled(span.content, style) } else { span };
     let mut spans = vec![Span::styled(" ", style)];
-    if r.width >= button_width(BOTS_LABEL) + bots_pad(compact) + bots.marks() {
+    let full = button_width(BOTS_LABEL) + bots_pad(compact);
+    if r.width >= full + bots.marks() {
         if bots.thinking() {
             spans.extend([lit(status_icon(view.muted, Status::Working, view.spin)), Span::styled(" ", style)]);
         }
@@ -137,7 +140,8 @@ fn draw_bots_button(f: &mut Frame, view: &View, bots: &BotsView, (r, compact): (
             spans.extend([lit(unread_span(bots.unread())), Span::styled(" ", style)]);
         }
     }
-    spans.push(Span::styled(format!("{BOTS_LABEL} "), style));
+    let label = if r.width >= full { BOTS_LABEL } else { BOTS_SHORT };
+    spans.push(Span::styled(format!("{label} "), style));
     f.render_widget(Paragraph::new(Line::from(spans)), middle(r));
 }
 

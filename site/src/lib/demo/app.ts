@@ -3271,7 +3271,7 @@ export class App {
   private keysKey(group: KeysGroup | null, k: Key): boolean {
     this.overlay = null;
     if (isPrefix(this.config.prefix, k)) {
-      const t = this.tab();
+      const t = this.bots.page ? undefined : this.tab();
       const pane = t ? activePane(t) : undefined;
       pane?.shell.key(k);
     } else if (k.key !== 'Escape') this.keysStep(keysLookup(group, k));

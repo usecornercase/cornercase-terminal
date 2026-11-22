@@ -3,7 +3,7 @@ use ratatui::widgets::{Block, Borders};
 
 use super::activity;
 use super::agents_section::AGENTS_LABEL;
-use super::bots::BOTS_LABEL;
+use super::bots::{BOTS_LABEL, BOTS_SHORT};
 use super::chrome::{BACK_LABEL, TODO_LABEL};
 use super::files;
 use super::rows::GAP;
@@ -251,10 +251,15 @@ pub(super) fn bots_pad(compact: bool) -> u16 {
     if compact { COMPACT_BOTS_PAD } else { 0 }
 }
 
+pub(super) fn projects_title_room(title: Rect, bots_button: Rect) -> u16 {
+    if bots_button.is_empty() { title.width } else { bots_button.x.saturating_sub(title.x).min(title.width) }
+}
+
 fn bots_button(title: Rect, marks: u16, pad: u16, taken: u16) -> Rect {
-    let plain = button_width(BOTS_LABEL) + pad;
-    let room = title.width.saturating_sub(taken + button_width(PROJECTS_TITLE));
-    let width = if plain + marks <= room { plain + marks } else { plain }.min(title.width);
+    let room = title.width.saturating_sub(taken);
+    let beside = room.saturating_sub(button_width(PROJECTS_TITLE) - 1);
+    let (full, short) = (button_width(BOTS_LABEL) + pad, button_width(BOTS_SHORT) + pad);
+    let width = [full + marks, full, short].into_iter().find(|width| *width <= beside).unwrap_or(short).min(room);
     Rect { x: title.right().saturating_sub(taken + width), width, ..title }
 }
 

@@ -201,10 +201,17 @@ export const PROJECTS_TITLE = 'Projects';
 const COMPACT_BOTS_PAD = 2;
 export const botsPad = (compact: boolean): number => (compact ? COMPACT_BOTS_PAD : 0);
 
+export const BOTS_SHORT = 'Bots';
+
+export function projectsTitleRoom(title: Rect, button: Rect): number {
+  return isEmpty(button) ? title.w : Math.min(title.w, Math.max(0, button.x - title.x));
+}
+
 function botsButton(title: Rect, marks: number, pad: number, taken: number): Rect {
-  const plain = buttonWidth(BOTS_LABEL) + pad;
-  const room = Math.max(0, title.w - taken - buttonWidth(PROJECTS_TITLE));
-  const w = Math.min(plain + marks <= room ? plain + marks : plain, title.w);
+  const room = Math.max(0, title.w - taken);
+  const beside = Math.max(0, room - (buttonWidth(PROJECTS_TITLE) - 1));
+  const [full, short] = [buttonWidth(BOTS_LABEL) + pad, buttonWidth(BOTS_SHORT) + pad];
+  const w = Math.min([full + marks, full, short].find((w) => w <= beside) ?? short, room);
   return rect(Math.max(0, right(title) - taken - w), title.y, w, title.h);
 }
 

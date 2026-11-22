@@ -1,7 +1,7 @@
 import { BOLD, type Rect, type Style, rect } from '../term/grid';
 import { DEFAULT } from '../term/palette';
 import { type Bot, EXAMPLES, type ChatLine, age, clock, details, shortClock, summary } from './bots';
-import { type Areas, BACK_LABEL, BOTS_LABEL, Rows, botsPad, bottom, buttonWidth, closeButton, isEmpty, marksWidth, menuButton, right } from './layout';
+import { type Areas, BACK_LABEL, BOTS_LABEL, BOTS_SHORT, Rows, botsPad, bottom, buttonWidth, closeButton, isEmpty, marksWidth, menuButton, right } from './layout';
 import { render as markdown } from './markdown';
 import { type Line, seg, truncateRight, width } from './text';
 import { drawSelection, fieldLines, fieldPosition, placeIn } from './todo';
@@ -106,11 +106,12 @@ function drawBotsButton(p: Painter, b: Rect): void {
   if (lit && b.h > 1) p.g.fill(b, style);
   const marked = (text: string, own: Style): Line => [seg(text, lit ? style : own), seg(' ', style)];
   const line: Line = [seg(' ', style)];
-  if (b.w >= buttonWidth(BOTS_LABEL) + botsPad(app.areas().compact) + marksWidth(bots.thinking(), bots.unread())) {
+  const full = buttonWidth(BOTS_LABEL) + botsPad(app.areas().compact);
+  if (b.w >= full + marksWidth(bots.thinking(), bots.unread())) {
     if (bots.thinking()) line.push(...marked(spin(p), { fg: 3 }));
     if (bots.unread()) line.push(...marked(`●${bots.unread() > 9 ? '9+' : bots.unread()}`, CYAN));
   }
-  line.push(seg(`${BOTS_LABEL} `, style));
+  line.push(seg(`${b.w >= full ? BOTS_LABEL : BOTS_SHORT} `, style));
   p.line(middleOf(b), line);
   p.region({ r: b, click: () => app.openBots(), cursor: 'pointer' });
 }

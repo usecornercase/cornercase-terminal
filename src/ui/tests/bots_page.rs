@@ -109,6 +109,39 @@ mod the_button {
         assert!(text.contains(" Projects") && text.contains("Bots ›") && !text.contains('●'), "{text}");
     }
 
+    fn marked() -> Screen {
+        Screen { bots: BotsShape { marks: marks_width(true, 2), ..offered(false) }, ..Screen::default() }
+    }
+
+    #[rstest]
+    #[case::the_plain_label(18, " Projects Bots › ")]
+    #[case::the_short_label(16, " Projects Bots ")]
+    fn keeps_the_projects_title_whole_down_to_the_narrowest_column(#[case] projects: u16, #[case] row: &str) {
+        let widths = Widths { projects, ..Widths::default() };
+        let a = full_layout(TALL, widths, marked());
+        let t = render_sized(&View { widths, ..shown(Sidebar::SideBySide, entries(), false) }, W, TALL.height);
+        assert_eq!(title_row(&t, &a), row);
+        assert_eq!((a.bots_button.x, a.bots_button.right()), (a.title.x + 9, a.title.right()));
+    }
+
+    #[rstest]
+    #[case::the_title_cut(28)]
+    #[case::the_title_cut_to_a_letter(24)]
+    #[case::the_label_cut(18)]
+    fn never_shares_cells_with_agents_in_a_narrow_compact_menu(#[case] cols: u16) {
+        let narrow = Rect { width: cols, ..SMALL };
+        let a = full_layout(narrow, Widths::default(), Screen { agents: true, ..marked() }).shown(Some(Nav::Projects));
+        assert!(a.bots_button.x >= a.title.x && a.bots_button.right() <= a.agents_button.x, "{a:?}");
+        let agents = Some(AgentsView { entries: Vec::new(), scroll: 0 });
+        let v = View { nav: Some(Nav::Projects), agents, ..shown(Sidebar::SideBySide, entries(), false) };
+        let t = render_sized(&v, narrow.width, narrow.height);
+        let row = middle(a.bots_button);
+        let before = Rect { x: a.title.x, width: a.bots_button.x - a.title.x, ..row };
+        assert!(row_text(&t, row).starts_with(" Bots"), "{}", row_text(&t, row));
+        assert!(row_text(&t, middle(a.agents_button)).contains("Agents ›"));
+        assert!(!row_text(&t, before).contains('B'), "{}", row_text(&t, before));
+    }
+
     #[test]
     fn says_9_plus_past_nine_unread() {
         assert_eq!(marks_width(false, 12), 4);
