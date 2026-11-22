@@ -18,10 +18,7 @@ fn answered_all(texts: &[&str]) -> Chat {
         c.app.panels.bots.live[0].next_line += 1;
     }
     c.app.window_attached();
-    let row = {
-        let a = c.app.layout(AREA);
-        ui::bot_rows(a.bots_list, a.pitch, 1, 0).item(0)
-    };
+    let row = bot_row(&mut c.app, 0);
     render(&mut c.app, AREA);
     click(&mut c.app, Position::new(row.x + 3, row.y));
     c

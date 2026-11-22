@@ -55,6 +55,8 @@ pub(crate) use activity::{Item as ActivityItem, Shown as ActivityShown, hit as a
 pub(crate) use agents_section::{AgentEntry, AgentsView, agent_close, agent_fold, agent_hit, agent_row, agent_rows};
 pub(crate) use bots::agent::{ChatAgentKind, ChatAgentLine};
 #[cfg(test)]
+pub(crate) use bots::bots_new;
+#[cfg(test)]
 pub(crate) use bots::card::card_menu;
 pub(crate) use bots::card::{BotCard, CardRow, card_buttons, card_folder, card_routine, card_row_at};
 pub(crate) use bots::chat::body as chat_body;
@@ -64,8 +66,11 @@ pub(crate) use bots::chat::{
 };
 #[cfg(test)]
 pub(crate) use bots::chat::{row_y, stop_button, thinking_row};
+#[cfg(test)]
+pub(crate) use bots::lobby::NEW_BOT;
+pub(crate) use bots::lobby::{IDEAS, Lobby, LobbyHit, lobby_hit};
 pub(crate) use bots::run::RunBlock;
-pub(crate) use bots::{BotEntry, BotsView, bot_menu, bot_rows, bots_fold, bots_new};
+pub(crate) use bots::{BotEntry, BotsView, bot_menu, bot_rows, marks_width};
 pub(crate) use chrome::ChangesButton;
 pub use chrome::MORE_LABEL;
 pub(crate) use chrome::{help_button, machine_button, more_button, plugin_buttons, recap_button, worktrees_button};
@@ -155,7 +160,7 @@ pub(crate) use forum::{ForumHit, ForumSetup, hit as forum_hit};
 pub(crate) use icons::glyphs;
 pub(crate) use layout::COMPACT_BUTTON_WIDTH;
 pub use layout::{Areas, Border, COMPACT_PITCH, COMPACT_WIDTH, changes_button, layout, layout_with};
-pub(crate) use layout::{Nav, Screen, full_layout};
+pub(crate) use layout::{BotsShape, Nav, Screen, full_layout};
 pub(crate) use pane::{PaneBand, TabView, held_notice, restart_notice, resume_notice, scrollback_badge, split_footer};
 pub(crate) use remote_access::{RemoteAccess, done as remote_done};
 pub(crate) use remote_card::{RemoteCard, RemoteNote, Retry, retrying};
@@ -326,6 +331,14 @@ impl View<'_> {
             .bare(self.workspaces.iter().map(|w| w.machine.is_some()).collect())
     }
 
+    fn bots_page(&self) -> bool {
+        self.bots.as_ref().is_some_and(|bots| bots.page)
+    }
+
+    fn lobby(&self) -> Option<Lobby> {
+        self.bots.as_ref().filter(|bots| bots.page && self.chat.is_none()).map(BotsView::lobby)
+    }
+
     fn glyphs(&self) -> &'static icons::Glyphs {
         glyphs(self.icons)
     }
@@ -407,7 +420,7 @@ fn draw_main(f: &mut Frame, view: &View, areas: &Areas) {
     }
     draw_tab_or_empty(f, view, areas);
     draw_chrome(f, view, areas);
-    if areas.tree {
+    if areas.tree && !areas.sidebar.is_empty() {
         draw_tree(f, view, areas);
     } else if !areas.sidebar.is_empty() {
         draw_sidebar(f, view, areas);
@@ -435,6 +448,10 @@ fn draw_main(f: &mut Frame, view: &View, areas: &Areas) {
 fn draw_tab_or_empty(f: &mut Frame, view: &View, areas: &Areas) {
     if let Some(chat) = &view.chat {
         bots::chat::draw(f, view, chat, areas.pane, areas.pitch);
+        return;
+    }
+    if let Some(lobby) = view.lobby() {
+        bots::lobby::draw(f, view, lobby, areas.pane);
         return;
     }
     if remote_tab::draw_remote(f, view, areas.pane) {
@@ -471,7 +488,11 @@ fn screen_of(view: &View) -> Screen {
         || view.files.is_some()
         || view.flow.is_some()
         || view.recap.is_some();
-    let bots = view.bots.as_ref().map_or(0, |bots| u16::try_from(bots.entries.len()).unwrap_or(u16::MAX));
+    let bots = view.bots.as_ref().map_or_else(BotsShape::default, |bots| BotsShape {
+        offered: true,
+        marks: bots.marks(),
+        page: bots.page,
+    });
     Screen {
         changes: panel,
         sidebar: view.sidebar,
@@ -480,7 +501,6 @@ fn screen_of(view: &View) -> Screen {
         plugins: !view.plugin_buttons.is_empty(),
         machine: view.machine.is_some(),
         bots,
-        bots_folded: view.bots.as_ref().is_some_and(|bots| bots.folded),
     }
 }
 

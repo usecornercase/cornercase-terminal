@@ -313,6 +313,9 @@ pub(super) fn draw_workspaces(f: &mut Frame, view: &View, areas: &Areas) {
         super::bots::card::draw_card(f, view, card, areas);
         return;
     }
+    if view.bots_page() && !areas.compact() {
+        return;
+    }
     if areas.back.is_empty() {
         draw_title(f, view.muted, areas.workspaces_title, "Workspaces");
     } else {

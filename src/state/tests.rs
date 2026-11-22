@@ -34,7 +34,6 @@ fn state(dirs: &[&str]) -> State {
         todo: false,
         files: false,
         flow: false,
-        bots_collapsed: false,
     }
 }
 
@@ -166,7 +165,6 @@ mod file {
             todo: true,
             files: true,
             flow: false,
-            bots_collapsed: false,
         };
         let fixture = crate::test_util::fixture!("session/v5.json");
         round_trip(fixture, &expected);
@@ -406,6 +404,16 @@ mod file {
         std::fs::write(&path, r#"{"version":3,"projects":[],"active":0}"#).expect("write");
 
         assert_eq!(load(&path).expect("load").widths, None);
+    }
+
+    #[test]
+    fn a_session_saved_with_the_fold_of_the_old_bots_section_still_loads() {
+        let tmp = TempDir::new();
+        let path = tmp.path().join("session.json");
+        let text = r#"{"version":5,"projects":[],"active":0,"todo":true,"bots_collapsed":true}"#;
+        std::fs::write(&path, text).expect("write");
+
+        assert!(load(&path).expect("load").todo);
     }
 
     #[test]

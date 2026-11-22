@@ -85,12 +85,12 @@ impl App {
         config::Sidebar::from_setting(&self.config.sidebar)
     }
 
-    pub(super) fn bots_screen(&self) -> ui::Screen {
-        let count = self.panels.bots.live.len();
-        ui::Screen {
-            bots: u16::try_from(count).unwrap_or(u16::MAX),
-            bots_folded: self.panels.bots.collapsed,
-            ..ui::Screen::default()
+    fn bots_shape(&self) -> ui::BotsShape {
+        let unread = self.panels.bots.live.iter().map(|live| live.unread).sum();
+        ui::BotsShape {
+            offered: self.bots_offered(),
+            marks: ui::marks_width(self.bots_thinking(), unread),
+            page: self.bots_page(),
         }
     }
 
@@ -102,7 +102,7 @@ impl App {
             icon_bar: self.config.icon_bar,
             plugins: self.has_plugin_buttons(),
             machine: self.machine_label().is_some(),
-            ..self.bots_screen()
+            bots: self.bots_shape(),
         }
     }
 
@@ -151,7 +151,7 @@ impl App {
 
     pub(super) fn visible_tab(&self) -> Option<u64> {
         self.focus().tab.filter(|_| {
-            self.screen.nav.is_none() && !self.file_full_screen() && self.shown_remote().is_none() && !self.bot_shown()
+            self.screen.nav.is_none() && !self.file_full_screen() && self.shown_remote().is_none() && !self.bots_page()
         })
     }
 
