@@ -88,7 +88,8 @@ pub(in crate::cli) const BOT_HELP: &str =
 message you write runs one turn of its agent (one `cornercase bot agents` lists as able to be a bot) in a conversation that continues,
 and the answer lands in the chat. It can see every project and act on them through `cornercase`.
 A bot made with --about sets itself up at once; after that it spends tokens when you write to it and when its
-routines run, and only while the server runs. The window lists bots in its Bots section and draws each one's chat.
+routines run, and only while the server runs. The window lists bots on its Bots page, which Bots › opens
+from the Projects title, and draws each one's chat.
 
 Events: `cornercase events` reports each chat line, the bot starting or finishing a turn, and a
 bot being created, edited or removed. `cornercase status --app` carries the list as `bots`.
