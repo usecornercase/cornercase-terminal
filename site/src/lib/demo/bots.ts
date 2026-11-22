@@ -1,5 +1,5 @@
 import type { App } from './app';
-import type { BotsShape } from './layout';
+import { type BotsShape, marksWidth } from './layout';
 import type { Key } from './programs';
 import { plain } from './markdown';
 import { type Editable, editKey, removeSelection } from './todo';
@@ -73,6 +73,12 @@ export const EXAMPLES = [
   'Every weekday at 9, tell me which of my PRs are blocked.',
 ];
 export const SETTING_UP = 'setting up';
+export const IDEAS: [string, string][] = [
+  ['PRs', 'Every weekday at 9:00, review my open pull requests and tell me which are blocked'],
+  ['News', 'Every morning at 8:00, sum up the news about the tools I use'],
+  ['Releases', 'Every Monday, check the new releases of the tools I use and tell me what changed'],
+];
+export type Lobby = 'empty' | 'pick';
 const ANSWER_AFTER = [1400, 2600, 4200];
 const SETUP_AFTER = [1200, 2400, 3600];
 const SETUP_STEPS = [
@@ -162,14 +168,30 @@ export const summary = (b: Bot): string => [b.agent, b.model].filter(Boolean).jo
 export class Bots {
   list: Bot[] = [];
   shown: string | null = null;
-  folded = false;
+  page = false;
+  last: string | null = null;
   scroll = 0;
   private next = 1;
 
   constructor(private readonly app: App) {}
 
-  shape(): BotsShape | null {
-    return this.list.length ? { rows: this.list.length, folded: this.folded } : null;
+  shape(): BotsShape {
+    return { offered: true, marks: marksWidth(this.thinking(), this.unread()), page: this.page };
+  }
+
+  lobby(): Lobby | null {
+    if (!this.page || this.current()) return null;
+    return this.list.length ? 'pick' : 'empty';
+  }
+
+  open(compact: boolean): void {
+    const last = this.list.find((b) => b.id === this.last) ?? this.list[0];
+    if (last && !compact) return this.show(last.id);
+    this.shown = null;
+    this.page = true;
+    this.app.files.full = false;
+    if (compact) this.app.nav = this.list.length ? 'bots' : null;
+    this.app.dirty();
   }
 
   current(): Bot | null {
@@ -239,6 +261,8 @@ export class Bots {
     const bot = this.list.find((b) => b.id === id);
     if (!bot) return;
     this.shown = id;
+    this.page = true;
+    this.last = id;
     bot.unread = 0;
     bot.scroll = 0;
     bot.below = false;
@@ -250,11 +274,7 @@ export class Bots {
 
   hide(): void {
     this.shown = null;
-  }
-
-  toggleFold(): void {
-    this.folded = !this.folded;
-    this.app.dirty();
+    this.page = false;
   }
 
   scrollTo(bot: Bot, delta: number, max: number): boolean {

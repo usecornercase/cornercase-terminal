@@ -16,7 +16,7 @@ use crate::text::truncate_right;
 const LABEL: usize = 120;
 const MOST_LISTED: usize = 25;
 pub(super) const BOT_GONE: &str = "That bot is gone. /bots lists the bots now.";
-const NO_BOTS: &str = "No bots yet: make one in cornercase, in the Bots section.";
+const NO_BOTS: &str = "No bots yet: make one in cornercase with Bots ›, at the right of the Projects title.";
 const NO_SUCH_BOT: &str = "No bot has that name.";
 pub(super) const BOTS: &str = "Bots";
 

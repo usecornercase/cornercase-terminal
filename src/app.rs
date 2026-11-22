@@ -76,7 +76,6 @@ use interaction::LINES_SCROLL_EVERY;
 use issues_dialog::IssueEvent;
 use launches::LAUNCH_EVERY;
 #[cfg(test)]
-#[cfg(unix)]
 use layout::List;
 use layout::{Scrolls, Side};
 use machine_links::RemoteDrag;
@@ -363,7 +362,7 @@ impl App {
         if let Some(b) = areas.border_hit(pos) {
             return border_shape(b);
         }
-        if !areas.pane.contains(pos) || (self.screen.nav.is_some() && areas.compact()) || self.bot_shown() {
+        if !areas.pane.contains(pos) || (self.screen.nav.is_some() && areas.compact()) || self.bots_page() {
             return pointer::Shape::Default;
         }
         let dir = if self.shown_remote().is_some() {
@@ -542,7 +541,7 @@ impl App {
     pub(crate) fn shows(&self, pane: u64) -> bool {
         self.screen.nav.is_none()
             && !self.file_full_screen()
-            && !self.bot_shown()
+            && !self.bots_page()
             && self.tab().is_some_and(|t| t.index_of(pane).is_some())
     }
 
@@ -576,7 +575,6 @@ impl App {
             todo: self.screen.side == Some(Side::Todo),
             files: self.screen.side == Some(Side::Files),
             flow: self.screen.side == Some(Side::Flow),
-            bots_collapsed: self.panels.bots.collapsed,
         }
     }
 
@@ -599,7 +597,6 @@ impl App {
         self.adopt_closed(&parents);
         self.adopt_saved(parents);
         self.sync_worktrees();
-        self.panels.bots.collapsed = saved.bots_collapsed;
         self.follow_restored();
         if saved.flow {
             self.show_flow();

@@ -186,8 +186,42 @@ export const AGENTS_LABEL = 'Agents ›';
 export const BOTS_LABEL = 'Bots ›';
 
 export interface BotsShape {
-  rows: number;
-  folded: boolean;
+  offered: boolean;
+  marks: number;
+  page: boolean;
+}
+
+export const BACK_LABEL = '‹ Projects';
+
+export function marksWidth(thinking: boolean, unread: number): number {
+  return (thinking ? 2 : 0) + (unread ? (unread > 9 ? 4 : 3) : 0);
+}
+
+export const PROJECTS_TITLE = 'Projects';
+const COMPACT_BOTS_PAD = 2;
+export const botsPad = (compact: boolean): number => (compact ? COMPACT_BOTS_PAD : 0);
+
+export const BOTS_SHORT = 'Bots';
+
+export function projectsTitleRoom(title: Rect, button: Rect): number {
+  return isEmpty(button) ? title.w : Math.min(title.w, Math.max(0, button.x - title.x));
+}
+
+function botsButton(title: Rect, marks: number, pad: number, taken: number): Rect {
+  const room = Math.max(0, title.w - taken);
+  const beside = Math.max(0, room - (buttonWidth(PROJECTS_TITLE) - 1));
+  const [full, short] = [buttonWidth(BOTS_LABEL) + pad, buttonWidth(BOTS_SHORT) + pad];
+  const w = Math.min([full + marks, full, short].find((w) => w <= beside) ?? short, room);
+  return rect(Math.max(0, right(title) - taken - w), title.y, w, title.h);
+}
+
+function withBots(areas: Areas, bots: BotsShape | null): Areas {
+  if (!bots) return areas;
+  if (!bots.page) return { ...areas, botsButton: bots.offered ? botsButton(areas.title, bots.marks, 0, 0) : EMPTY };
+  const { title, list } = areas;
+  const page = rect(title.x, title.y, title.w, Math.max(0, bottom(list) - title.y));
+  const back = rect(title.x, title.y, Math.min(buttonWidth(BACK_LABEL), title.w), title.h);
+  return { ...areas, bots: page, botsTitle: title, botsList: list, back, sidebar: EMPTY, title: EMPTY, list: EMPTY };
 }
 
 export function agentsRows(w: Widths, room: number, keep: number): number {
@@ -204,25 +238,7 @@ function splitAgents(r: Rect, w: Widths, keep: number): [Rect, Rect, Rect] {
 }
 
 type AgentsAreas = Pick<Areas, 'agents' | 'agentsTitle' | 'agentsList' | 'agentsBorder' | 'agentsButton'>;
-type BotsAreas = Pick<Areas, 'bots' | 'botsTitle' | 'botsList' | 'botsBorder' | 'botsButton'>;
-
-function splitBots(r: Rect, shape: BotsShape, keep: number): [Rect, Rect, Rect] | null {
-  const content = shape.folded ? 1 : 1 + 2 * GAP + shape.rows;
-  const cap = Math.min(Math.floor(r.h / 2), Math.max(0, r.h - 1 - keep));
-  const rows = Math.min(content, cap);
-  if (rows < 1) return null;
-  const rest = rect(r.x, r.y, r.w, r.h - rows - 1);
-  const line = rect(r.x, bottom(rest), r.w, 1);
-  return [rest, line, rect(r.x, bottom(line), r.w, rows)];
-}
-
-function botsSection(r: Rect, shape: BotsShape | null, keep: number): [Rect, BotsAreas] {
-  const split = shape ? splitBots(r, shape, keep) : null;
-  if (!split) return [r, NO_BOTS];
-  const [rest, line, area] = split;
-  const [botsTitle, botsList] = section(area);
-  return [rest, { ...NO_BOTS, bots: area, botsTitle, botsList, botsBorder: line }];
-}
+type BotsAreas = Pick<Areas, 'bots' | 'botsTitle' | 'botsList' | 'botsButton'>;
 
 function agentsSection(r: Rect, w: Widths, keep: number, agents: boolean): [Rect, AgentsAreas] {
   if (!agents) return [r, NO_AGENTS];
@@ -241,7 +257,7 @@ export const mainWidth = (w: Widths, total: number, changes: boolean): number =>
 
 export const EMPTY: Rect = rect(0, 0, 0, 0);
 const NO_AGENTS: AgentsAreas = { agents: EMPTY, agentsTitle: EMPTY, agentsList: EMPTY, agentsBorder: EMPTY, agentsButton: EMPTY };
-const NO_BOTS: BotsAreas = { bots: EMPTY, botsTitle: EMPTY, botsList: EMPTY, botsBorder: EMPTY, botsButton: EMPTY };
+const NO_BOTS: BotsAreas = { bots: EMPTY, botsTitle: EMPTY, botsList: EMPTY, botsButton: EMPTY };
 export const isEmpty = (r: Rect) => r.w === 0 || r.h === 0;
 export const bottom = (r: Rect) => r.y + r.h;
 export const right = (r: Rect) => r.x + r.w;
@@ -311,7 +327,6 @@ export interface Areas {
   bots: Rect;
   botsTitle: Rect;
   botsList: Rect;
-  botsBorder: Rect;
   botsButton: Rect;
   changes: Rect;
   changesBorder: Rect;
@@ -332,13 +347,15 @@ function column(r: Rect, lead: number): [Rect, Rect, Rect, Rect, Rect] {
 }
 
 export function layout(cols: number, rows: number, widths: Widths, nav: Nav, changes = false, sidebar: Sidebar = 'side_by_side', agents = false, tabs = false, bots: BotsShape | null = null): Areas {
-  const main = (c: number): Areas =>
+  const listed = agents && !bots?.page;
+  const columns = (c: number): Areas =>
     sidebar === 'side_by_side'
-      ? wide(c, rows, widths, agents, bots)
+      ? wide(c, rows, widths, listed)
       : sidebar === 'tree'
-        ? treeColumn(c, rows, widths, agents, bots)
-        : stacked(c, rows, widths, sidebar, agents, bots);
-  const areas = cols < COMPACT_WIDTH ? compact(cols, rows, changes, agents, !!bots) : changes ? withChanges(cols, rows, widths, main) : main(cols);
+        ? treeColumn(c, rows, widths, listed)
+        : stacked(c, rows, widths, sidebar, listed);
+  const main = (c: number): Areas => withBots(columns(c), bots);
+  const areas = cols < COMPACT_WIDTH ? compact(cols, rows, changes, agents, bots) : changes ? withChanges(cols, rows, widths, main) : main(cols);
   if (!areas.compact) {
     return tabs ? withTabBar(areas) : areas;
   }
@@ -373,7 +390,7 @@ function withChanges(cols: number, rows: number, widths: Widths, main: (cols: nu
   return { ...main(x), changes: rect(x + 1, 0, w - 1, rows), changesBorder: rect(x, 0, Math.min(1, w), rows) };
 }
 
-function wide(cols: number, rows: number, widths: Widths, agents: boolean, bots: BotsShape | null): Areas {
+function wide(cols: number, rows: number, widths: Widths, agents: boolean): Areas {
   const { projects, workspaces } = fit(widths, cols);
   const columnsWidth = projects + workspaces;
   const pane = rect(columnsWidth + PANE_PADDING, 0, Math.max(1, cols - columnsWidth - PANE_PADDING), rows);
@@ -382,8 +399,7 @@ function wide(cols: number, rows: number, widths: Widths, agents: boolean, bots:
   const [projectsTitle, projectsList, separator, worktrees, more] = column(rect(0, HEADER_HEIGHT, projects - 1, sidebar.h), 1);
   const lists = rect(projectsTitle.x, projectsTitle.y, projectsTitle.w, Math.max(0, bottom(projectsList) - projectsTitle.y));
   const [rest, agentsAreas] = agentsSection(lists, widths, MIN_STACK_SECTION, agents);
-  const [restBots, botsAreas] = botsSection(rest, bots, MIN_STACK_SECTION);
-  const [title, list] = agents || bots ? section(restBots) : [projectsTitle, projectsList];
+  const [title, list] = agents ? section(rest) : [projectsTitle, projectsList];
   const wsColumn = rect(projects, 0, workspaces, rows);
   const [workspacesTitle, workspacesList, workspacesSeparator, issues, todo] = column(rect(projects, HEADER_HEIGHT, workspaces - 1, sidebar.h), 1);
   return {
@@ -418,7 +434,7 @@ function wide(cols: number, rows: number, widths: Widths, agents: boolean, bots:
     filesButton: filesButton(todo),
     tabBar: EMPTY,
     ...agentsAreas,
-    ...botsAreas,
+    ...NO_BOTS,
   };
 }
 
@@ -464,7 +480,7 @@ function section(r: Rect): [Rect, Rect] {
   return [rect(r.x, r.y, r.w, Math.min(1, r.h)), rect(r.x, r.y + 1 + GAP, r.w, Math.max(0, r.h - 1 - GAP))];
 }
 
-function oneColumn(cols: number, rows: number, widths: Widths, keep: number, agents: boolean, bots: BotsShape | null): [Areas, Rect] {
+function oneColumn(cols: number, rows: number, widths: Widths, keep: number, agents: boolean): [Areas, Rect] {
   const width = stackedWidth(widths, cols);
   const inner = width - 1;
   const footer = HEADER_HEIGHT + stackRoom(rows) + 1;
@@ -502,14 +518,12 @@ function oneColumn(cols: number, rows: number, widths: Widths, keep: number, age
     ...NO_BOTS,
     ...NO_AGENTS,
   };
-  const [above, agentsAreas] = agentsSection(rect(0, HEADER_HEIGHT, inner, footer - HEADER_HEIGHT), widths, keep, agents);
-  const [sections, botsAreas] = botsSection(above, bots, keep);
-  const wide = (r: Rect): Rect => (isEmpty(r) ? r : { ...r, w: width });
-  return [{ ...frame, ...agentsAreas, ...botsAreas, agents: agents ? { ...agentsAreas.agents, w: width } : EMPTY, bots: wide(botsAreas.bots) }, sections];
+  const [sections, agentsAreas] = agentsSection(rect(0, HEADER_HEIGHT, inner, footer - HEADER_HEIGHT), widths, keep, agents);
+  return [{ ...frame, ...agentsAreas, agents: agents ? { ...agentsAreas.agents, w: width } : EMPTY }, sections];
 }
 
-function stacked(cols: number, rows: number, widths: Widths, sidebar: Sidebar, agents: boolean, bots: BotsShape | null): Areas {
-  const [frame, sections] = oneColumn(cols, rows, widths, STACKED_KEEP, agents, bots);
+function stacked(cols: number, rows: number, widths: Widths, sidebar: Sidebar, agents: boolean): Areas {
+  const [frame, sections] = oneColumn(cols, rows, widths, STACKED_KEEP, agents);
   const room = Math.max(0, sections.h - 1);
   const topH = topRows(widths, room);
   const top = rect(0, sections.y, sections.w, topH);
@@ -530,13 +544,13 @@ function stacked(cols: number, rows: number, widths: Widths, sidebar: Sidebar, a
   };
 }
 
-function treeColumn(cols: number, rows: number, widths: Widths, agents: boolean, bots: BotsShape | null): Areas {
-  const [frame, sections] = oneColumn(cols, rows, widths, MIN_STACK_SECTION, agents, bots);
+function treeColumn(cols: number, rows: number, widths: Widths, agents: boolean): Areas {
+  const [frame, sections] = oneColumn(cols, rows, widths, MIN_STACK_SECTION, agents);
   const [title, list] = section(sections);
   return { ...frame, tree: true, sidebar: { ...sections, w: frame.sidebar.w }, title, list };
 }
 
-function compact(cols: number, rows: number, changes: boolean, agents: boolean, bots: boolean): Areas {
+function compact(cols: number, rows: number, changes: boolean, agents: boolean, bots: BotsShape | null): Areas {
   const pitch = COMPACT_PITCH;
   const bar = rect(0, 0, cols, pitch);
   const below = rect(0, pitch, cols, Math.max(0, rows - pitch));
@@ -551,9 +565,7 @@ function compact(cols: number, rows: number, changes: boolean, agents: boolean, 
   const agentsY = menu.y + pitch + GAP;
   const agentsWidth = Math.min(buttonWidth(AGENTS_LABEL) + 2, title.w);
   const shown = (r: Rect): Rect => (agents ? r : EMPTY);
-  const listed = (r: Rect): Rect => (bots ? r : EMPTY);
-  const botsWidth = Math.min(buttonWidth(BOTS_LABEL) + 2, title.w);
-  const botsAt = right(title) - botsWidth - (agents ? agentsWidth : 0);
+  const listed = (r: Rect): Rect => (bots?.offered ? r : EMPTY);
   return {
     compact: true,
     tree: false,
@@ -561,7 +573,7 @@ function compact(cols: number, rows: number, changes: boolean, agents: boolean, 
     bar,
     search: bar,
     searchButton: rect(cols - searchWidth, 0, searchWidth, pitch),
-    back: intersect(rect(0, title.y, '‹ Projects'.length + 2 + 2, pitch), title),
+    back: intersect(rect(0, title.y, BACK_LABEL.length + 2 + 2, pitch), title),
     sidebar: below,
     title,
     list: projectsList,
@@ -587,8 +599,7 @@ function compact(cols: number, rows: number, changes: boolean, agents: boolean, 
     bots: listed(below),
     botsTitle: listed(title),
     botsList: listed(rect(0, agentsY, cols, Math.max(1, bottom(menu) - agentsY))),
-    botsBorder: EMPTY,
-    botsButton: listed(rect(Math.max(0, botsAt), title.y, botsWidth, pitch)),
+    botsButton: listed(botsButton(title, bots?.marks ?? 0, COMPACT_BOTS_PAD, agents ? buttonWidth(AGENTS_LABEL) + 3 : 0)),
     changes: changes ? below : EMPTY,
     changesBorder: EMPTY,
     changesButton: rect(Math.max(0, cols - searchWidth - 3 * COMPACT_BUTTON_WIDTH), 0, Math.min(COMPACT_BUTTON_WIDTH, Math.max(0, cols - searchWidth - 2 * COMPACT_BUTTON_WIDTH)), pitch),

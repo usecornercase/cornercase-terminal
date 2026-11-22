@@ -18,9 +18,11 @@ fn typed(c: &mut Chat, text: &str) {
 }
 
 fn plus(c: &mut Chat) {
+    c.app.panels.bots.page = true;
     render(&mut c.app, AREA);
-    let title = c.app.layout(AREA).bots_title;
-    click(&mut c.app, Position::new(title.right() - 2, title.y));
+    let a = c.app.layout(AREA);
+    let new = ui::bots_new(a.bots_list, a.pitch, c.app.panels.bots.live.len(), 0);
+    click(&mut c.app, Position::new(new.x + 3, new.y));
 }
 
 fn drawn(app: &mut App) -> String {
@@ -28,7 +30,7 @@ fn drawn(app: &mut App) -> String {
 }
 
 #[test]
-fn the_plus_of_the_section_opens_the_form() {
+fn new_on_the_page_opens_the_form() {
     let mut c = chat(ANSWER);
     plus(&mut c);
     assert!(bot_form(&c.app).editing.is_none());

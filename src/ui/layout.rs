@@ -3,7 +3,7 @@ use ratatui::widgets::{Block, Borders};
 
 use super::activity;
 use super::agents_section::AGENTS_LABEL;
-use super::bots::BOTS_LABEL;
+use super::bots::{BOTS_LABEL, BOTS_SHORT};
 use super::chrome::{BACK_LABEL, TODO_LABEL};
 use super::files;
 use super::rows::GAP;
@@ -23,6 +23,10 @@ pub(crate) const COMPACT_BUTTON_WIDTH: u16 = 7;
 
 pub(super) const HEADER_HEIGHT: u16 = 2;
 
+pub(super) const PROJECTS_TITLE: &str = "Projects";
+
+const COMPACT_BOTS_PAD: u16 = 2;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Border {
     Projects,
@@ -41,18 +45,6 @@ pub(super) fn split_agents(r: Rect, widths: Widths, keep: u16) -> [Rect; 3] {
     let line = Rect { y: rest.bottom(), height: r.height.min(1), ..r };
     let agents = Rect { y: line.bottom(), height: rows, ..r };
     [rest, line, agents]
-}
-
-pub(super) fn split_bots(r: Rect, screen: Screen, pitch: u16, keep: u16) -> [Rect; 3] {
-    let content = if screen.bots_folded { 1 } else { 1 + 2 * GAP + screen.bots.saturating_mul(pitch) };
-    let cap = (r.height / 2).min(r.height.saturating_sub(1).saturating_sub(keep));
-    let rows = if screen.bots == 0 { 0 } else { content.min(cap) };
-    if rows == 0 {
-        return [r, Rect::default(), Rect::default()];
-    }
-    let rest = Rect { height: r.height - rows - 1, ..r };
-    let line = Rect { y: rest.bottom(), height: 1, ..r };
-    [rest, line, Rect { y: line.bottom(), height: rows, ..r }]
 }
 
 pub(super) fn stack_room(column: Rect, screen: Screen) -> Rect {
@@ -122,7 +114,6 @@ pub struct Areas {
     pub(crate) bots: Rect,
     pub(crate) bots_title: Rect,
     pub(crate) bots_list: Rect,
-    pub(crate) bots_line: Rect,
     pub(crate) bots_button: Rect,
     pub changes: Rect,
     pub(crate) changes_border: Rect,
@@ -230,9 +221,46 @@ impl Areas {
         if nav == Some(Nav::Bots) {
             agents
         } else {
-            Self { bots: hidden, bots_title: hidden, bots_list: hidden, bots_line: hidden, ..agents }
+            Self { bots: hidden, bots_title: hidden, bots_list: hidden, ..agents }
         }
     }
+
+    #[must_use]
+    fn with_bots(self, bots: BotsShape) -> Self {
+        if !bots.page {
+            let button = if bots.offered { bots_button(self.title, bots.marks, 0, 0) } else { Rect::default() };
+            return Self { bots_button: button, ..self };
+        }
+        let hidden = Rect::default();
+        let page = Rect { height: self.list.bottom().saturating_sub(self.title.y), ..self.title };
+        let back = Rect { width: button_width(BACK_LABEL).min(self.title.width), ..self.title };
+        Self {
+            bots: page,
+            bots_title: self.title,
+            bots_list: self.list,
+            back,
+            sidebar: hidden,
+            title: hidden,
+            list: hidden,
+            ..self
+        }
+    }
+}
+
+pub(super) fn bots_pad(compact: bool) -> u16 {
+    if compact { COMPACT_BOTS_PAD } else { 0 }
+}
+
+pub(super) fn projects_title_room(title: Rect, bots_button: Rect) -> u16 {
+    if bots_button.is_empty() { title.width } else { bots_button.x.saturating_sub(title.x).min(title.width) }
+}
+
+fn bots_button(title: Rect, marks: u16, pad: u16, taken: u16) -> Rect {
+    let room = title.width.saturating_sub(taken);
+    let beside = room.saturating_sub(button_width(PROJECTS_TITLE) - 1);
+    let (full, short) = (button_width(BOTS_LABEL) + pad, button_width(BOTS_SHORT) + pad);
+    let width = [full + marks, full, short].into_iter().find(|width| *width <= beside).unwrap_or(short).min(room);
+    Rect { x: title.right().saturating_sub(taken + width), width, ..title }
 }
 
 fn right_edge(r: Rect) -> Rect {
@@ -286,6 +314,13 @@ pub fn layout_with(area: Rect, widths: Widths, changes: bool, sidebar: Sidebar) 
     full_layout(area, widths, Screen { changes, sidebar, ..Screen::default() })
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct BotsShape {
+    pub(crate) offered: bool,
+    pub(crate) marks: u16,
+    pub(crate) page: bool,
+}
+
 #[expect(clippy::struct_excessive_bools, reason = "each flag is a setting or a state the layout follows")]
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct Screen {
@@ -295,8 +330,13 @@ pub(crate) struct Screen {
     pub(crate) icon_bar: bool,
     pub(crate) plugins: bool,
     pub(crate) machine: bool,
-    pub(crate) bots: u16,
-    pub(crate) bots_folded: bool,
+    pub(crate) bots: BotsShape,
+}
+
+impl Screen {
+    pub(crate) fn wide(self) -> Self {
+        Self { agents: self.agents && !self.bots.page, ..self }
+    }
 }
 
 pub(crate) fn full_layout(area: Rect, widths: Widths, screen: Screen) -> Areas {
@@ -304,14 +344,15 @@ pub(crate) fn full_layout(area: Rect, widths: Widths, screen: Screen) -> Areas {
     if area.width < COMPACT_WIDTH {
         return compact_layout(area, screen);
     }
+    let wide = screen.wide();
     let columns = |r: Rect| {
         let (activity, rest) = activity_split(r, icons);
         let areas = match sidebar {
-            Sidebar::SideBySide => wide_layout(rest, widths, screen),
-            Sidebar::Tree => tree_layout(rest, widths, screen),
-            Sidebar::ProjectsOnTop | Sidebar::WorkspacesOnTop => stacked_layout(rest, widths, screen),
+            Sidebar::SideBySide => wide_layout(rest, widths, wide),
+            Sidebar::Tree => tree_layout(rest, widths, wide),
+            Sidebar::ProjectsOnTop | Sidebar::WorkspacesOnTop => stacked_layout(rest, widths, wide),
         };
-        Areas { activity, ..areas }
+        Areas { activity, ..areas }.with_bots(screen.bots)
     };
     if !changes {
         return columns(area);
@@ -345,30 +386,6 @@ fn agents_section(r: Rect, widths: Widths, keep: u16, agents: bool) -> (Rect, Ar
     (rest, areas)
 }
 
-fn bots_section(r: Rect, screen: Screen, pitch: u16, keep: u16) -> (Rect, Areas) {
-    let [rest, line, section_rect] = split_bots(r, screen, pitch, keep);
-    if section_rect.is_empty() {
-        return (r, Areas::default());
-    }
-    let [bots_title, bots_list] = section(section_rect);
-    let areas = Areas { bots: section_rect, bots_title, bots_list, bots_line: line, ..Areas::default() };
-    (rest, areas)
-}
-
-fn bots_over(base: &Areas, bots: &Areas, wide: Option<Rect>) -> Areas {
-    let stretch = |r: Rect| match wide {
-        Some(column) if !r.is_empty() => Rect { x: column.x, width: column.width, ..r },
-        _ => r,
-    };
-    Areas {
-        bots: stretch(bots.bots),
-        bots_title: bots.bots_title,
-        bots_list: bots.bots_list,
-        bots_line: bots.bots_line,
-        ..*base
-    }
-}
-
 fn wide_columns(area: Rect, projects: u16, workspaces: u16) -> [Rect; 4] {
     let [columns, _, pane] = Layout::horizontal([
         Constraint::Length(projects + workspaces),
@@ -391,8 +408,7 @@ fn wide_layout(area: Rect, widths: Widths, screen: Screen) -> Areas {
         projects_column(sidebar_block().inner(sidebar), screen);
     let lists = Rect { height: list.bottom().saturating_sub(title.y), ..title };
     let (lists, agents_areas) = agents_section(lists, widths, MIN_STACK_SECTION, agents);
-    let (lists, bots_areas) = bots_section(lists, screen, 1, MIN_STACK_SECTION);
-    let [title, list] = if agents || screen.bots > 0 { section(lists) } else { [title, list] };
+    let [title, list] = if agents { section(lists) } else { [title, list] };
     let [workspaces_title, workspaces_list, workspaces_separator, issues, todo] =
         workspaces_column(below_header(sidebar_block().inner(workspaces)), screen);
     Areas {
@@ -418,7 +434,7 @@ fn wide_layout(area: Rect, widths: Widths, screen: Screen) -> Areas {
         workspaces_border: right_edge(workspaces),
         todo_button: changes_button(todo, TODO_LABEL),
         files_button: files_button(todo),
-        ..bots_over(&agents_areas, &bots_areas, None)
+        ..agents_areas
     }
 }
 
@@ -464,8 +480,6 @@ fn one_column(area: Rect, widths: Widths, keep: u16, screen: Screen) -> (Areas, 
         ..Areas::default()
     };
     let (sections, section) = agents_section(Rect { height: footer_y - room.y, ..room }, widths, keep, screen.agents);
-    let (sections, bots) = bots_section(sections, screen, 1, keep);
-    let frame = bots_over(&frame, &bots, Some(column));
     let frame = Areas {
         agents: Rect { x: column.x, width: column.width, ..section.agents },
         agents_title: section.agents_title,
@@ -546,9 +560,8 @@ fn compact_bots(menu: Rect, title: Rect, screen: Screen) -> [Rect; 4] {
     let [bots_title, _, bots_list] =
         Layout::vertical([Constraint::Length(COMPACT_PITCH), Constraint::Length(GAP), Constraint::Min(1)]).areas(menu);
     let taken = if screen.agents { button_width(AGENTS_LABEL) + 3 } else { 0 };
-    let width = (button_width(BOTS_LABEL) + 2).min(title.width);
-    let button = Rect { x: title.right().saturating_sub(taken + width), width, ..title };
-    let shown = |r: Rect| if screen.bots > 0 { r } else { Rect::default() };
+    let button = bots_button(title, screen.bots.marks, COMPACT_BOTS_PAD, taken);
+    let shown = |r: Rect| if screen.bots.offered { r } else { Rect::default() };
     [shown(menu), shown(bots_title), shown(bots_list), shown(button)]
 }
 

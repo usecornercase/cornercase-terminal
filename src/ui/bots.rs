@@ -2,26 +2,28 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
+use ratatui::widgets::{Block, Paragraph};
 
 use super::View;
-use super::chrome::draw_back;
-use super::layout::Areas;
-use super::rows::{Rows, Tags, arrow, draw_hidden, draw_menu_in, draw_rail, marker, row_menu_button};
+use super::chrome::{BACK_LABEL, draw_back};
+use super::layout::{Areas, bots_pad};
+use super::rows::{Rows, Tags, draw_hidden, draw_menu_in, draw_rail, marker, row_menu_button};
+use super::sidebar::draw_new_project;
 use super::theme::{BRAND_COLOR, WAITING_COLOR, status_icon};
-use super::widgets::{button_style, draw_band, draw_button, draw_separator, middle};
+use super::widgets::{button_style, button_width, draw_band, draw_button, draw_title, middle, sidebar_hovered};
 use crate::agents::activity::Status;
 
 pub(crate) mod agent;
 pub(crate) mod card;
 pub(crate) mod chat;
+pub(crate) mod lobby;
 pub(crate) mod run;
 
 pub(crate) const BOTS_LABEL: &str = "Bots ›";
 
-const TITLE: &str = "Bots";
+pub(super) const BOTS_SHORT: &str = "Bots";
 
-const NEW_WIDTH: u16 = 3;
+const TITLE: &str = "Bots";
 
 const MIN_NAME_WIDTH: usize = 4;
 
@@ -42,24 +44,44 @@ pub(crate) struct BotEntry {
 pub(crate) struct BotsView {
     pub(crate) entries: Vec<BotEntry>,
     pub(crate) scroll: usize,
-    pub(crate) folded: bool,
+    pub(crate) page: bool,
+}
+
+impl BotsView {
+    fn thinking(&self) -> bool {
+        self.entries.iter().any(|entry| entry.thinking)
+    }
+
+    fn unread(&self) -> usize {
+        self.entries.iter().map(|entry| entry.unread).sum()
+    }
+
+    pub(super) fn marks(&self) -> u16 {
+        marks_width(self.thinking(), self.unread())
+    }
+
+    pub(super) fn lobby(&self) -> lobby::Lobby {
+        if self.entries.is_empty() { lobby::Lobby::Empty } else { lobby::Lobby::Pick }
+    }
 }
 
 pub(crate) fn bot_rows(list: Rect, pitch: u16, count: usize, scroll: usize) -> Rows {
-    Rows { list, heights: vec![pitch.max(1); count], button: 0, scroll }
+    Rows { list, heights: vec![pitch.max(1); count], button: pitch.max(1), scroll }
 }
 
-pub(crate) fn bots_new(title: Rect) -> Rect {
-    let width = NEW_WIDTH.min(title.width);
-    Rect { x: title.right() - width, width, ..title }
-}
-
-pub(crate) fn bots_fold(title: Rect) -> Rect {
-    Rect { width: title.width.saturating_sub(NEW_WIDTH), ..title }
+#[cfg(test)]
+pub(crate) fn bots_new(list: Rect, pitch: u16, count: usize, scroll: usize) -> Rect {
+    bot_rows(list, pitch, count, scroll).button()
 }
 
 pub(crate) fn bot_menu(row: Rect, pitch: u16) -> Rect {
     row_menu_button(row, pitch)
+}
+
+pub(crate) fn marks_width(thinking: bool, unread: usize) -> u16 {
+    let spin = if thinking { 2 } else { 0 };
+    let count = if unread == 0 { 0 } else { unread_text(unread).chars().count() + 1 };
+    spin + u16::try_from(count).unwrap_or(u16::MAX)
 }
 
 fn unread_text(count: usize) -> String {
@@ -71,20 +93,13 @@ fn unread_span(count: usize) -> Span<'static> {
 }
 
 pub(super) fn draw_bots(f: &mut Frame, view: &View, bots: &BotsView, areas: &Areas) {
+    if !areas.bots_button.is_empty() {
+        draw_bots_button(f, view, bots, (areas.bots_button, areas.compact()));
+    }
     if areas.bots.is_empty() {
-        draw_bots_button(f, view, areas);
         return;
     }
-    if areas.compact() {
-        draw_back(f, view, areas, TITLE);
-        draw_new(f, view, areas.bots_title);
-    } else {
-        draw_separator(f, view.line(), areas.bots_line);
-        draw_title_row(f, view, bots, areas.bots_title);
-    }
-    if bots.folded && !areas.compact() {
-        return;
-    }
+    draw_header(f, view, areas);
     let rows = bot_rows(areas.bots_list, areas.pitch, bots.entries.len(), bots.scroll);
     for (i, entry) in bots.entries.iter().enumerate() {
         let r = rows.item(i);
@@ -94,44 +109,40 @@ pub(super) fn draw_bots(f: &mut Frame, view: &View, bots: &BotsView, areas: &Are
     }
     let indices: Vec<usize> = (0..bots.entries.len()).collect();
     draw_hidden(f, view.muted, &rows, &indices, |_| true);
+    draw_new_project(f, view, rows.button());
 }
 
-fn draw_title_row(f: &mut Frame, view: &View, bots: &BotsView, title: Rect) {
-    let muted = Style::default().fg(view.muted).add_modifier(Modifier::BOLD);
-    let mut spans = vec![Span::raw(" "), arrow(view.muted, bots.folded), Span::styled(TITLE, muted)];
-    let new = bots_new(title);
-    let tags = if bots.folded { folded_tags(view, bots) } else { Vec::new() };
-    let room = usize::from(title.width.saturating_sub(new.width));
-    let used: usize = spans.iter().map(Span::width).sum();
-    let tags = Tags::fit(tags, room.saturating_sub(used));
-    tags.push_onto(&mut spans, used, room);
-    f.render_widget(Paragraph::new(Line::from(spans)), middle(title));
-    draw_new(f, view, title);
-}
-
-fn draw_new(f: &mut Frame, view: &View, title: Rect) {
-    let new = bots_new(title);
-    let style = button_style(view, new, Style::default().fg(Color::Cyan), Color::Cyan);
-    draw_button(f, new, "", "+", style);
-}
-
-fn draw_bots_button(f: &mut Frame, view: &View, areas: &Areas) {
-    if !areas.bots_button.is_empty() {
-        let style = button_style(view, areas.bots_button, Style::default().fg(Color::Cyan), Color::Cyan);
-        draw_button(f, areas.bots_button, "", BOTS_LABEL, style);
+fn draw_header(f: &mut Frame, view: &View, areas: &Areas) {
+    if areas.compact() {
+        draw_back(f, view, areas, TITLE);
+        return;
     }
+    let back = areas.back;
+    draw_button(f, back, "", BACK_LABEL, button_style(view, back, Style::default().fg(Color::Cyan), Color::Cyan));
+    let rest = Rect { x: back.right(), width: areas.bots_title.right().saturating_sub(back.right()), ..back };
+    draw_title(f, view.muted, rest, TITLE);
 }
 
-fn folded_tags(view: &View, bots: &BotsView) -> Vec<Span<'static>> {
-    let mut tags = Vec::new();
-    if bots.entries.iter().any(|entry| entry.thinking) {
-        tags.push(status_icon(view.muted, Status::Working, view.spin));
+fn draw_bots_button(f: &mut Frame, view: &View, bots: &BotsView, (r, compact): (Rect, bool)) {
+    let hovered = sidebar_hovered(view, r);
+    let style = button_style(view, r, Style::default().fg(Color::Cyan), Color::Cyan);
+    if hovered && r.height > 1 {
+        f.render_widget(Block::new().style(style), r);
     }
-    let unread: usize = bots.entries.iter().map(|entry| entry.unread).sum();
-    if unread > 0 {
-        tags.push(unread_span(unread));
+    let lit = |span: Span<'static>| if hovered { Span::styled(span.content, style) } else { span };
+    let mut spans = vec![Span::styled(" ", style)];
+    let full = button_width(BOTS_LABEL) + bots_pad(compact);
+    if r.width >= full + bots.marks() {
+        if bots.thinking() {
+            spans.extend([lit(status_icon(view.muted, Status::Working, view.spin)), Span::styled(" ", style)]);
+        }
+        if bots.unread() > 0 {
+            spans.extend([lit(unread_span(bots.unread())), Span::styled(" ", style)]);
+        }
     }
-    tags
+    let label = if r.width >= full { BOTS_LABEL } else { BOTS_SHORT };
+    spans.push(Span::styled(format!("{label} "), style));
+    f.render_widget(Paragraph::new(Line::from(spans)), middle(r));
 }
 
 fn name_room(entry: &BotEntry, room: usize) -> usize {

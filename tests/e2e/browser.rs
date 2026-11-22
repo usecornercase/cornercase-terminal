@@ -100,8 +100,7 @@ fn a_paired_browser_types_into_a_bots_chat() {
     std::fs::write(session.dir.join("config.json"), config.to_string()).expect("config");
     let mut ui = window_on(&session, &path);
     session.says(&["bot", "new", "prs", "--agent", "claude"]);
-    ui.wait_for("the section lists the bot", |s| s.contains("Bots"));
-    ui.click(ui.position_of("prs"));
+    bots::open_the_bots(&mut ui);
     ui.wait_for("its chat shows", |s| s.contains("Message prs…"));
 
     let token = open_the_pairing_dialog(&mut ui);

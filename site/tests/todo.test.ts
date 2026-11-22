@@ -55,7 +55,6 @@ for (const [columns, dot, plain] of [
 
 test('the send button of a pending TODO picks an agent and sends the text', () => {
   const app = demo(140);
-  app.bots.folded = false;
   app.todo.add('fix the empty address');
   app.toggleTodo();
   app.todo.open = true;

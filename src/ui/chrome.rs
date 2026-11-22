@@ -289,6 +289,9 @@ fn breadcrumb(view: &View, room: usize) -> Vec<Span<'static>> {
     if let Some(chat) = &view.chat {
         return bot_breadcrumb(view, &chat.name, room);
     }
+    if view.lobby().is_some() {
+        return vec![Span::styled("Bots", Style::default().fg(Color::Reset).add_modifier(Modifier::BOLD))];
+    }
     let Some(project) = view.shown_project().and_then(|p| view.projects.get(p)) else {
         return wordmark();
     };

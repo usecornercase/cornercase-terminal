@@ -12,9 +12,10 @@ use super::rows::{
     Band, GAP, RowButton, Rows, arrow, draw_hidden, draw_landing, draw_rail, marker, row_button, row_rect,
 };
 use super::sidebar::{
-    NEW_BUTTON, SidebarRow, draw_group, draw_new_project, draw_project_band, machine_rows, sidebar_rows,
+    NEW_BUTTON, SidebarRow, draw_group, draw_new_project, draw_project_band, draw_projects_title, machine_rows,
+    sidebar_rows,
 };
-use super::widgets::{button_style, draw_button, draw_title};
+use super::widgets::{button_style, draw_button};
 use super::workspaces::{
     Badge, Guide, Tag, WorkspaceEntry, WorkspaceLine, draw_guide, draw_tab_band, draw_workspace_band, tag_badge,
 };
@@ -329,7 +330,7 @@ impl TreePaint<'_> {
 }
 
 pub(super) fn draw_tree(f: &mut Frame, view: &View, areas: &Areas) {
-    draw_title(f, view.muted, areas.title, "Projects");
+    draw_projects_title(f, view, areas);
     let Some(tree) = &view.tree else { return };
     let shape = &tree.shape;
     let rows = tree_rows(shape);

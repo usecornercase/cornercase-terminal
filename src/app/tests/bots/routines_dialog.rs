@@ -7,8 +7,7 @@ use crate::queue::{State, Task};
 
 fn show(c: &mut Chat) {
     c.app.window_attached();
-    let a = c.app.layout(AREA);
-    let row = ui::bot_rows(a.bots_list, a.pitch, 1, 0).item(0);
+    let row = bot_row(&mut c.app, 0);
     render(&mut c.app, AREA);
     click(&mut c.app, Position::new(row.x + 3, row.y));
 }
@@ -86,8 +85,7 @@ fn routines_in_the_menu_and_a_routine_on_the_card_open_it_too() {
     scheduled(&mut c, reminder(crate::time::now() + 3_600));
     let id = scheduled(&mut c, bot_routine(later(), "2h"));
     render(&mut c.app, AREA);
-    let a = c.app.layout(AREA);
-    let row = ui::bot_rows(a.bots_list, a.pitch, 1, 0).item(0);
+    let row = bot_row(&mut c.app, 0);
     right_click(&mut c.app, Position::new(row.x + 3, row.y));
     pick(&mut c.app, "routines…");
     assert!(matches!(&c.app.overlay, Some(Overlay::BotRoutines(dialog)) if dialog.list.selected.is_some()));

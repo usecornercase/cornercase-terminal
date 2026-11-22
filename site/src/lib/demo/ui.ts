@@ -1,6 +1,7 @@
 import { drawBotForm, botFormBounds } from './botform';
 import { botRoutinesBounds, drawBotRoutines } from './botroutines';
-import { drawBotsSection, drawCard, drawChat } from './botchat';
+import { drawBots, drawCard, drawChat } from './botchat';
+import { drawLobby } from './lobby';
 import { drawQueueForm, queueBounds } from './queue';
 import type { QueueListDialog } from './queuelist';
 import { counting, factor, duration, ramp, rows as statRows } from '../stats/model';
@@ -85,6 +86,8 @@ import {
   TODO_LABEL,
   FILES_LABEL,
   todoWithDot,
+  PROJECTS_TITLE,
+  projectsTitleRoom,
 } from './layout';
 import { USAGE, STATS, type UsageWindow } from './data';
 import { render as markdown } from './markdown';
@@ -370,10 +373,10 @@ export class Painter {
       this.borders(areas);
       this.searchBar(areas.search);
     }
-    if (areas.tree) this.tree(areas);
+    if (areas.tree && !isEmpty(areas.sidebar)) this.tree(areas);
     else if (!isEmpty(areas.sidebar)) this.sidebar(areas);
     if (app.config.agentsSection) this.agents(areas);
-    drawBotsSection(this, areas);
+    drawBots(this, areas);
     if ([areas.separator, areas.worktrees, areas.moreSeparator, areas.more].some((r) => !isEmpty(r))) this.footer(areas);
     if (!isEmpty(areas.workspaces)) this.workspaces(areas);
     if (app.project() && [areas.workspacesSeparator, areas.issues].some((r) => !isEmpty(r))) this.issuesRow(areas);
@@ -414,8 +417,11 @@ export class Painter {
     const app = this.app;
     const tab = app.tab();
     const bot = app.bots.current();
+    const lobby = app.bots.lobby();
     if (bot) drawChat(this, areas.pane, bot, areas.pitch);
-    else if (tab) this.tab(tab, areas.pane);
+    else if (lobby) {
+      if (!areas.compact || !app.nav) drawLobby(this, areas.pane, lobby);
+    } else if (tab) this.tab(tab, areas.pane);
     else if (app.project()) this.noTab(areas.pane);
     else if (!app.projects.length) this.welcome(areas.pane);
   }
@@ -671,6 +677,7 @@ export class Painter {
     const app = this.app;
     const bot = app.bots.current();
     if (bot) return [seg('Bots', { fg: DEFAULT, add: BOLD }), seg(` › ${truncateRight(bot.name, Math.max(0, room - 7))}`, { fg: 7 })];
+    if (app.bots.lobby()) return [seg('Bots', { fg: DEFAULT, add: BOLD })];
     const p = app.project();
     if (!p) return wordmark();
     const w = p.workspaces[p.active];
@@ -683,6 +690,11 @@ export class Painter {
 
   title(r: Rect, text: string): void {
     this.line(middle(r), [seg(` ${text}`, { fg: 8, add: BOLD })]);
+  }
+
+  private projectsTitle(areas: Areas): void {
+    const room = projectsTitleRoom(areas.title, areas.botsButton);
+    this.title(rect(areas.title.x, areas.title.y, room, areas.title.h), truncateRight(PROJECTS_TITLE, Math.max(0, room - 1)));
   }
 
   more<R>(list: Rect, rows: Rows, specs: R[], named: (r: R) => boolean): void {
@@ -846,7 +858,7 @@ export class Painter {
 
   private sidebar(areas: Areas): void {
     const app = this.app;
-    this.title(areas.title, 'Projects');
+    this.projectsTitle(areas);
     const all = app.sidebarRows();
     const base = sidebarLayout(areas.list, areas.pitch, all, app.projectsScroll);
     const drag = app.rowDragView();
@@ -879,7 +891,7 @@ export class Painter {
 
   private tree(areas: Areas): void {
     const app = this.app;
-    this.title(areas.title, 'Projects');
+    this.projectsTitle(areas);
     const shape = app.treeShape();
     const base = treeLayout(areas.list, shape, treeRows(shape), app.projectsScroll);
     const drag = app.rowDragView();
@@ -1002,7 +1014,7 @@ export class Painter {
   back(areas: Areas, name: string): void {
     const style = this.buttonStyle(areas.back, CYAN, 6);
     this.button(areas.back, '', '‹ Projects', style);
-    this.region({ r: areas.back, click: () => this.app.navTo('projects'), cursor: 'pointer' });
+    this.region({ r: areas.back, click: () => this.app.pressBack(), cursor: 'pointer' });
     const restX = right(areas.back);
     const m = middle(areas.back);
     this.span(restX, m.y, ` ${truncateRight(name, Math.max(0, right(areas.bar) - restX - 1))}`, { fg: 8, add: BOLD });
@@ -1036,6 +1048,7 @@ export class Painter {
   private workspaces(areas: Areas): void {
     const app = this.app;
     if (app.bots.current() && !areas.compact) return drawCard(this, areas);
+    if (app.bots.page && !areas.compact) return;
     if (isEmpty(areas.back)) this.title(areas.workspacesTitle, 'Workspaces');
     else this.back(areas, app.project() ? projectLabel(app.project()!) : '');
     const p = app.project();

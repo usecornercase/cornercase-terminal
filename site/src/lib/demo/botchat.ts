@@ -1,7 +1,7 @@
 import { BOLD, type Rect, type Style, rect } from '../term/grid';
 import { DEFAULT } from '../term/palette';
 import { type Bot, EXAMPLES, type ChatLine, age, clock, details, shortClock, summary } from './bots';
-import { type Areas, BOTS_LABEL, Rows, bottom, buttonWidth, closeButton, isEmpty, menuButton, right } from './layout';
+import { type Areas, BACK_LABEL, BOTS_LABEL, BOTS_SHORT, Rows, botsPad, bottom, buttonWidth, closeButton, isEmpty, marksWidth, menuButton, right } from './layout';
 import { render as markdown } from './markdown';
 import { type Line, seg, truncateRight, width } from './text';
 import { drawSelection, fieldLines, fieldPosition, placeIn } from './todo';
@@ -18,6 +18,7 @@ const NAME_ROOM = 12;
 const MAX_INPUT = 6;
 const FOLD = 3;
 const MENU_LEFT_OUT = 'this needs cornercase on your computer: the demo has no bot menu';
+const NEW_BUTTON = '+ New';
 
 interface Act {
   x: number;
@@ -95,48 +96,43 @@ function drawRow(p: Painter, r: Rect, bot: Bot, active: boolean): void {
   p.region({ r: menu, click: side, right: side, cursor: 'pointer' });
 }
 
-function foldedTags(p: Painter): Line {
-  const bots = p.app.bots;
-  const out: Line = [];
-  if (bots.thinking()) out.push(seg(spin(p), { fg: 3 }), seg(' '));
-  if (bots.unread()) out.push(seg(`●${bots.unread()}`, CYAN), seg(' '));
-  return out;
-}
+const middleOf = (r: Rect): Rect => rect(r.x, r.y + Math.floor(Math.max(0, r.h - 1) / 2), r.w, Math.min(r.h, 1));
 
-function sectionTitle(p: Painter, areas: Areas): void {
+function drawBotsButton(p: Painter, b: Rect): void {
   const app = p.app;
   const bots = app.bots;
-  const t = areas.botsTitle;
-  const compact = areas.compact;
-  const plus = compact ? rect(right(t) - 5, t.y, 5, t.h) : rect(right(t) - 3, t.y, 3, 1);
-  if (compact) p.back(areas, 'Bots');
-  else {
-    p.line(t, [seg(bots.folded ? ' ▸ ' : ' ▾ ', DARK), seg('Bots', { fg: 8, add: BOLD })]);
-    const tags = bots.folded ? foldedTags(p) : [];
-    if (tags.length) p.line(rect(plus.x - width(tags) - 1, t.y, width(tags), 1), tags);
-    p.region({ r: t, click: () => bots.toggleFold(), cursor: 'pointer' });
+  const style = p.buttonStyle(b, CYAN, 6);
+  const lit = p.sidebarHovered(b);
+  if (lit && b.h > 1) p.g.fill(b, style);
+  const marked = (text: string, own: Style): Line => [seg(text, lit ? style : own), seg(' ', style)];
+  const line: Line = [seg(' ', style)];
+  const full = buttonWidth(BOTS_LABEL) + botsPad(app.areas().compact);
+  if (b.w >= full + marksWidth(bots.thinking(), bots.unread())) {
+    if (bots.thinking()) line.push(...marked(spin(p), { fg: 3 }));
+    if (bots.unread()) line.push(...marked(`●${bots.unread() > 9 ? '9+' : bots.unread()}`, CYAN));
   }
-  p.button(plus, '', '+', p.buttonStyle(plus, CYAN, 6));
-  p.region({ r: plus, click: () => app.openBotForm(), cursor: 'pointer' });
+  line.push(seg(`${b.w >= full ? BOTS_LABEL : BOTS_SHORT} `, style));
+  p.line(middleOf(b), line);
+  p.region({ r: b, click: () => app.openBots(), cursor: 'pointer' });
 }
 
-export function drawBotsSection(p: Painter, areas: Areas): void {
+function pageTitle(p: Painter, areas: Areas): void {
+  if (areas.compact) return p.back(areas, 'Bots');
+  const back = areas.back;
+  p.button(back, '', BACK_LABEL, p.buttonStyle(back, CYAN, 6));
+  p.region({ r: back, click: () => p.app.pressBack(), cursor: 'pointer' });
+  p.title(rect(right(back), back.y, Math.max(0, right(areas.botsTitle) - right(back)), back.h), 'Bots');
+}
+
+export function drawBots(p: Painter, areas: Areas): void {
   const app = p.app;
   const bots = app.bots;
-  if (!bots.list.length) return;
-  if (isEmpty(areas.bots)) {
-    const b = areas.botsButton;
-    if (isEmpty(b)) return;
-    p.button(b, '', BOTS_LABEL, p.buttonStyle(b, CYAN, 6));
-    p.region({ r: b, click: () => app.navTo('bots'), cursor: 'pointer' });
-    return;
-  }
-  const line = areas.botsBorder;
-  if (!isEmpty(line)) p.line(line, [seg(` ${'─'.repeat(Math.max(0, line.w - 2))}`, { fg: p.lineColour })]);
-  sectionTitle(p, areas);
+  if (!isEmpty(areas.botsButton)) drawBotsButton(p, areas.botsButton);
+  if (isEmpty(areas.bots)) return;
+  pageTitle(p, areas);
   const list = areas.botsList;
-  if (isEmpty(list) || (bots.folded && !areas.compact)) return;
-  const rows = new Rows(list, Array<number>(bots.list.length).fill(areas.pitch), 0, bots.scroll);
+  if (isEmpty(list)) return;
+  const rows = new Rows(list, Array<number>(bots.list.length).fill(areas.pitch), areas.pitch, bots.scroll);
   p.region({
     r: list,
     wheel: (dy) => {
@@ -152,6 +148,10 @@ export function drawBotsSection(p: Painter, areas: Areas): void {
     if (!isEmpty(r)) drawRow(p, r, bot, bot.id === bots.shown);
   });
   p.more(list, rows, bots.list, () => true);
+  const add = rows.buttonRect();
+  p.g.clear(add);
+  p.button(add, ' ', NEW_BUTTON, p.buttonStyle(add, CYAN, 6));
+  p.region({ r: add, click: () => app.openBotForm(), cursor: 'pointer' });
 }
 
 function youRows(p: Painter, bot: Bot, l: ChatLine, w: number): Row[] {

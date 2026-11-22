@@ -161,7 +161,7 @@ impl App {
     }
 
     pub(super) fn tab_view(&mut self, area: Rect) -> Option<ui::TabView> {
-        if self.shown_remote().is_some() || self.bot_shown() {
+        if self.shown_remote().is_some() || self.bots_page() {
             return None;
         }
         let dragging = self.screen.drag.as_ref().and_then(Drag::divider);
