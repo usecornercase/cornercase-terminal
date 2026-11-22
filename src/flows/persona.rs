@@ -15,6 +15,7 @@ pub(crate) const MAX_ID: usize = 64;
 pub(crate) const MAX_IMPORT: usize = 500;
 const FENCE: &str = "---";
 const FALLBACK: &str = "persona";
+const UNREAD: &str = "cannot read";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct Persona {
@@ -50,6 +51,9 @@ fn names_a_device(id: &str) -> bool {
 
 pub(crate) fn id_of(file: &str, name: &str) -> String {
     let stem = Path::new(file).file_stem().and_then(|stem| stem.to_str()).unwrap_or_default();
+    if valid_id(stem) {
+        return stem.to_string();
+    }
     [stem, name].into_iter().map(|text| slug(text, MAX_ID)).find(|id| valid_id(id)).unwrap_or(FALLBACK.into())
 }
 
@@ -244,9 +248,9 @@ fn read_file(id: &str, path: &Path) -> std::result::Result<Persona, String> {
 
 pub(crate) fn read_text(path: &Path) -> std::result::Result<String, String> {
     let shown = path.display();
-    let file = std::fs::File::open(path).map_err(|e| format!("cannot read {shown}: {e}"))?;
+    let file = std::fs::File::open(path).map_err(|e| format!("{UNREAD} {shown}: {e}"))?;
     let mut bytes = Vec::new();
-    file.take(MAX_BYTES as u64 + 1).read_to_end(&mut bytes).map_err(|e| format!("cannot read {shown}: {e}"))?;
+    file.take(MAX_BYTES as u64 + 1).read_to_end(&mut bytes).map_err(|e| format!("{UNREAD} {shown}: {e}"))?;
     if bytes.len() > MAX_BYTES {
         return Err(too_long(&shown.to_string()));
     }

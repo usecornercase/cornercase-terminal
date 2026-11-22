@@ -112,6 +112,35 @@ mod on_disk {
 
         assert!(error.starts_with("no personas in "), "{error}");
     }
+
+    #[test]
+    fn a_folder_with_a_file_too_long_or_not_text_skips_it() {
+        let dir = TempDir::new();
+        std::fs::write(dir.path().join("reviewer.md"), REVIEWER).expect("write");
+        std::fs::write(dir.path().join("big.md"), "a".repeat(MAX_BYTES + 1)).expect("write");
+        std::fs::write(dir.path().join("binary.md"), [0xff, 0xfe, 0x00]).expect("write");
+
+        let gathered = gather(&Source::Folder(dir.path().to_path_buf()), &Hosts::from_env()).expect("gathered");
+
+        assert_eq!((gathered.found.len(), gathered.skipped), (1, 2));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_folder_with_a_persona_it_cannot_read_imports_nothing_and_names_it() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir = TempDir::new();
+        std::fs::write(dir.path().join("reviewer.md"), REVIEWER).expect("write");
+        let locked = dir.path().join("tester.md");
+        std::fs::write(&locked, TESTER).expect("write");
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o000)).expect("lock");
+
+        let error = gather(&Source::Folder(dir.path().to_path_buf()), &Hosts::from_env());
+
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o644)).expect("unlock");
+        let error = error.expect_err("refused");
+        assert!(error.contains("cannot read") && error.contains("tester.md"), "{error}");
+    }
 }
 
 mod from_the_web {

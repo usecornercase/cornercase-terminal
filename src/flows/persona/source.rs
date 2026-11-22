@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use flate2::read::GzDecoder;
 
-use super::{EXTENSION, MAX_BYTES, MAX_IMPORT, is_persona, read_text, too_long};
+use super::{EXTENSION, MAX_BYTES, MAX_IMPORT, UNREAD, is_persona, read_text, too_long};
 use crate::http::{self, Service};
 
 pub(crate) const RAW_URL: &str = "https://raw.githubusercontent.com";
@@ -230,14 +230,16 @@ fn walk(root: &Path) -> Result<Tree, String> {
     let mut pending = vec![(root.to_path_buf(), String::new(), 0usize)];
     let mut seen = 0;
     while let Some((folder, prefix, depth)) = pending.pop() {
-        let entries = std::fs::read_dir(&folder).map_err(|e| format!("cannot read {}: {e}", folder.display()))?;
-        for entry in entries.flatten() {
+        let unread = |e: std::io::Error| format!("cannot read {}: {e}", folder.display());
+        let entries = std::fs::read_dir(&folder).map_err(unread)?;
+        for entry in entries {
+            let entry = entry.map_err(unread)?;
             seen += 1;
             if seen > MAX_ENTRIES {
                 return Err(format!("{} holds more than {MAX_ENTRIES} files", root.display()));
             }
             let name = entry.file_name().to_string_lossy().into_owned();
-            let Ok(kind) = entry.file_type() else { continue };
+            let kind = entry.file_type().map_err(|e| format!("cannot read {}: {e}", entry.path().display()))?;
             let relative = format!("{prefix}{name}");
             if kind.is_dir() && !name.starts_with('.') && depth < MAX_DEPTH {
                 pending.push((entry.path(), format!("{relative}/"), depth + 1));
@@ -250,11 +252,14 @@ fn walk(root: &Path) -> Result<Tree, String> {
 }
 
 fn tree_file(tree: &mut Tree, path: &Path, relative: String) -> Result<(), String> {
-    if let Ok(text) = read_text(path) {
-        return tree.add(relative, text.into_bytes(), absolute(path));
+    match read_text(path) {
+        Ok(text) => tree.add(relative, text.into_bytes(), absolute(path)),
+        Err(e) if e.starts_with(UNREAD) => Err(e),
+        Err(_) => {
+            tree.skipped += 1;
+            Ok(())
+        }
     }
-    tree.skipped += 1;
-    Ok(())
 }
 
 fn archive(hosts: &Hosts, repo: &str, path: &str) -> Result<Tree, String> {

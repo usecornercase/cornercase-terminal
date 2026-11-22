@@ -98,6 +98,7 @@ mod ids {
     #[case::from_the_name("", "Code Reviewer", "code-reviewer")]
     #[case::fallback("", "👁️", "persona")]
     #[case::past_a_device("nul.md", "Null Persona", "null-persona")]
+    #[case::an_id_kept_as_it_is("code--reviewer.md", "Code Reviewer", "code--reviewer")]
     fn come_from_the_file_name_then_the_name(#[case] file: &str, #[case] name: &str, #[case] id: &str) {
         assert_eq!(id_of(file, name), id);
     }
