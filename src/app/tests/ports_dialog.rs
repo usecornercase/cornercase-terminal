@@ -22,6 +22,7 @@ fn port(pid: i32, number: u16) -> Port {
     }
 }
 
+mod every_port;
 mod tunnels;
 
 fn dialog(app: &mut App) -> &mut Dialog {
@@ -33,7 +34,7 @@ fn dialog(app: &mut App) -> &mut Dialog {
 
 fn opened(app: &mut App) -> u64 {
     let workspace = app.projects[0].workspaces[0].id;
-    app.open_ports(workspace);
+    app.open_ports(Some(workspace));
     dialog(app).generation
 }
 
