@@ -427,7 +427,7 @@ Hover a group, project, workspace or tab row: it gets a lighter background, so y
 | A tab | Its panes' programs are ended, then the tab goes away. In the compact layout it asks first. |
 | A workspace | All its tabs are closed, then the workspace goes away. In the compact layout it asks first. A workspace with its own worktree asks first, because it also deletes the worktree folder; see [Removing a worktree](../worktrees/#remove-a-worktree). |
 | A machine's workspace | It always asks first, naming the machine, then closes it there, or removes its worktree there; see [Acting on a machine's workspace](../machines/#acting-on-a-machines-workspace). |
-| A machine's tab | It closes there, asking first when an agent works in it or in the compact layout; its row reads `closing…` until the machine drops it. See [Acting on a machine's tabs](../machines/#acting-on-a-machines-tabs). |
+| A machine's tab | It closes there, asking first when it has a recognized agent status, idle and done included, or in the compact layout; its row reads `closing…` until the machine drops it. See [Acting on a machine's tabs](../machines/#acting-on-a-machines-tabs). |
 | A project | It asks first, saying how many tabs it stops. Then everything in it is closed and the project goes away; its folder and its worktrees stay on disk. |
 | A group | It asks first, then the group goes away. With **keep projects** its projects stay open, ungrouped, and nothing in them is ended; with **close projects** they close with it, which stops every shell in them (folders and worktrees stay on disk). |
 

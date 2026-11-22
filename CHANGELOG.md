@@ -4,7 +4,7 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.13.113
 
-- **Open, close and rename a machine's tabs from your sidebar.** A machine's workspace now has a `+ Tab` row, and its tabs a `×` and a ` ⋯ ` menu with **rename tab** and **close tab**, as yours. The `×` asks first when an agent works in the tab, and in the compact layout; a shell tab closes at once.
+- **Open, close and rename a machine's tabs from your sidebar.** A machine's workspace now has a `+ Tab` row, and its tabs a `×` and a ` ⋯ ` menu with **rename tab** and **close tab**, as yours. The `×` asks first when the machine reports a recognized agent status for the tab, idle and done included, and in the compact layout; a shell tab closes at once.
 - **The prefix key's menu works on a machine's tab**: **new tab**, **split right**, **split down**, **close pane**, **rename tab**, the arrows between panes, **rename workspace** and **close workspace** act there, and the machine's workspace stays picked.
 - While the machine closes a tab, its row reads `closing…`. A refusal shows the machine's own words (`could not split the pane on vps: pane 3 is too small to split right`), and a machine that is down or restarted says that nothing was sent or changed.
 
