@@ -18,22 +18,32 @@ The window draws a bot as a chat, with bubbles, Markdown and what it is doing, n
 
 <Screen
   name="bots"
-  alt="The window with the Bots section in the sidebar listing prs and digest, and prs's chat in place of the panes: a routine's run as one block (its header, its steps folded and its answer), what you wrote, the steps the bot used, its Markdown answer with a list and a code block, and the message field with its send button at the bottom; the workspaces column shows the bot's card"
+  alt="The window on the Bots page, listing prs and digest where the projects were, with ‹ Projects above them and + New under them, and prs's chat in place of the panes: a routine's run as one block (its header, its steps folded and its answer), what you wrote, the steps the bot used, its Markdown answer with a list and a code block, and the message field with its send button at the bottom; the workspaces column shows the bot's card"
   caption="A bot's chat in place of the panes, and its card where the workspaces were."
 />
 
-### The Bots section
+### The Bots page
 
-Once you have a bot, a **Bots** section sits at the bottom of the sidebar, above the [agents section](../projects-workspaces-tabs/#the-agents-section) when that is on. With no bots it takes no room: the way in is **More ▴ › new bot…**, or `b` in the [keys menu](../../reference/keyboard-and-mouse/#keyboard-shortcuts) (with a prefix key).
+Bots have a page of their own. **`Bots ›`**, at the right of the **Projects** title, opens it in every layout, also before you make your first bot. While a bot answers, the button shows the spinner before its label, and while answers wait for you a blue `●` with how many, for every bot together (`●9+` past nine).
+
+While the page shows, your bots take the place of the projects list (and of the [agents section](../projects-workspaces-tabs/#the-agents-section), when that is on), the chat takes the place of the panes, and the bot's card takes the place of the workspaces. The page opens on the bot you read last, or on the first one. **`‹ Projects`** at the top of the page goes back to where you were.
 
 - **One row per bot**, in the order you made them: a mark, its name and, dim, its agent and model, or `next 09:00` (`next Mon 09:00` on another day, a date past a week) while the bot is idle, when that fits, and has a [routine](#routines). The mark is the spinner while the bot answers, and a blue `●` with a count while it has answers you have not read. The row of the bot on screen has the cyan bar `▌`.
-- **Click the title** to fold the section into its title row, which then shows the spinner or the unread count of every bot. The fold is saved with your session. **` + `** opens the [new bot form](#make-a-bot-in-the-window).
-- **` ⋯ `** at the end of a row (it shows when you hover the row, and always, dimmed, in a [compact](../small-terminals/) layout), or a right click, opens its menu: **rename**, **edit…**, **routines…**, **secrets…**, **new conversation**, **open folder** and **remove…**. A bot's row has no `×`: removing a bot deletes its memory, so it asks first. **remove…** says `Remove bot prs? Its chat, its memory and its folder are deleted. Agents it started keep running.` (with its [routines](#routines) named when it has some, and removing them too) and, while the bot answers, its button reads `stop it first` and stops the turn.
+- **`+ New`** under the rows opens the [new bot form](#make-a-bot-in-the-window).
+- **` ⋯ `** at the end of a row (it shows when you hover the row, and always, dimmed, in a [compact](../small-terminals/) layout), or a right click, opens its menu: **rename**, **edit…**, **routines…**, **secrets…**, **new conversation**, **open folder** and **remove…**. A bot's row has no `×`: removing a bot deletes its memory, so it asks first. **remove…** says `Remove bot prs? Its chat, its memory and its folder are deleted. Agents it started keep running.` (with its [routines](#routines) named when it has some, and removing them too) and, while the bot answers, its button reads `stop it first` and stops the turn. Removing the bot you are reading leaves you on the page.
 - **The wheel** scrolls the rows when they do not fit.
+
+With no chat chosen, the page shows a **lobby** where the chat goes. With no bot yet, it says what a bot is, has **` + New bot `** and three ideas, **PRs**, **News** and **Releases**: a click on one opens the form with its name and what it is for filled in, and **` create `** then makes a bot that sets itself up. With bots, it asks you to pick one in the list. Keys reach no pane while the page shows; `Esc` closes a side panel, and otherwise does nothing.
+
+<Screen
+  name="bots-lobby"
+  alt="The Bots page before the first bot: ‹ Projects and + New where the projects were, and in place of the panes Meet your bots, two lines on what a bot is, a + New bot button and three ideas, PRs, News and Releases, each with what it is for, the pointer on News"
+  caption="The Bots page before your first bot: an idea opens the form with its name and what it is for."
+/>
 
 ### The chat
 
-A click on a bot shows its chat **in place of the panes**, and its **card** where the workspaces were: the agent, model, effort, account and access, the folder (a click opens it, or copies its path), the day it was made, the agents it started that are still running (**`started`**, each with its status icon, and a click shows that tab) and, two rows each, its [routines](#routines): the name, then `next Mon 09:00 · ↻ weekday 09:00` (or `paused`). A click on a routine opens [its routines](#a-bots-routines), with that one selected. Its **` ⋯ `** (it shows while you hover the routine) or a right click opens its menu: **run now**, **pause** or **resume**, **edit…** and **remove** (with **` undo `** in the notice), the dialog's buttons without the dialog. A click on a project, a workspace or a tab goes back to the panes. Showing a bot marks its answers as read, as `cornercase bot seen` does.
+A click on a bot shows its chat **in place of the panes**, and its **card** where the workspaces were: the agent, model, effort, account and access, the folder (a click opens it, or copies its path), the day it was made, the agents it started that are still running (**`started`**, each with its status icon, and a click shows that tab) and, two rows each, its [routines](#routines): the name, then `next Mon 09:00 · ↻ weekday 09:00` (or `paused`). A click on a routine opens [its routines](#a-bots-routines), with that one selected. Its **` ⋯ `** (it shows while you hover the routine) or a right click opens its menu: **run now**, **pause** or **resume**, **edit…** and **remove** (with **` undo `** in the notice), the dialog's buttons without the dialog. **`‹ Projects`**, or a click on a tab of the [tab bar](../projects-workspaces-tabs/) when tabs are on top, goes back to the panes. Showing a bot marks its answers as read, as `cornercase bot seen` does.
 
 From top to bottom:
 
@@ -57,7 +67,7 @@ An answer, or an error, that arrives while you are looking at something else mak
 
 ### Make a bot in the window
 
-**` + `** in the section, **More ▴ › new bot…** and `b` in the keys menu open the form:
+**`+ New`** on the Bots page, **` + New bot `** in its lobby, **More ▴ › new bot…** and `b` in the keys menu open the form:
 
 - **Name**: 1 to 40 characters, not in use by another bot (whatever the case). The server's refusals (a name in use, 50 bots) show under the form.
 - **Agent**: Claude Code, Codex, Gemini CLI, opencode, Cursor CLI or GitHub Copilot CLI. An agent that cannot be a bot is greyed, with why: `not yet`, `not installed`, or, for an access, why it has no `through cornercase` (`its sandbox cannot reach cornercase`, `a command can write outside its folder`). The form is built from what [`cornercase bot agents`](#make-a-bot) answers.

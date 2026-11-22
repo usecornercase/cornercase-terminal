@@ -86,7 +86,6 @@ export function world(app: App, opts: { scripted?: boolean } = {}): App {
 
   seedBots(app);
   seedBotQueue(app);
-  if (opts.scripted) app.bots.folded = true;
   app.active = 0;
   app.widths = { ...app.widths, stack: STACK_ROWS };
   return app;

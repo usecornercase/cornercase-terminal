@@ -1,7 +1,7 @@
 import { DAYS, ROUTINE_GRACE, ROUTINE_RUNS, type QueueChoice, type QueueEntry, type QueueForm, type QueueList, UNITS, parseRepeat, queueAt, queueChoice, queueChose, queueForm, queueKey as queueFormKey, queueListRows, queueRefit, queueRepeat, queueRepeats, queueTextRect, queueTime, queueWhen, queueFirstLine, queueName, queuePaste, queueWorktree, repeatFirst, repeatWalk, revealPrompt, routineSlug, whenCombo } from './queue';
-import { botFormKey, botFormPaste, newBotForm } from './botform';
+import { type BotForm, botFormKey, botFormPaste, newBotForm } from './botform';
 import { actOnRoutine, botRoutinesKey, buttonsOf, openBotRoutines, routinesOf } from './botroutines';
-import { Bots } from './bots';
+import { Bots, IDEAS, draftOf } from './bots';
 import { type QueueListDialog, type QueueShown, foldAsked, moveQueueList, openQueueList, queueButtons, queueIndex, queueShown } from './queuelist';
 import { chooseCombo, combo, comboLabel } from './combo';
 import { shareLink } from '../stats/model';
@@ -663,7 +663,7 @@ export class App {
   }
 
   private visibleTab(): Tab | undefined {
-    return this.nav || this.bots.current() ? undefined : this.tab();
+    return this.nav || this.bots.page ? undefined : this.tab();
   }
 
   private awakeAt: number | null = null;
@@ -1567,6 +1567,26 @@ export class App {
     this.dirty();
   }
 
+  openBotIdea(at: number): void {
+    const idea = IDEAS[at];
+    if (!idea) return;
+    this.openBotForm();
+    const form = this.overlay as BotForm;
+    form.name = draftOf(idea[0]);
+    form.about = draftOf(idea[1]);
+  }
+
+  openBots(): void {
+    this.bots.open(this.areas().compact);
+  }
+
+  pressBack(): void {
+    const compact = this.areas().compact;
+    if (!compact || this.nav === 'bots') this.bots.hide();
+    if (compact) this.nav = 'projects';
+    this.dirty();
+  }
+
   openNewMenu(at: Pos): void {
     this.overlay = { kind: 'menu', at, actions: [{ kind: 'openProject' }, { kind: 'newGroup' }] };
     this.dirty();
@@ -1750,7 +1770,7 @@ export class App {
   }
 
   toggleNav(): void {
-    this.nav = this.nav ? null : this.bots.current() ? 'bots' : 'projects';
+    this.nav = this.nav ? null : this.bots.page ? 'bots' : 'projects';
     if (this.nav) {
       this.changesOpen = false;
       this.closeTodo();
@@ -5057,7 +5077,7 @@ export class App {
           border === 'agents'
             ? this.agentsDragged(y)
             : border !== 'changes' && this.sidebar() !== 'side_by_side'
-              ? draggedStacked(this.widths, border, x, y, total, this.rows, this.config.agentsSection)
+              ? draggedStacked(this.widths, border, x, y, total, this.rows, this.config.agentsSection && !this.bots.page)
               : dragged(this.widths, border, x, total);
       }
       else {
@@ -5330,6 +5350,7 @@ export class App {
       return;
     }
     if (this.bots.current() && !this.nav) return this.bots.paste(text);
+    if (this.bots.page) return;
     const t = this.tab();
     if (t) activePane(t)?.shell.paste(text);
   }
@@ -5376,6 +5397,7 @@ export class App {
     }
     if (this.bots.current() && !this.nav) return this.bots.key(k, this.botWidth());
     if (k.key === 'Escape' && this.panelShown()) return this.closePanel();
+    if (this.bots.page) return true;
     const t = this.tab();
     const pane = t ? activePane(t) : undefined;
     if (!pane) return false;
