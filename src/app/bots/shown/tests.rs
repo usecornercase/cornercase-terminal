@@ -42,6 +42,24 @@ fn a_line_that_joins_a_run_above_grows_only_that_block() {
 }
 
 #[test]
+fn a_run_followed_by_one_group_grows_only_its_block_too() {
+    let lines = vec![Line::notice(1, 0, "↻ PRs · 09:00").of_run(7), Line::you(2, 0, "which are blocked?", false)];
+    let mut chat = Chat::new(String::from("prs"), lines);
+    let growth = chat.took(&Line::failed(3, 0, "the run failed").of_run(7), Some((&facts(), WIDTH, TONE)));
+    assert!(growth.height > 0 && growth.below > 0 && growth.top > growth.below, "{growth:?}");
+    assert_eq!(growth.moved(0), Some(0));
+}
+
+#[test]
+fn a_line_that_joins_the_last_group_moves_every_row_up() {
+    let lines = vec![Line::you(1, 0, "which are blocked?", false), Line::notice(2, 0, "↻ PRs · 09:00").of_run(7)];
+    let mut chat = Chat::new(String::from("prs"), lines);
+    let growth = chat.took(&Line::failed(3, 0, "the run failed").of_run(7), Some((&facts(), WIDTH, TONE)));
+    assert_eq!((growth.below, growth.top), (0, 0));
+    assert!(growth.height > 0);
+}
+
+#[test]
 fn a_line_at_the_end_moves_every_row_up() {
     let mut chat = chat();
     let growth = chat.took(&Line::notice(5, 0, "stopped"), Some((&facts(), WIDTH, TONE)));

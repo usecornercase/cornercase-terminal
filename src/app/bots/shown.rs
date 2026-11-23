@@ -240,9 +240,9 @@ impl Chat {
     }
 
     fn took(&mut self, line: &Line, measure: Option<(&Facts, u16, ui::Tone)>) -> Growth {
-        let tail = self.tail_start();
+        let (tail, count) = (self.tail_start(), groups(&self.lines).len());
         let run = line.routine.filter(|_| line.ask.is_none());
-        let above = run.and_then(|run| self.run_group(run)).filter(|group| *group < tail);
+        let above = run.and_then(|run| self.run_group(run)).filter(|group| group + 1 < count);
         let Some((facts, width, tone)) = measure else {
             self.lines.push(line.clone());
             return Growth::default();
