@@ -172,6 +172,14 @@ fn the_log_line_of_a_secret_request_never_holds_a_value_or_a_name_that_is_not_on
 }
 
 #[test]
+fn a_name_holding_its_value_in_another_case_is_not_logged() {
+    let set =
+        SecretSet { bot: "prs".into(), name: "x-HUNTER22".into(), value: crate::issues::Secret("hunter22".into()) };
+    let text = format!("{:?}", Command::Bot(BotRequest::SecretSet(set)).fields());
+    assert!(text.contains("name_bytes") && !text.contains("HUNTER22"), "{text}");
+}
+
+#[test]
 fn a_name_equal_to_its_value_is_not_logged() {
     let same = BotRequest::SecretSet(SecretSet {
         bot: "prs".into(),

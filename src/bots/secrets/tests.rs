@@ -146,6 +146,8 @@ mod the_rules {
         assert_eq!(logged_name("pw", &["hunter22"]), "pw");
         assert_eq!(logged_name("token", &["first", "TOKEN"]), "a value");
         assert_eq!(logged_name("Token", &["token"]), "a value");
+        assert_eq!(logged_name("my-HUNTER22-x", &["hunter22"]), "a value");
+        assert_eq!(logged_name("password", &["pass"]), "password");
     }
 
     #[test]

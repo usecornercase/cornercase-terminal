@@ -202,10 +202,10 @@ impl BotRequest {
         match self {
             Self::SecretSet(set) => {
                 fields.add("action", "secret-set").add("bot", &set.bot);
-                if set.name.eq_ignore_ascii_case(&set.value.0) {
-                    fields.add("name_bytes", set.name.len());
-                } else {
+                if crate::bots::secrets::logged_name(&set.name, &[&set.value.0]) == set.name {
                     name_field(fields, &set.name);
+                } else {
+                    fields.add("name_bytes", set.name.len());
                 }
                 fields.add("bytes", set.value.0.len())
             }

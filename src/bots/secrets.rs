@@ -53,14 +53,17 @@ pub(crate) fn same_name(a: &str, b: &str) -> bool {
     a.eq_ignore_ascii_case(b)
 }
 
+fn holds(name: &str, value: &str) -> bool {
+    name.eq_ignore_ascii_case(value)
+        || (value.len() >= REDACT_MIN && name.to_ascii_lowercase().contains(&value.to_ascii_lowercase()))
+}
+
 pub(crate) fn logged_name<'a>(name: &'a str, values: &[&str]) -> &'a str {
-    if values.iter().any(|value| name.eq_ignore_ascii_case(value)) { "a value" } else { name }
+    if values.iter().any(|value| holds(name, value)) { "a value" } else { name }
 }
 
 pub(crate) fn name_holds_value(name: &str, entries: &[Entry]) -> bool {
-    let name = name.to_ascii_lowercase();
-    let long = |entry: &&Entry| entry.value.0.len() >= REDACT_MIN;
-    entries.iter().filter(long).any(|entry| name.contains(&entry.value.0.to_ascii_lowercase()))
+    entries.iter().any(|entry| entry.value.0.len() >= REDACT_MIN && holds(name, &entry.value.0))
 }
 
 pub(crate) fn value_refusal(value: &str) -> Option<String> {

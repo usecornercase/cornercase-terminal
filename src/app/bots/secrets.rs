@@ -207,7 +207,9 @@ impl App {
         let found = live.secrets.find(name);
         let missing = || Refusal::new(Code::NotFound, format!("no secret {} in {id}; {hint}", shown(name)));
         let found = found.ok_or_else(missing)?;
-        log::info!("bots", "secret get", bot = id, name = name);
+        let known: Vec<&str> =
+            live.secrets.entries().iter().chain(&live.retired).map(|entry| entry.value.0.as_str()).collect();
+        log::info!("bots", "secret get", bot = id, name = keeping::logged_name(name, &known));
         Ok(json!({ "bot": id, "name": name, "value": found.value.0 }))
     }
 }
