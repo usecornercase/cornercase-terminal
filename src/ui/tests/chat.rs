@@ -101,6 +101,7 @@ fn the_copied_cells_keep_whole_graphemes() {
     let family = "\u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}";
     assert_eq!(row_cells(&row(&format!("{family}ok")), &(0..2)), family);
     assert_eq!(row_cells(&row(&format!("{family}ok")), &(2..3)), "o");
+    assert_eq!(row_cells(&row(&format!("{family}ok")), &(1..3)), format!("{family}o"));
 }
 
 #[test]

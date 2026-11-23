@@ -526,10 +526,11 @@ pub(crate) fn row_cells(row: &ChatRow, cols: &Range<u16>) -> String {
     let mut at: u16 = 0;
     let mut kept = String::new();
     for grapheme in text.graphemes(true) {
-        if (cols.start..cols.end).contains(&at) {
+        let width = u16::try_from(grapheme.width()).unwrap_or(u16::MAX);
+        if at < cols.end && at.saturating_add(width.max(1)) > cols.start {
             kept.push_str(grapheme);
         }
-        at = at.saturating_add(u16::try_from(grapheme.width()).unwrap_or(u16::MAX));
+        at = at.saturating_add(width);
     }
     kept
 }

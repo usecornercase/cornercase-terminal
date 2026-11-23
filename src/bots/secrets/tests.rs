@@ -142,6 +142,13 @@ mod the_rules {
     }
 
     #[test]
+    fn a_name_that_is_one_of_the_values_is_logged_as_a_value() {
+        assert_eq!(logged_name("pw", &["hunter22"]), "pw");
+        assert_eq!(logged_name("token", &["first", "TOKEN"]), "a value");
+        assert_eq!(logged_name("Token", &["token"]), "a value");
+    }
+
+    #[test]
     fn values_are_refused_with_their_size() {
         assert_eq!(value_refusal(""), Some(String::from("the value is empty")));
         assert_eq!(value_refusal(&"a".repeat(8192)), None);

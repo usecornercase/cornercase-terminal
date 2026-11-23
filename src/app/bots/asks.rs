@@ -227,8 +227,10 @@ impl App {
             .iter()
             .fold(live.secrets.clone(), |kept, (name, value)| Kept::Open(kept.with(name, &value.0, saved)));
         self.secrets_keep(at, kept.entries().to_vec())?;
+        let given: Vec<&str> = values.values().map(|value| value.0.as_str()).collect();
         for ((name, value), replaced) in values.iter().zip(replaced) {
-            log::info!("bots", "secret set", bot = id, name = name, bytes = value.0.len(), replaced = replaced);
+            let logged = keeping::logged_name(name, &given);
+            log::info!("bots", "secret set", bot = id, name = logged, bytes = value.0.len(), replaced = replaced);
         }
         let names: Vec<String> = values.keys().cloned().collect();
         self.asks_saved(at, &names);

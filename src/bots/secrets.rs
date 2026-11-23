@@ -53,6 +53,10 @@ pub(crate) fn same_name(a: &str, b: &str) -> bool {
     a.eq_ignore_ascii_case(b)
 }
 
+pub(crate) fn logged_name<'a>(name: &'a str, values: &[&str]) -> &'a str {
+    if values.iter().any(|value| name.eq_ignore_ascii_case(value)) { "a value" } else { name }
+}
+
 pub(crate) fn name_holds_value(name: &str, entries: &[Entry]) -> bool {
     let name = name.to_ascii_lowercase();
     let long = |entry: &&Entry| entry.value.0.len() >= REDACT_MIN;
