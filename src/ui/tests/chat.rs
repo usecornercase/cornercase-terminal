@@ -94,6 +94,16 @@ fn a_cell_under_the_pointer_is_found_and_held_inside_the_rows() {
 }
 
 #[test]
+fn the_copied_cells_keep_whole_graphemes() {
+    let row = |text: &str| ChatRow { line: Text::from(text.to_string()), hit: None };
+    assert_eq!(row_cells(&row("e\u{301}x"), &(0..1)), "e\u{301}");
+    assert_eq!(row_cells(&row("e\u{301}x"), &(1..2)), "x");
+    let family = "\u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}";
+    assert_eq!(row_cells(&row(&format!("{family}ok")), &(0..2)), family);
+    assert_eq!(row_cells(&row(&format!("{family}ok")), &(2..3)), "o");
+}
+
+#[test]
 fn a_run_of_steps_folds_to_the_last_three_under_a_count() {
     let texts: Vec<String> = (1..=7).map(|n| format!("step {n}")).collect();
     let refs: Vec<&str> = texts.iter().map(String::as_str).collect();

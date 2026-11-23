@@ -104,8 +104,8 @@ impl App {
         };
         let id = self.panels.bots.live[at].bot.id.clone();
         let saved = match self.bot_memory(&id) {
-            Ok((_, now)) if now != read => Saved::Changed(now),
             Ok(_) if !changed => Saved::Done,
+            Ok((_, now)) if now != read => Saved::Changed(now),
             Ok(_) => match self.bot_edit(&EditBot { bot: id, memory: Some(text), ..EditBot::default() }) {
                 Ok(_) => Saved::Done,
                 Err(refusal) => Saved::Refused(refusal.message),

@@ -134,7 +134,7 @@ impl App {
         let saved = crate::time::now();
         let entries = live.secrets.with(name, value, saved);
         self.secrets_keep(at, entries)?;
-        let name_logged = if name == value { "a value" } else { name };
+        let name_logged = if name.eq_ignore_ascii_case(value) { "a value" } else { name };
         log::info!("bots", "secret set", bot = id, name = name_logged, bytes = value.len(), replaced = replaced);
         self.asks_saved(at, &[name.to_string()]);
         Ok(json!({ "bot": id, "name": name, "saved": saved }))

@@ -47,9 +47,9 @@ impl Selection {
         Some(from..to)
     }
 
-    pub(in crate::app) fn shifted(self, rows: usize) -> Self {
-        let lift = |cell: Cell| Cell { up: cell.up + rows, ..cell };
-        Self { anchor: lift(self.anchor), head: lift(self.head) }
+    pub(in crate::app) fn moved(self, up: impl Fn(usize) -> Option<usize>) -> Option<Self> {
+        let lift = |cell: Cell| up(cell.up).map(|up| Cell { up, ..cell });
+        Some(Self { anchor: lift(self.anchor)?, head: lift(self.head)? })
     }
 }
 

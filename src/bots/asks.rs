@@ -14,6 +14,7 @@ pub(crate) const ASKS: &str = "asks for a secret: ";
 pub(crate) const SAVED: &str = "secret saved: ";
 pub(crate) const NOT_GIVEN: &str = "secret not given: ";
 pub(crate) const ONLY_ITSELF: &str = "only the bot itself asks for a secret, from its own turn";
+pub(crate) const NAME_TWICE: &str = "a secret's name is there twice";
 pub(crate) const NAME_HOLDS_VALUE: &str = "a secret's name holds the value of a saved secret: ask by its name";
 pub(crate) const ABOUT_HOLDS_VALUE: &str =
     "--about holds the value of a saved secret: say why without a secret's value";
@@ -62,8 +63,13 @@ pub(crate) fn names_refusal(names: &[String]) -> Option<String> {
     if let Some(why) = names.iter().find_map(|name| secrets::name_refusal(name)) {
         return Some(why);
     }
+    twice(names).then(|| String::from(NAME_TWICE))
+}
+
+pub(crate) fn twice<'a>(names: impl IntoIterator<Item = &'a String>) -> bool {
+    let names: Vec<&String> = names.into_iter().collect();
     let unique: BTreeSet<String> = names.iter().map(|name| name.to_ascii_lowercase()).collect();
-    (unique.len() != names.len()).then(|| String::from("a secret's name is there twice"))
+    unique.len() != names.len()
 }
 
 fn is_direction_mark(c: char) -> bool {

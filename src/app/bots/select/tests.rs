@@ -38,9 +38,10 @@ mod the_cells_of_a_row {
 
     #[test]
     fn new_rows_below_move_it_up_with_the_text() {
-        let selection = Selection { anchor: cell(0, 1), head: cell(2, 3) }.shifted(4);
+        let selection = Selection { anchor: cell(0, 1), head: cell(2, 3) };
 
-        assert_eq!(selection, Selection { anchor: cell(4, 1), head: cell(6, 3) });
+        assert_eq!(selection.moved(|up| Some(up + 4)), Some(Selection { anchor: cell(4, 1), head: cell(6, 3) }));
+        assert_eq!(selection.moved(|up| (up < 2).then_some(up)), None);
     }
 }
 

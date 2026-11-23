@@ -64,11 +64,10 @@ impl App {
         let live = &self.panels.bots.live[at];
         let id = &live.bot.id;
         let known: Vec<keeping::Entry> = live.secrets.entries().iter().chain(&live.retired).cloned().collect();
-        let holds = |text: &str| keeping::redact(text, &known) != text;
-        if ask.names.iter().any(|name| holds(name)) {
+        if ask.names.iter().any(|name| keeping::name_holds_value(name, &known)) {
             return Err(malformed(asks::NAME_HOLDS_VALUE));
         }
-        if holds(&ask.about) {
+        if keeping::redact(&ask.about, &known) != ask.about {
             return Err(malformed(asks::ABOUT_HOLDS_VALUE));
         }
         if live.secrets.is_unreadable() {
@@ -180,7 +179,20 @@ impl App {
         }
     }
 
+    fn give_names_checked(&self, at: usize, give: &SecretGive) -> Done<()> {
+        let live = &self.panels.bots.live[at];
+        let known: Vec<keeping::Entry> = live.secrets.entries().iter().chain(&live.retired).cloned().collect();
+        if give.values.keys().any(|name| keeping::name_holds_value(name, &known)) {
+            return Err(malformed(asks::NAME_HOLDS_VALUE));
+        }
+        if asks::twice(give.values.keys()) {
+            return Err(malformed(asks::NAME_TWICE));
+        }
+        Ok(())
+    }
+
     fn give_checked(&self, at: usize, ask: &Ask, give: &SecretGive) -> Done<()> {
+        self.give_names_checked(at, give)?;
         let asked = |name: &String| ask.names.iter().any(|asked| keeping::same_name(asked, name));
         let listed = give.values.keys().all(asked);
         let covered = ask.missing().iter().all(|name| give.values.keys().any(|given| keeping::same_name(given, name)));
@@ -207,18 +219,18 @@ impl App {
         self.answering_person(client)?;
         let (at, ask) = self.waiting_ask(&give.bot, give.ask)?;
         self.give_checked(at, &ask, give)?;
+        let values = asked_spelling(&ask, give);
         let live = &self.panels.bots.live[at];
         let (id, saved) = (live.bot.id.clone(), crate::time::now());
-        let replaced: Vec<bool> = give.values.keys().map(|name| live.secrets.find(name).is_some()).collect();
-        let kept = give
-            .values
+        let replaced: Vec<bool> = values.keys().map(|name| live.secrets.find(name).is_some()).collect();
+        let kept = values
             .iter()
             .fold(live.secrets.clone(), |kept, (name, value)| Kept::Open(kept.with(name, &value.0, saved)));
         self.secrets_keep(at, kept.entries().to_vec())?;
-        for ((name, value), replaced) in give.values.iter().zip(replaced) {
+        for ((name, value), replaced) in values.iter().zip(replaced) {
             log::info!("bots", "secret set", bot = id, name = name, bytes = value.0.len(), replaced = replaced);
         }
-        let names: Vec<String> = give.values.keys().cloned().collect();
+        let names: Vec<String> = values.keys().cloned().collect();
         self.asks_saved(at, &names);
         Ok(json!({ "bot": id, "ask": ask.id, "saved": names }))
     }
@@ -312,4 +324,10 @@ impl App {
             })
             .collect()
     }
+}
+
+fn asked_spelling(ask: &Ask, give: &SecretGive) -> std::collections::BTreeMap<String, crate::issues::Secret> {
+    let spelled =
+        |name: &String| ask.names.iter().find(|asked| keeping::same_name(asked, name)).unwrap_or(name).clone();
+    give.values.iter().map(|(name, value)| (spelled(name), value.clone())).collect()
 }

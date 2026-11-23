@@ -5,6 +5,7 @@ use ratatui::layout::{Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
+use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
 use super::agent::{ChatAgentLine, chat_agent_rows};
@@ -521,13 +522,14 @@ pub(crate) fn chat_cell(areas: &ChatAreas, chat: &ChatView, pos: Position) -> Op
 }
 
 pub(crate) fn row_cells(row: &ChatRow, cols: &Range<u16>) -> String {
-    let mut at = 0;
+    let text: String = row.line.spans.iter().map(|span| span.content.as_ref()).collect();
+    let mut at: u16 = 0;
     let mut kept = String::new();
-    for c in row.line.spans.iter().flat_map(|span| span.content.chars()) {
+    for grapheme in text.graphemes(true) {
         if (cols.start..cols.end).contains(&at) {
-            kept.push(c);
+            kept.push_str(grapheme);
         }
-        at = at.saturating_add(u16::try_from(c.to_string().width()).unwrap_or(1));
+        at = at.saturating_add(u16::try_from(grapheme.width()).unwrap_or(u16::MAX));
     }
     kept
 }

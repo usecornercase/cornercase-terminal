@@ -259,8 +259,12 @@ impl App {
         let noted = write_notes(&self.panels.bots.live[at].folder, edit)?;
         let followed = self.panels.bots.live[at].bot.follow;
         bot.follow = edit.follow.unwrap_or(followed);
-        bot.memory_edits += u64::from(edit.memory.is_some());
-        save_edited(&self.panels.bots.live[at].folder, &bot, noted)?;
+        let remembered = u64::from(edit.memory.is_some());
+        bot.memory_edits += remembered;
+        if let Err(refusal) = save_edited(&self.panels.bots.live[at].folder, &bot, noted) {
+            self.panels.bots.live[at].bot.memory_edits += remembered;
+            return Err(refusal);
+        }
         self.panels.bots.live[at].bot = bot;
         self.follow_changed(at, followed);
         self.publish_bot_change(at, "edited");

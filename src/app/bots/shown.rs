@@ -238,6 +238,41 @@ impl Chat {
     fn run_group(&self, run: u64) -> Option<usize> {
         groups(&self.lines).iter().position(|group| matches!(group, Group::Run(found, _) if *found == run))
     }
+
+    fn took(&mut self, line: &Line, measure: Option<(&Facts, u16, ui::Tone)>) -> Growth {
+        let tail = self.tail_start();
+        let run = line.routine.filter(|_| line.ask.is_none());
+        let above = run.and_then(|run| self.run_group(run)).filter(|group| *group < tail);
+        let Some((facts, width, tone)) = measure else {
+            self.lines.push(line.clone());
+            return Growth::default();
+        };
+        let from = above.unwrap_or(tail);
+        let before = self.tail_height(from, facts, width, tone);
+        let below = above.map_or(0, |group| self.tail_height(group + 1, facts, width, tone));
+        self.lines.push(line.clone());
+        let height = self.tail_height(from, facts, width, tone).saturating_sub(before);
+        Growth { below, top: if above.is_some() { before } else { 0 }, height }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(super) struct Growth {
+    pub(super) below: usize,
+    pub(super) top: usize,
+    pub(super) height: usize,
+}
+
+impl Growth {
+    pub(super) fn moved(self, up: usize) -> Option<usize> {
+        if up < self.below {
+            Some(up)
+        } else if up >= self.top {
+            Some(up + self.height)
+        } else {
+            None
+        }
+    }
 }
 
 impl App {
@@ -367,18 +402,16 @@ impl App {
         let measured = scrolled || shown.selection.is_some();
         let (facts, tone) = (self.chat_facts(at), self.chat_tone());
         let Some(shown) = self.panels.bots.shown.as_mut() else { return };
-        let tail = shown.tail_start();
-        let run = line.routine.filter(|_| line.ask.is_none());
-        let from = run.and_then(|run| shown.run_group(run)).map_or(tail, |at| at.min(tail));
-        let before = if measured { shown.tail_height(from, &facts, width, tone) } else { 0 };
-        shown.lines.push(line.clone());
-        let height = if measured { shown.tail_height(from, &facts, width, tone).saturating_sub(before) } else { 0 };
-        shown.selection = shown.selection.map(|selection| selection.shifted(height));
+        let growth = shown.took(line, measured.then_some((&facts, width, tone)));
+        shown.selection = shown.selection.and_then(|selection| selection.moved(|up| growth.moved(up)));
         let extra = shown.lines.len().saturating_sub(super::window::CHAT_KEPT);
         shown.lines.drain(..extra);
         if scrolled {
-            shown.scroll += height;
+            shown.scroll = growth.moved(shown.scroll).unwrap_or(shown.scroll);
             shown.news = true;
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -202,7 +202,7 @@ impl BotRequest {
         match self {
             Self::SecretSet(set) => {
                 fields.add("action", "secret-set").add("bot", &set.bot);
-                if set.name == set.value.0 {
+                if set.name.eq_ignore_ascii_case(&set.value.0) {
                     fields.add("name_bytes", set.name.len());
                 } else {
                     name_field(fields, &set.name);

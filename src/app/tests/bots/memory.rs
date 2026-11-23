@@ -111,6 +111,30 @@ fn a_memory_the_bot_changed_meanwhile_is_kept_until_saved_again() {
 }
 
 #[test]
+fn a_memory_written_when_its_settings_cannot_be_is_still_told() {
+    let mut c = with_memory();
+    let folder = c.app.panels.bots.live[0].folder.clone();
+    std::fs::remove_file(folder.join(folder::BOT_FILE)).expect("remove bot.json");
+    std::fs::create_dir(folder.join(folder::BOT_FILE)).expect("a directory in its place");
+    let edit =
+        crate::control::bots::EditBot { bot: "prs".into(), memory: Some("- new\n".into()), ..Default::default() };
+    let refused = c.app.bot_edit(&edit).expect_err("bot.json cannot be written");
+    assert!(refused.message.starts_with("the memory was saved"), "{}", refused.message);
+    assert_eq!(memory_of(&c), "- new\n");
+    assert_eq!(c.app.panels.bots.live[0].bot.memory_edits, 1);
+}
+
+#[test]
+fn an_untouched_memory_the_bot_changed_meanwhile_is_left_to_the_bot() {
+    let mut c = with_memory();
+    opened(&mut c);
+    folder::write_memory(&c.app.panels.bots.live[0].folder, "- the bot's own\n").expect("the bot writes");
+    save(&mut c);
+    assert!(c.app.overlay.is_none());
+    assert_eq!(memory_of(&c), "- the bot's own\n");
+}
+
+#[test]
 fn removing_the_bot_closes_its_memory() {
     let mut c = with_memory();
     opened(&mut c);
