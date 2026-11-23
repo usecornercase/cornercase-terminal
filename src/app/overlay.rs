@@ -180,6 +180,7 @@ pub(super) enum Overlay {
     BotRoutines(Box<crate::bots::routines::Dialog>),
     BotSecrets(Box<super::bots::Secrets>),
     BotAsk(Box<crate::bots::asks::Form>),
+    BotMemory(Box<crate::bots::memory::Dialog>),
     Processes(Box<crate::processes::dialog::Dialog>),
     CloseAgent(Box<CloseAgent>),
     CloseAgents(Box<CloseAgents>),
@@ -212,9 +213,8 @@ impl Overlay {
             Self::StartFlow { .. } => "start flow",
             Self::ProjectSettings(_) => "project settings",
             Self::Rename { .. } => "rename",
-            Self::BotForm(_) | Self::RenameBot { .. } | Self::RemoveBot { .. } | Self::OpenLink { .. } => {
-                self.bot_name()
-            }
+            Self::BotForm(_) | Self::RenameBot { .. } | Self::RemoveBot { .. } | Self::BotMemory(_) => self.bot_name(),
+            Self::OpenLink { .. } => "open link",
             Self::RemoveWorkspace { .. } => "remove workspace",
             Self::Picker { .. } => "folder picker",
             Self::Issues(_) => "issues",
@@ -250,7 +250,7 @@ impl Overlay {
             Self::BotForm(form) if form.editing.is_some() => "edit bot",
             Self::BotForm(_) => "new bot",
             Self::RenameBot { .. } => "rename bot",
-            Self::OpenLink { .. } => "open link",
+            Self::BotMemory(_) => "bot memory",
             _ => "remove bot",
         }
     }
@@ -282,6 +282,7 @@ impl Overlay {
                 | Self::CloneOnMachine(_)
                 | Self::ProjectSettings(_)
                 | Self::BotAsk(_)
+                | Self::BotMemory(_)
         )
     }
 
@@ -584,6 +585,7 @@ impl App {
         match overlay {
             Overlay::BotSecrets(secrets) => self.secrets_view(secrets, area),
             Overlay::BotAsk(form) => self.ask_view(form),
+            Overlay::BotMemory(dialog) => Some(Self::bot_memory_view(dialog)),
             Overlay::OpenLink { bot, url } => self.open_link_view(*bot, url, area),
             _ => Self::machine_dialog_view(overlay),
         }

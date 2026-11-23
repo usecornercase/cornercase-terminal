@@ -106,6 +106,8 @@ pub(crate) const FEATURES: &[&str] = &[
     "bot-chat-apps",
     FLOW_SYNC,
     "tunnel-machine",
+    "bot-memory",
+    "focus-bot",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

@@ -1,5 +1,6 @@
 pub(crate) mod bot;
 pub(crate) mod bot_ask;
+pub(crate) mod bot_memory;
 pub(crate) mod clone_on_machine;
 pub(crate) mod context;
 pub(super) mod flows;
@@ -206,6 +207,7 @@ pub(crate) enum Overlay {
     QueueList(Box<queue_list::QueueList>),
     BotForm(Box<crate::bots::form::Form>),
     BotAsk(Box<bot_ask::BotAsk>),
+    BotMemory(Box<bot_memory::BotMemory>),
     Machine(Box<crate::machines::form::Form>),
     CloneOnMachine(Box<crate::machines::clone_form::CloneForm>),
     GroupStyle(GroupEntry),
@@ -253,6 +255,7 @@ impl Overlay {
             }
             Self::Flows(_) | Self::StartFlow(_) => Some(flows_area(area)),
             Self::ProjectSettings(_) => Some(project_settings::project_settings_area(area)),
+            Self::BotMemory(_) => Some(bot_memory::area(area)),
             Self::Worktrees(w) => Some(worktrees_area(area, w.compact)),
             Self::Ports(p) => Some(ports_area(area, p.compact)),
             Self::BotRoutines(r) | Self::BotSecrets(r) => Some(routines_area(area, r.compact)),

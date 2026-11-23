@@ -350,6 +350,7 @@ impl Form {
             follow: Some(self.follow),
             chat_apps: self.chosen_chat_apps(),
             about: (about != self.loaded_about).then_some(about),
+            memory: None,
         })
     }
 }

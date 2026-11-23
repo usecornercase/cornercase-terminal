@@ -229,6 +229,30 @@ mod giving {
     }
 
     #[test]
+    fn an_upper_case_name_is_asked_given_and_read_however_its_letters_are_cased() {
+        let mut k = keeper();
+        let ask = ask_id(&k.ask(&["GITHUB_TOKEN"]).expect("asked"));
+        k.give(ask, &[("github_token", VALUE)]).expect("given");
+        assert_eq!(k.waiting(), Vec::<u64>::new());
+        let kept = &k.app.panels.bots.live[k.at()].secrets;
+        assert_eq!(kept.find("github_token").map(|entry| entry.name.as_str()), Some("GITHUB_TOKEN"));
+        assert_eq!(refusal(k.ask(&["Github_Token"])).0, Code::Conflict);
+    }
+
+    #[test]
+    fn refuses_two_keys_that_differ_by_case_and_a_key_that_holds_a_value_in_another_case() {
+        let mut k = keeper();
+        k.set("pw", "Abcdef123").expect("set");
+        let ask = ask_id(&k.ask(&["TOKEN"]).expect("asked"));
+        let twice = refusal(k.give(ask, &[("TOKEN", "first"), ("token", "second")]));
+        assert_eq!(twice, (Code::Malformed, asks::NAME_TWICE.to_string()));
+        let holds = refusal(k.give(ask, &[("abcdef123", "x")]));
+        assert_eq!(holds, (Code::Malformed, asks::NAME_HOLDS_VALUE.to_string()));
+        assert_eq!(refusal(k.ask(&["ABCDEF123"])), (Code::Malformed, asks::NAME_HOLDS_VALUE.to_string()));
+        assert_eq!(k.waiting(), [ask]);
+    }
+
+    #[test]
     fn declining_writes_its_notice_and_tells_the_chat_later() {
         let mut k = keeper();
         let ask = ask_id(&k.ask(&["pw"]).expect("asked"));

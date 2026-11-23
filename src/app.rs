@@ -389,6 +389,7 @@ impl App {
             | Drag::Lines { .. }
             | Drag::Text(_)
             | Drag::Footer(_)
+            | Drag::Chat
             | Drag::Remote(RemoteDrag::Selection { .. } | RemoteDrag::Mouse { .. }) => None,
         };
         dir.map_or(pointer::Shape::Default, divider_shape)

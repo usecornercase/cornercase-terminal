@@ -44,11 +44,12 @@ fn more_and_its_new_bot_open_the_form() {
 }
 
 #[test]
-fn b_in_the_keys_menu_opens_the_form() {
+fn b_n_in_the_keys_menu_opens_the_form() {
     let mut c = chat(ANSWER);
     c.app.config.prefix_key = "ctrl+]".into();
     send_key(&mut c.app, KeyCode::Char(']'), KeyModifiers::CONTROL);
     send_key(&mut c.app, KeyCode::Char('b'), KeyModifiers::NONE);
+    send_key(&mut c.app, KeyCode::Char('n'), KeyModifiers::NONE);
     assert!(matches!(c.app.overlay, Some(Overlay::BotForm(_))));
 }
 

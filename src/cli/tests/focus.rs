@@ -37,3 +37,30 @@ fn a_machine_takes_one_of_its_workspaces() {
 fn wrong_usage_of_a_machine_exits_with_2(#[case] args: &[&str]) {
     assert_eq!(parse(args).expect_err("wrong usage").exit_code(), 2);
 }
+
+#[test]
+fn a_bot_is_a_place_of_its_own() {
+    let cli = parse(&["focus", "--bot", "prs", "--json"]).expect("parse");
+
+    let Some(Command::Control(Control::Focus(focus))) = cli.command else { panic!("not focus") };
+    assert_eq!((focus.bot.as_deref(), focus.which.pane, focus.print.json), (Some("prs"), None, true));
+}
+
+#[rstest]
+#[case::a_pane(&["focus", "--bot", "prs", "--pane", "1"])]
+#[case::a_workspace(&["focus", "--bot", "prs", "--workspace", "1"])]
+#[case::a_machine(&["focus", "--bot", "prs", "--machine", "vps"])]
+#[case::a_view(&["focus", "--bot", "prs", "--view", "41"])]
+#[case::a_reveal(&["focus", "--bot", "prs", "--reveal", "x"])]
+fn wrong_usage_of_a_bot_exits_with_2(#[case] args: &[&str]) {
+    assert_eq!(parse(args).expect_err("wrong usage").exit_code(), 2);
+}
+
+#[test]
+fn a_memory_that_starts_with_a_list_mark_is_its_text() {
+    let cli = parse(&["bot", "edit", "prs", "--memory", "- squash merges"]).expect("parse");
+
+    let Some(Command::Control(Control::Bot(bot))) = cli.command else { panic!("not bot") };
+    let crate::cli::args::bot::BotAction::Edit(edit) = bot.action else { panic!("not edit") };
+    assert_eq!(edit.memory.as_deref(), Some("- squash merges"));
+}

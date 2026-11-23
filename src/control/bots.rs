@@ -12,6 +12,8 @@ pub(crate) enum BotRequest {
     List,
     Edit(EditBot),
     About(BotTarget),
+    Memory(BotTarget),
+    Show(BotTarget),
     Remove(BotTarget),
     Reset(BotTarget),
     Seen(BotTarget),
@@ -111,6 +113,7 @@ pub(crate) struct EditBot {
     pub(crate) follow: Option<bool>,
     pub(crate) chat_apps: Option<String>,
     pub(crate) about: Option<String>,
+    pub(crate) memory: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -199,10 +202,10 @@ impl BotRequest {
         match self {
             Self::SecretSet(set) => {
                 fields.add("action", "secret-set").add("bot", &set.bot);
-                if set.name == set.value.0 {
-                    fields.add("name_bytes", set.name.len());
-                } else {
+                if crate::bots::secrets::logged_name(&set.name, &[&set.value.0]) == set.name {
                     name_field(fields, &set.name);
+                } else {
+                    fields.add("name_bytes", set.name.len());
                 }
                 fields.add("bytes", set.value.0.len())
             }
@@ -243,9 +246,12 @@ impl BotRequest {
                 fields.add("action", "edit").add("bot", &edit.bot).maybe("name", edit.name.as_deref());
                 fields.maybe("access", edit.access.as_deref()).maybe("follow", edit.follow);
                 fields.maybe("chat_apps", edit.chat_apps.as_deref());
-                fields.maybe("about_bytes", edit.about.as_ref().map(String::len))
+                fields.maybe("about_bytes", edit.about.as_ref().map(String::len));
+                fields.maybe("memory_bytes", edit.memory.as_ref().map(String::len))
             }
             Self::About(target) => fields.add("action", "about").add("bot", &target.bot),
+            Self::Memory(target) => fields.add("action", "memory").add("bot", &target.bot),
+            Self::Show(target) => fields.add("action", "show").add("bot", &target.bot),
             Self::Remove(target) => fields.add("action", "remove").add("bot", &target.bot),
             Self::Reset(target) => fields.add("action", "reset").add("bot", &target.bot),
             Self::Seen(target) => fields.add("action", "seen").add("bot", &target.bot),

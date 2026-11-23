@@ -122,6 +122,18 @@ mod keys {
     }
 
     #[test]
+    fn b_opens_the_bots_group_which_reaches_the_page_and_each_bot() {
+        let keys: String = items(Some(Group::Bots)).iter().map(|item| item.key).collect();
+
+        assert_eq!(press(None, 'b'), Some(Step::Open(Group::Bots)));
+        assert_eq!(keys, "bn][m");
+        assert_eq!(press(Some(Group::Bots), 'b'), Some(Step::Run(Action::BotsPage)));
+        assert_eq!(press(Some(Group::Bots), 'n'), Some(Step::Run(Action::NewBot)));
+        assert_eq!(press(Some(Group::Bots), ']'), Some(Step::Run(Action::NextBot)));
+        assert_eq!(press(Some(Group::Bots), 'm'), Some(Step::Run(Action::BotMemory)));
+    }
+
+    #[test]
     fn digits_go_to_a_tab_from_one() {
         assert_eq!(press(None, '1'), Some(Step::Run(Action::Tab(0))));
     }
@@ -143,7 +155,7 @@ mod keys {
 
     #[test]
     fn no_key_is_listed_twice_in_a_menu() {
-        for group in [None, Some(Group::Find), Some(Group::Git), Some(Group::Workspace)] {
+        for group in [None, Some(Group::Find), Some(Group::Git), Some(Group::Workspace), Some(Group::Bots)] {
             let mut keys: Vec<&str> = items(group).iter().map(|i| i.key).collect();
             keys.sort_unstable();
             keys.dedup();

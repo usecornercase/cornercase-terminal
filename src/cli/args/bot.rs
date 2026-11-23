@@ -2,9 +2,9 @@ use clap::{Args, Subcommand};
 
 use super::Print;
 use crate::cli::help::{
-    BOT_ABOUT_HELP, BOT_AGENTS_HELP, BOT_EDIT_HELP, BOT_HISTORY_HELP, BOT_ID_HELP, BOT_NEW_HELP, BOT_SAY_HELP,
-    BOT_SECRET_ASK_HELP, BOT_SECRET_DECLINE_HELP, BOT_SECRET_GET_HELP, BOT_SECRET_GIVE_HELP, BOT_SECRET_HELP,
-    BOT_SECRET_LIST_HELP, BOT_SECRET_REMOVE_HELP, BOT_SECRET_SET_HELP, BOT_SETUP_HELP,
+    BOT_ABOUT_HELP, BOT_AGENTS_HELP, BOT_EDIT_HELP, BOT_HISTORY_HELP, BOT_ID_HELP, BOT_MEMORY_HELP, BOT_NEW_HELP,
+    BOT_SAY_HELP, BOT_SECRET_ASK_HELP, BOT_SECRET_DECLINE_HELP, BOT_SECRET_GET_HELP, BOT_SECRET_GIVE_HELP,
+    BOT_SECRET_HELP, BOT_SECRET_LIST_HELP, BOT_SECRET_REMOVE_HELP, BOT_SECRET_SET_HELP, BOT_SETUP_HELP,
 };
 
 const ACCESS: [&str; 2] = ["cornercase", "full"];
@@ -31,6 +31,8 @@ pub(crate) enum BotAction {
     Edit(EditArgs),
     #[command(about = "Print what a bot is for: the text of its bot.md", after_help = BOT_ABOUT_HELP)]
     About(BotNameArgs),
+    #[command(about = "Print what a bot keeps from one conversation to the next: the text of its memory.md", after_help = BOT_MEMORY_HELP)]
+    Memory(BotNameArgs),
     #[command(about = "Delete a bot, its folder and its queue entries; refused while it answers")]
     Remove(BotNameArgs),
     #[command(about = "Write to a bot; it answers in its chat", after_help = BOT_SAY_HELP)]
@@ -75,7 +77,7 @@ pub(crate) enum SecretAction {
 
 #[derive(Debug, Args)]
 pub(crate) struct SecretAskArgs {
-    #[arg(value_name = "NAME", required = true, num_args = 1..=4, help = "1 to 4 names of a-z, 0-9, - and _, such as campus-password")]
+    #[arg(value_name = "NAME", required = true, num_args = 1..=4, help = "1 to 4 names of a-z, A-Z, 0-9, - and _, such as campus-password")]
     pub(crate) names: Vec<String>,
     #[arg(long, value_name = "TEXT", help = "Why the bot needs them, in one line of at most 200 characters")]
     pub(crate) about: String,
@@ -99,7 +101,10 @@ pub(crate) struct SecretAnswerArgs {
 pub(crate) struct SecretSetArgs {
     #[arg(value_name = "BOT", help = BOT_ID_HELP)]
     pub(crate) bot: String,
-    #[arg(value_name = "NAME", help = "1 to 40 characters of a-z, 0-9, - and _, such as campus-password")]
+    #[arg(
+        value_name = "NAME",
+        help = "1 to 40 characters of a-z, A-Z, 0-9, - and _, such as campus-password or GITHUB_TOKEN"
+    )]
     pub(crate) name: String,
     #[command(flatten)]
     pub(crate) print: Print,
@@ -211,6 +216,13 @@ pub(crate) struct EditArgs {
     pub(crate) chat_apps: Option<String>,
     #[arg(long, value_name = "TEXT", help = "What the bot is for, written to bot.md; an empty one empties it")]
     pub(crate) about: Option<String>,
+    #[arg(
+        long,
+        value_name = "TEXT",
+        allow_hyphen_values = true,
+        help = "What the bot keeps from one conversation to the next, written to memory.md; an empty one empties it"
+    )]
+    pub(crate) memory: Option<String>,
     #[command(flatten)]
     pub(crate) print: Print,
 }

@@ -121,12 +121,33 @@ mod the_rules {
     #[rstest::rstest]
     #[case::fine("campus-password_2", true)]
     #[case::empty("", false)]
-    #[case::upper("Campus", false)]
+    #[case::upper("GITHUB_TOKEN", true)]
+    #[case::mixed("Campus-Password", true)]
+    #[case::accented("contraseña", false)]
     #[case::space("a b", false)]
     #[case::forty("a".repeat(40).leak(), true)]
     #[case::forty_one("a".repeat(41).leak(), false)]
     fn names(#[case] name: &str, #[case] fine: bool) {
         assert_eq!(name_refusal(name).is_none(), fine);
+    }
+
+    #[test]
+    fn a_name_is_the_same_however_its_letters_are_cased() {
+        let kept = Kept::Open(vec![entry("GITHUB_TOKEN", "first")]);
+        assert_eq!(kept.find("github_token").map(|found| found.name.as_str()), Some("GITHUB_TOKEN"));
+        let replaced = kept.with("Github_Token", "second", 2);
+        assert_eq!(replaced.len(), 1);
+        assert_eq!((replaced[0].name.as_str(), replaced[0].value.0.as_str()), ("Github_Token", "second"));
+        assert_eq!(kept.without("github_token"), Vec::new());
+    }
+
+    #[test]
+    fn a_name_that_is_one_of_the_values_is_logged_as_a_value() {
+        assert_eq!(logged_name("pw", &["hunter22"]), "pw");
+        assert_eq!(logged_name("token", &["first", "TOKEN"]), "a value");
+        assert_eq!(logged_name("Token", &["token"]), "a value");
+        assert_eq!(logged_name("my-HUNTER22-x", &["hunter22"]), "a value");
+        assert_eq!(logged_name("password", &["pass"]), "password");
     }
 
     #[test]

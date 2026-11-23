@@ -173,6 +173,7 @@ impl App {
             BotItem::Edit,
             BotItem::Routines,
             BotItem::Secrets,
+            BotItem::Memory,
             BotItem::NewConversation,
             BotItem::OpenFolder,
             BotItem::Remove,

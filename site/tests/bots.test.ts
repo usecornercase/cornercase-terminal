@@ -256,10 +256,13 @@ test('‹ Projects goes back to the panes, and a click on a project then shows i
   assert.equal(projectLabel(app.projects[app.active]), 'blog');
 });
 
-test('the keys menu opens the form with b, and More lists new bot…', () => {
+test('the keys menu opens the form with b n, and More lists new bot…', () => {
   const app = demo(140);
   app.config.prefix = 'ctrl+]';
-  app.openBotForm();
+  inputKey(app, { ...key(']'), ctrlKey: true });
+  inputKey(app, key('b'));
+  assert.match(screen(app), /bots page/);
+  inputKey(app, key('n'));
   assert.equal(app.overlay?.kind, 'bot');
   app.closeOverlay();
   press(app, 'More');
@@ -281,6 +284,40 @@ test('below 90 columns Bots › opens the list and a tap shows the chat full scr
   assert.match(text, /Bots › prs/);
   assert.match(text, /Message prs…/);
   assert.match(text, /\bsend\b/);
+});
+
+test('b ] and b [ in the keys menu step through the bots, and b m says the demo keeps no memory', () => {
+  const app = demo(140);
+  app.config.prefix = 'ctrl+]';
+  const keys = (last: string) => {
+    inputKey(app, { ...key(']'), ctrlKey: true });
+    inputKey(app, key('b'));
+    inputKey(app, key(last));
+    app.render();
+  };
+  keys('b');
+  const first = app.bots.shown;
+  assert.ok(first);
+  keys(']');
+  assert.notEqual(app.bots.shown, first);
+  keys('[');
+  assert.equal(app.bots.shown, first);
+  keys('m');
+  assert.match(screen(app), /keep no memory/);
+});
+
+test('PageUp and PageDown scroll the chat a page at a time', () => {
+  const app = demo(140);
+  press(app, 'prs');
+  const bot = app.bots.list[0];
+  for (let i = 0; i < 60; i++) app.bots.add(bot, Date.now(), 'notice', `line ${i}`);
+  app.render();
+  inputKey(app, key('PageUp'));
+  app.render();
+  assert.equal(bot.scroll, app.bots.chatRows - 1);
+  inputKey(app, key('PageDown'));
+  app.render();
+  assert.equal(bot.scroll, 0);
 });
 
 test('a run of more than three steps folds under +N steps, and a click unfolds it', () => {

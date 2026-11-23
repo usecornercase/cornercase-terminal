@@ -2,6 +2,15 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.116
+
+- **Select and copy a bot's answers.** Press, drag and release over a bot's chat to select its text, as in a pane; it is copied when you let go. Dragging above or below the lines scrolls them, and a click drops the selection.
+- **Scroll a chat from the keyboard.** `PageUp` and `PageDown` scroll a bot's chat a page at a time while you type in its field.
+- **Edit a bot's memory.** **memory…** in a bot's menu opens its `memory.md`, what it keeps from one conversation to the next, to read and change. Saving tells the bot at its next message that you changed it. If the bot changed it while you were editing, cornercase says so and keeps the bot's text until you save again.
+- **Bots in the keys menu.** With a prefix key, `b` now opens a Bots group: `b` the Bots page, `n` a new bot (it was `b` alone), `]` and `[` the next and previous bot's chat, and `m` the memory of the bot on screen.
+- **For scripts:** `cornercase focus --bot prs` shows a bot's chat in the window, `cornercase bot memory prs` prints its memory and `cornercase bot edit prs --memory TEXT` replaces it.
+- **Secret names can have capitals**, such as `GITHUB_TOKEN`; before, only lower-case letters were accepted. A name is the same secret however its letters are cased, so `GITHUB_TOKEN` and `github_token` are one, and a bot finds it either way.
+
 ## 0.13.115
 
 - **A bot learns when you change its settings.** After you change a bot's access, its name or whether it follows the agents it starts, its next message tells its conversation what holds now. Before, the chat went on with what it was told when the conversation began: a bot given full access still said it could only use cornercase and write in its folder. A bot whose conversation began on an earlier version is told its settings once, at its next message.

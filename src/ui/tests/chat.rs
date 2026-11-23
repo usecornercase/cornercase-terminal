@@ -36,6 +36,7 @@ fn chat(entries: &[ChatEntry]) -> ChatView {
         input: Editor::default(),
         focused: true,
         placeholder: "Message prs…".into(),
+        selected: Vec::new(),
     }
 }
 
@@ -65,6 +66,42 @@ fn all_lines() -> Vec<ChatEntry> {
 #[test]
 fn every_kind_of_line_is_drawn() {
     insta::assert_snapshot!(drawn(chat(&all_lines())).backend());
+}
+
+#[test]
+fn the_selected_cells_are_reversed_and_the_others_are_not() {
+    let mut view = chat(&[bot("Two are blocked.")]);
+    let rows = view.rows.len();
+    view.selected = vec![(rows - 1, 0..3)];
+    let t = drawn(view);
+    let body = bots::chat::body(chat_areas(Rect::new(0, 0, CHAT_W, CHAT_H), 1, 1).lines, false);
+    let y = row_y(body, rows, false, rows - 1);
+    let cell = |x: u16| t.backend().buffer()[(body.x + x, y)].modifier.contains(Modifier::REVERSED);
+    assert!(cell(0) && cell(2) && !cell(3));
+}
+
+#[test]
+fn a_cell_under_the_pointer_is_found_and_held_inside_the_rows() {
+    let view = chat(&[bot("Two are blocked.")]);
+    let areas = chat_areas(Rect::new(0, 0, CHAT_W, CHAT_H), 1, 1);
+    let body = bots::chat::body(areas.lines, false);
+    let last = view.rows.len() - 1;
+    let y = row_y(body, view.rows.len(), false, last);
+    assert_eq!(chat_cell(&areas, &view, Position::new(body.x + 4, y)), Some((last, 4)));
+    assert_eq!(chat_cell(&areas, &view, Position::new(body.x + 4, body.y)), Some((0, 0)));
+    assert_eq!(chat_cell(&areas, &view, Position::new(body.right() + 5, y)), Some((last, body.width - 1)));
+    assert_eq!(row_cells(&view.rows[last], &(0..3)), "Two");
+}
+
+#[test]
+fn the_copied_cells_keep_whole_graphemes() {
+    let row = |text: &str| ChatRow { line: Text::from(text.to_string()), hit: None };
+    assert_eq!(row_cells(&row("e\u{301}x"), &(0..1)), "e\u{301}");
+    assert_eq!(row_cells(&row("e\u{301}x"), &(1..2)), "x");
+    let family = "\u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}";
+    assert_eq!(row_cells(&row(&format!("{family}ok")), &(0..2)), family);
+    assert_eq!(row_cells(&row(&format!("{family}ok")), &(2..3)), "o");
+    assert_eq!(row_cells(&row(&format!("{family}ok")), &(1..3)), format!("{family}o"));
 }
 
 #[test]

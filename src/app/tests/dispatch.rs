@@ -20,6 +20,10 @@ fn every_action() -> Vec<Action> {
         Action::Todo,
         Action::Recap,
         Action::NewBot,
+        Action::BotsPage,
+        Action::NextBot,
+        Action::PreviousBot,
+        Action::BotMemory,
         Action::Settings,
         Action::Usage,
         Action::Processes,
@@ -105,12 +109,16 @@ fn later_action_index(action: &Action) -> usize {
         Action::Todo => 30,
         Action::Recap => 31,
         Action::NewBot => 32,
-        Action::Settings => 33,
-        Action::Usage => 34,
-        Action::Processes => 35,
-        Action::Away => 36,
-        Action::Quit => 37,
-        Action::Help => 38,
+        Action::BotsPage => 33,
+        Action::NextBot => 34,
+        Action::PreviousBot => 35,
+        Action::BotMemory => 36,
+        Action::Settings => 37,
+        Action::Usage => 38,
+        Action::Processes => 39,
+        Action::Away => 40,
+        Action::Quit => 41,
+        Action::Help => 42,
         other => panic!("{other:?} is counted by action_index"),
     }
 }
@@ -124,6 +132,7 @@ fn every_shortcut_is_answered_by_a_stage_or_the_last_match() {
         let (mut app, _rx) = app();
         let rest = app
             .go_shortcut(action, AREA)
+            .and_then(|action| app.bot_shortcut(action, AREA))
             .and_then(|action| app.panel_shortcut(action))
             .and_then(|action| app.edit_shortcut(action));
         left.extend(rest);

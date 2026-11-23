@@ -5,6 +5,7 @@ use ratatui::layout::{Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
+use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
 use super::agent::{ChatAgentLine, chat_agent_rows};
@@ -121,6 +122,7 @@ pub(crate) struct ChatView {
     pub(crate) input: Editor,
     pub(crate) focused: bool,
     pub(crate) placeholder: String,
+    pub(crate) selected: Vec<(usize, Range<u16>)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -503,6 +505,36 @@ pub(crate) fn chat_hit(areas: &ChatAreas, chat: &ChatView, pos: Position) -> Opt
     row_hit(body, chat, pos)
 }
 
+pub(crate) fn chat_cell(areas: &ChatAreas, chat: &ChatView, pos: Position) -> Option<(usize, u16)> {
+    let body = body(areas.lines, chat.thinking.is_some());
+    let shown = shown_rows(chat, body);
+    let last = shown.len().checked_sub(1).filter(|_| !chat.empty && !body.is_empty())?;
+    let top = row_y(body, shown.len(), false, 0);
+    let end = body.width.saturating_sub(1);
+    if pos.y < top {
+        return Some((0, 0));
+    }
+    let row = usize::from(pos.y - top);
+    if row > last {
+        return Some((last, end));
+    }
+    Some((row, pos.x.saturating_sub(body.x).min(end)))
+}
+
+pub(crate) fn row_cells(row: &ChatRow, cols: &Range<u16>) -> String {
+    let text: String = row.line.spans.iter().map(|span| span.content.as_ref()).collect();
+    let mut at: u16 = 0;
+    let mut kept = String::new();
+    for grapheme in text.graphemes(true) {
+        let width = u16::try_from(grapheme.width()).unwrap_or(u16::MAX);
+        if at < cols.end && at.saturating_add(width.max(1)) > cols.start {
+            kept.push_str(grapheme);
+        }
+        at = at.saturating_add(width);
+    }
+    kept
+}
+
 fn shown_rows(chat: &ChatView, body: Rect) -> &[ChatRow] {
     &chat.rows[chat.rows.len().saturating_sub(usize::from(body.height))..]
 }
@@ -620,6 +652,12 @@ fn draw_rows(f: &mut Frame, view: &View, chat: &ChatView, areas: &ChatAreas) {
         if let Some(cells) = lit_cells(row, r).filter(|cells| sidebar_hovered(view, *cells)) {
             f.buffer_mut().set_style(cells, lit);
         }
+    }
+    for (i, cols) in chat.selected.iter().filter(|(i, _)| *i < shown.len()) {
+        let r = Rect { y: row_y(body, shown.len(), chat.empty, *i), height: 1, ..body };
+        let start = cols.start.min(r.width);
+        let cells = Rect { x: r.x + start, width: cols.end.min(r.width).saturating_sub(start), ..r };
+        f.buffer_mut().set_style(cells, Style::default().add_modifier(Modifier::REVERSED));
     }
 }
 

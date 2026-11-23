@@ -126,6 +126,7 @@ mod agents_section;
 mod borders;
 mod bot_ask;
 mod bot_form;
+mod bot_memory;
 mod bots_page;
 mod buttons;
 mod changes_layout;

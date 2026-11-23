@@ -3,9 +3,13 @@ use ratatui::layout::{Position, Rect};
 
 use crate::app::App;
 use crate::app::overlay::Overlay;
+use crate::app::toast::Toast;
 use crate::editor::Editor;
 use crate::log;
+use crate::shortcuts::Action;
 use crate::ui;
+
+const NO_BOT_SHOWN: &str = "no bot's chat is on screen";
 
 impl App {
     pub(in crate::app) fn bots_offered(&self) -> bool {
@@ -28,6 +32,36 @@ impl App {
         }
         if compact {
             self.screen.nav = (!self.panels.bots.live.is_empty()).then_some(ui::Nav::Bots);
+        }
+    }
+
+    pub(in crate::app) fn bot_shortcut(&mut self, action: Action, area: Rect) -> Option<Action> {
+        match action {
+            Action::BotsPage => self.open_bots(self.layout(area).shown(self.screen.nav).compact()),
+            Action::NextBot => self.step_bot(1, area),
+            Action::PreviousBot => self.step_bot(-1, area),
+            Action::BotMemory => self.memory_by_key(),
+            other => return Some(other),
+        }
+        None
+    }
+
+    fn step_bot(&mut self, delta: isize, area: Rect) {
+        let count = self.panels.bots.live.len();
+        let next = match self.shown_bot() {
+            Some(at) => crate::app::shortcuts::cycle(at, count, delta),
+            None => self.last_bot(),
+        };
+        match next {
+            Some(at) => self.show_bot(at),
+            None => self.open_bots(self.layout(area).shown(self.screen.nav).compact()),
+        }
+    }
+
+    fn memory_by_key(&mut self) {
+        match self.shown_bot() {
+            Some(at) => self.open_bot_memory(self.panels.bots.live[at].key),
+            None => self.messages.toast = Some(Toast::new(NO_BOT_SHOWN, ui::ToastIcon::Bug)),
         }
     }
 

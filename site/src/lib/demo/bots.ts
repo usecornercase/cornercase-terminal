@@ -171,6 +171,7 @@ export class Bots {
   page = false;
   last: string | null = null;
   scroll = 0;
+  chatRows = 10;
   private next = 1;
 
   constructor(private readonly app: App) {}
@@ -410,7 +411,11 @@ export class Bots {
     if (!bot) return false;
     const draft = bot.draft;
     if (k.key === 'Enter' && !k.shift && !k.ctrl && !k.alt) this.send(bot, draft.chars.join(''));
-    else if (k.key === 'Escape') {
+    else if (k.key === 'PageUp' || k.key === 'PageDown') {
+      const page = Math.max(1, this.chatRows - 1);
+      bot.scroll = Math.max(0, bot.scroll + (k.key === 'PageUp' ? page : -page));
+      if (!bot.scroll) bot.below = false;
+    } else if (k.key === 'Escape') {
       if (draft.chars.length) bot.draft = draftOf();
       else if (this.app.panelShown()) this.app.closePanel();
     } else editKey(draft, k, width);

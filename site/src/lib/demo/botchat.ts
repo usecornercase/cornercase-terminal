@@ -411,6 +411,7 @@ function drawLines(p: Painter, area: Rect, bot: Bot): void {
     bot.anchor = null;
   }
   bot.scroll = Math.min(bot.scroll, max);
+  app.bots.chatRows = area.h;
   p.region({ r: area, wheel: (dy) => app.bots.scrollTo(bot, -dy, max) });
   const lift = empty ? Math.floor(Math.max(0, area.h - rows.length) / 2) : 0;
   const start = rows.length - area.h - bot.scroll;

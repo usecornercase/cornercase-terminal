@@ -158,6 +158,10 @@ pub(crate) enum Action {
     Todo,
     Recap,
     NewBot,
+    BotsPage,
+    NextBot,
+    PreviousBot,
+    BotMemory,
     Settings,
     Usage,
     Processes,
@@ -171,6 +175,7 @@ pub(crate) enum Group {
     Find,
     Git,
     Workspace,
+    Bots,
 }
 
 impl Group {
@@ -179,6 +184,7 @@ impl Group {
             Self::Find => "Find",
             Self::Git => "Git",
             Self::Workspace => "Workspace",
+            Self::Bots => "Bots",
         }
     }
 
@@ -187,6 +193,7 @@ impl Group {
             Self::Find => "find…",
             Self::Git => "git…",
             Self::Workspace => "workspace…",
+            Self::Bots => "bots…",
         }
     }
 }
@@ -236,7 +243,7 @@ const ROOT: [Item; 30] = [
     run("e", "queue", Action::Queue),
     run("t", "todo", Action::Todo),
     run("s", "recap", Action::Recap),
-    run("b", "new bot", Action::NewBot),
+    open("b", Group::Bots),
     run(",", "settings", Action::Settings),
     run("u", "usage", Action::Usage),
     run("k", "processes", Action::Processes),
@@ -270,12 +277,21 @@ const WORKSPACE: [Item; 7] = [
     run("x", "close workspace", Action::CloseWorkspace),
 ];
 
+const BOTS: [Item; 5] = [
+    run("b", "bots page", Action::BotsPage),
+    run("n", "new bot", Action::NewBot),
+    run("]", "next bot", Action::NextBot),
+    run("[", "previous bot", Action::PreviousBot),
+    run("m", "memory of the bot on screen", Action::BotMemory),
+];
+
 pub(crate) fn items(group: Option<Group>) -> &'static [Item] {
     match group {
         None => &ROOT,
         Some(Group::Find) => &FIND,
         Some(Group::Git) => &GIT,
         Some(Group::Workspace) => &WORKSPACE,
+        Some(Group::Bots) => &BOTS,
     }
 }
 

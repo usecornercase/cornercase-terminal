@@ -467,6 +467,9 @@ fn run_focus(focus: &args::FocusArgs) -> Result<()> {
     if let Some(machine) = &focus.machine {
         return run_focus_machine(machine, focus);
     }
+    if let Some(bot) = &focus.bot {
+        return run_focus_bot(bot, focus.print.json);
+    }
     let item = focus.which.item("focus")?.ok_or_else(|| Error::Control("say what to show".into()))?;
     let reveal = focus.reveal.clone().map(|query| control::Reveal { query, line: focus.line });
     if reveal.is_some() {
@@ -487,6 +490,14 @@ fn run_focus_machine(machine: &str, focus: &args::FocusArgs) -> Result<()> {
     let request = control::FocusMachine { machine: machine.to_string(), item, machine_boot: focus.boot.boot.clone() };
     let value = ask("focus-machine", control::Command::FocusMachine(request))?;
     if focus.print.json { print_json(&value) } else { Ok(()) }
+}
+
+fn run_focus_bot(bot: &str, json: bool) -> Result<()> {
+    client::use_bots()?;
+    client::use_focus_bot()?;
+    let request = control::bots::BotRequest::Show(control::bots::BotTarget { bot: bot.to_string() });
+    let value = ask("bot", control::Command::Bot(request))?;
+    if json { print_json(&value) } else { Ok(()) }
 }
 
 fn run_go(go: args::GoArgs) -> Result<()> {

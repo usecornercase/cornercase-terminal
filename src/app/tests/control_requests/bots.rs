@@ -171,6 +171,33 @@ fn what_a_bot_is_for_is_read_over_the_socket() {
 }
 
 #[test]
+fn a_bot_s_memory_is_read_and_replaced_over_the_socket() {
+    let mut b = bots();
+    b.new_prs();
+    assert_eq!(b.ask("bot", &json!({"action": "memory", "bot": "prs"})), json!({"bot": "prs", "memory": ""}));
+    let edited = b.ask("bot", &json!({"action": "edit", "bot": "prs", "memory": "- squash merges\n"}));
+    assert_eq!(edited["id"], "prs");
+    assert_eq!(
+        b.ask("bot", &json!({"action": "memory", "bot": "PRs"})),
+        json!({"bot": "prs", "memory": "- squash merges\n"})
+    );
+    assert_eq!(b.refuse(&json!({"action": "memory", "bot": "nobody"})).code, "not-found");
+    assert!(b.argvs().is_empty(), "reading and editing a memory starts nothing");
+}
+
+#[test]
+fn show_puts_a_bot_s_chat_in_the_window() {
+    let mut b = bots();
+    b.new_prs();
+    b.app.window_attached();
+    assert_eq!(b.ask("bot", &json!({"action": "show", "bot": "PRs"})), json!({"bot": "prs"}));
+    assert_eq!(b.app.shown_bot_id().as_deref(), Some("prs"));
+    assert!(b.app.bots_page());
+    assert_eq!(b.app.report(None).shown_bot.as_deref(), Some("prs"));
+    assert_eq!(b.refuse(&json!({"action": "show", "bot": "nobody"})).code, "not-found");
+}
+
+#[test]
 fn a_setup_is_asked_again_over_the_socket() {
     let mut b = bots();
     b.new_prs();
