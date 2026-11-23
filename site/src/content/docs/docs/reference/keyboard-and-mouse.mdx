@@ -172,9 +172,10 @@ See [Flows](../../guides/flows/#the-flow-panel).
 | Click | `+ New` under the bots, or ` + New bot ` on the page | Opens the new bot form. |
 | Click | An idea (**PRs**, **News**, **Releases**) on the page with no bot | Opens the new bot form with its name and what it is for filled in. |
 | Click | A bot's row | Shows its chat in place of the panes, with its card, and marks its answers as read. `‹ Projects` or a tab of the tab bar goes back. |
-| Right-click, or hover and click `⋯` | A bot's row | Opens its menu: **rename**, **edit…**, **new conversation**, **open folder**, **remove…**. A bot has no `×`. |
+| Right-click, or hover and click `⋯` | A bot's row | Opens its menu: **rename**, **edit…**, **routines…**, **secrets…**, **memory…** (see [Its memory](../../guides/bots/#its-memory)), **new conversation**, **open folder**, **remove…**. A bot has no `×`. |
 | Wheel | The list of bots | Scrolls its rows. |
 | Wheel | A [chat](../../guides/bots/#the-chat) | Scrolls its lines. |
+| Press, drag, release | A chat's lines | Selects the text, as a pane does, and copies it when you let go; dragging above or below the lines scrolls them. A click drops the selection. |
 | Click | `+N steps` | Unfolds the steps of that run. |
 | Click | `+N lines` | Unfolds the rest of an agent's last message, or of its screen, in a `finished` or `waiting` line. |
 | Click | ` show ` on a `started`, `finished` or `waiting` line | Shows that agent's tab and leaves the chat; it reads `closed` when the agent is gone. |
@@ -188,7 +189,7 @@ See [Flows](../../guides/flows/#the-flow-panel).
 | Click | ` ↓ new ` | Goes back to the bottom of the chat. |
 | Click | A link in a bot's answer | Asks, then opens it in your browser; copies it in a remote window, the browser or over ssh. |
 | Click | The folder on a bot's card | Opens it through **open in…**, or copies its path. |
-| `Enter`, `Esc` | The chat's field | `Enter` sends; a paste keeps its line breaks. `Esc` clears the field, and does nothing when it is empty. Every key goes to this field, never to a pane, while a chat shows. |
+| `Enter`, `Esc`, `PgUp`, `PgDn` | The chat's field | `Enter` sends; a paste keeps its line breaks. `Esc` clears the field, and does nothing when it is empty. `PgUp` and `PgDn` scroll the chat a page at a time. Every key goes to this field, never to a pane, while a chat shows. |
 
 See [Bots](../../guides/bots/#in-the-window).
 
@@ -219,7 +220,7 @@ Press the prefix and a menu opens at the bottom of the screen with what each nex
 
 <Screen
   name="keys-menu"
-  alt="The web-shop project with git log in the pane, and the Keys menu at the bottom of the pane: n next tab, p previous tab, 1-9 go to tab, ] next workspace, [ previous workspace, } next project, { previous project, arrows pane on that side, a agent that needs you, m mark for review, / search, c new tab, | split right, - split down, x close pane, r rename tab, f find…, g git…, w workspace…, i issues, e queue, t todo, comma settings, u usage, k processes, h help, o away on chat apps, q quit, and a note that esc closes and ctrl+] twice types it in the pane"
+  alt="The web-shop project with git log in the pane, and the Keys menu at the bottom of the pane: n next tab, p previous tab, 1-9 go to tab, ] next workspace, [ previous workspace, } next project, { previous project, arrows pane on that side, a agent that needs you, m mark for review, / search, c new tab, | split right, - split down, x close pane, r rename tab, f find…, g git…, w workspace…, i issues, e queue, t todo, b bots…, comma settings, u usage, k processes, h help, o away on chat apps, q quit, and a note that esc closes and ctrl+] twice types it in the pane"
   caption="The menu the prefix key opens, here Ctrl+]."
 />
 
@@ -252,7 +253,10 @@ Press the prefix and a menu opens at the bottom of the screen with what each nex
 | `i`, `t`, `,`, `u` | Opens the issues, the [TODO list](../../guides/todo/) (on a new item), the settings, Usage and stats. |
 | `e` | Opens the [Queue](../../guides/queue/) window. |
 | `s` | Opens or closes the [Recap panel](../../guides/recap/). |
-| `b` | Opens the [new bot](../../guides/bots/#make-a-bot-in-the-window) form. |
+| `b` `b` | Opens the [Bots page](../../guides/bots/#the-bots-page) on the bot you read last. |
+| `b` `n` | Opens the [new bot](../../guides/bots/#make-a-bot-in-the-window) form. |
+| `b` `]` / `b` `[` | Shows the chat of the next / previous bot, going round; with no bot, the Bots page. |
+| `b` `m` | Opens the [memory](../../guides/bots/#its-memory) of the bot whose chat is on screen, or says none is. |
 | `k` | Opens the [Processes](../../guides/projects-workspaces-tabs/#processes) dialog: what every pane runs, with its CPU and memory, and a way to stop a program. |
 | `h` | Opens the **`Help`** menu. |
 | `o` | Away on chat apps: turns the away mode of [Telegram](../../guides/telegram/) and [Discord](../../guides/discord/) on or off, on every one that is set up, as **More ▴ › remote…** does for each. With none paired, it opens the settings to set one up. |
@@ -291,7 +295,8 @@ While a dialog, the search, the settings, the issue browser, the changes panel's
 | Agent, place and person pickers | Type to filter. `↑` `↓` select. `Enter` picks. `Esc` goes back. |
 | Changes panel filter | Type a piece of a path or a pattern: `*.test.js` keeps only those files, `!*.snap` leaves them out. `Enter` keeps the filter and gives the keys back to your program, `Esc` clears it, or closes the panel when the field is empty. A click in a pane gives the keys back too. |
 | Files panel search | Type to search. `↑` `↓` pick a result. `Enter` opens it. `Esc` clears the search and gives the keys back to your program, or closes the panel when the bar is empty. A click in a pane gives them back too and keeps the search. |
-| A bot's chat field | Type, paste. `Enter` sends, and a paste keeps its line breaks. `Esc` clears the field. The arrows, `Home` and `End`, word moves and selection work as in every field below. |
+| A bot's chat field | Type, paste. `Enter` sends, and a paste keeps its line breaks. `Esc` clears the field. `PgUp` `PgDn` scroll the chat above it. The arrows, `Home` and `End`, word moves and selection work as in every field below. |
+| A bot's memory | Type, paste. `Enter` starts a new line. `Tab` moves to **save**, where `Enter` saves, and back. `Esc` closes without saving. |
 | New bot form | `Tab` / `Shift+Tab` move between its fields; a list opens with `Space`, `↑` or `↓` and `Esc` closes it first. `Enter` creates the bot, or breaks the line in **For**. `Esc` closes. |
 | TODO field | Type, paste. `←` `→` move the cursor, `Ctrl+←` `Ctrl+→` (or `Option+←` `Option+→`) a word at a time, `↑` `↓` move across the lines of a long item, `Home` `End` (or `Ctrl+A` `Ctrl+E`) go to its start and end, `Backspace` `Delete` delete. `Enter` saves (a new item keeps the field open for the next one), `Esc` cancels, or closes the panel when the field is empty. A click outside the field saves it and gives the keys back. |
 | Files panel find field | Type to find in the open file. `↓` or `Enter` go to the next match, `↑` to the previous one, wrapping. `Esc` clears it, or closes it when it is empty. A click in a pane gives the keys back and keeps it. |

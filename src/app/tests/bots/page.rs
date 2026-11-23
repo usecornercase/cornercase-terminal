@@ -148,6 +148,7 @@ fn a_move_of_the_keys_menu_leaves_the_page_and_new_bot_keeps_it() {
     press_button(&mut app, AREA);
     send_key(&mut app, KeyCode::Char(']'), KeyModifiers::CONTROL);
     send_key(&mut app, KeyCode::Char('b'), KeyModifiers::NONE);
+    send_key(&mut app, KeyCode::Char('n'), KeyModifiers::NONE);
     assert!(matches!(app.overlay, Some(Overlay::BotForm(_))) && app.bots_page());
     app.overlay = None;
     send_key(&mut app, KeyCode::Char(']'), KeyModifiers::CONTROL);
@@ -221,4 +222,35 @@ mod compact {
         send_key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
         assert_eq!((app.screen.nav, app.bots_page()), (None, true));
     }
+}
+
+fn bots_key(app: &mut App, key: char) {
+    app.config.prefix_key = "ctrl+]".into();
+    send_key(app, KeyCode::Char(']'), KeyModifiers::CONTROL);
+    send_key(app, KeyCode::Char('b'), KeyModifiers::NONE);
+    send_key(app, KeyCode::Char(key), KeyModifiers::NONE);
+}
+
+#[test]
+fn b_b_opens_the_page_on_a_bot_and_the_brackets_step_through_the_bots() {
+    let mut c = chat(ANSWER);
+    folder::create(c.dir.path(), &bot("news", "News"), "").expect("create");
+    c.app.set_bots_dir(c.dir.path());
+    c.app.window_attached();
+    bots_key(&mut c.app, 'b');
+    assert_eq!(c.app.shown_bot_id().as_deref(), Some("news"));
+    bots_key(&mut c.app, ']');
+    assert_eq!(c.app.shown_bot_id().as_deref(), Some("prs"));
+    bots_key(&mut c.app, ']');
+    assert_eq!(c.app.shown_bot_id().as_deref(), Some("news"));
+    bots_key(&mut c.app, '[');
+    assert_eq!(c.app.shown_bot_id().as_deref(), Some("prs"));
+    assert!(c.app.bots_page());
+}
+
+#[test]
+fn a_step_with_no_bot_opens_the_lobby() {
+    let (mut app, _rx, _dir) = no_bots();
+    bots_key(&mut app, ']');
+    assert!(app.bots_page() && !app.bot_shown());
 }

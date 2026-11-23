@@ -10,6 +10,7 @@ pub(crate) mod chat;
 pub(crate) mod folder;
 pub(crate) mod follow;
 pub(crate) mod form;
+pub(crate) mod memory;
 pub(crate) mod routines;
 pub(crate) mod secrets;
 pub(crate) mod turn;
@@ -71,6 +72,8 @@ pub(crate) struct Bot {
     pub(crate) chat_apps: ChatApps,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) briefed: Option<Briefed>,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub(crate) memory_edits: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -78,11 +81,13 @@ pub(crate) struct Briefed {
     pub(crate) name: String,
     pub(crate) access: Access,
     pub(crate) follow: bool,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub(crate) memory: u64,
 }
 
 impl Briefed {
     pub(crate) fn of(bot: &Bot) -> Self {
-        Self { name: bot.name.clone(), access: bot.access, follow: bot.follow }
+        Self { name: bot.name.clone(), access: bot.access, follow: bot.follow, memory: bot.memory_edits }
     }
 }
 
@@ -123,6 +128,11 @@ fn yes() -> bool {
 #[expect(clippy::trivially_copy_pass_by_ref, reason = "serde's skip_serializing_if takes a reference")]
 fn is_on(follow: &bool) -> bool {
     *follow
+}
+
+#[expect(clippy::trivially_copy_pass_by_ref, reason = "serde's skip_serializing_if takes a reference")]
+fn is_zero(count: &u64) -> bool {
+    *count == 0
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -202,6 +212,7 @@ pub(crate) fn sample(id: &str, name: &str) -> Bot {
         follow: true,
         chat_apps: ChatApps::Away,
         briefed: None,
+        memory_edits: 0,
     }
 }
 

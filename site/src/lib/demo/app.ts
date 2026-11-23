@@ -157,6 +157,8 @@ const HELP_LABELS: Record<HelpItem, string> = {
 };
 const MORE_ITEMS: MoreItem[] = ['settings', 'usage', 'processes', 'ports', 'new bot…', 'queue', 'quit'];
 const CLOSE_AGENT_NEEDS = 'this needs cornercase on your computer: the demo closes no agents';
+const BOT_MEMORY_NEEDS = "this needs cornercase on your computer: the demo's bots keep no memory";
+const NO_BOT_SHOWN = "no bot's chat is on screen";
 const CONTEXT_NEEDS = "this needs cornercase on your computer: the demo's agents are not real Claude Code sessions";
 const AGENT_TITLES: Record<string, string> = { claude: 'Claude Code', codex: 'Codex', gemini: 'Gemini CLI', opencode: 'opencode', grok: 'Grok Build', cursor: 'Cursor CLI', copilot: 'GitHub Copilot CLI', vibe: 'Vibe CLI' };
 const MERGE_NEED = 'this needs cornercase on your computer: the demo has no git repositories to merge';
@@ -1579,6 +1581,15 @@ export class App {
 
   openBots(): void {
     this.bots.open(this.areas().compact);
+  }
+
+  private stepBot(delta: number): void {
+    const list = this.bots.list;
+    const shown = list.findIndex((b) => b.id === this.bots.shown);
+    const next = shown >= 0 ? this.cycle(shown, list.length, delta) : list.findIndex((b) => b.id === this.bots.last);
+    const bot = next === null ? undefined : (list[next] ?? list[0]);
+    if (bot) this.bots.show(bot.id);
+    else this.openBots();
   }
 
   pressBack(): void {
@@ -3386,6 +3397,9 @@ export class App {
       if (opening) this.addTodo();
     } else if (a.kind === 'recap') this.toggleRecap();
     else if (a.kind === 'newBot') this.openBotForm();
+    else if (a.kind === 'botsPage') this.openBots();
+    else if (a.kind === 'nextBot' || a.kind === 'previousBot') this.stepBot(a.kind === 'nextBot' ? 1 : -1);
+    else if (a.kind === 'botMemory') this.bug(this.bots.current() ? BOT_MEMORY_NEEDS : NO_BOT_SHOWN);
     else if (a.kind === 'queue') this.openQueue();
     else if (a.kind === 'settings') this.openSettings();
     else if (a.kind === 'usage') this.openUsage();

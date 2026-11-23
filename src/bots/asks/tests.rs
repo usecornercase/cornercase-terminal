@@ -32,6 +32,7 @@ mod the_names {
     #[case::five(&["a", "b", "c", "d", "e"])]
     #[case::a_bad_name(&["Not A Name"])]
     #[case::a_name_twice(&["a", "a"])]
+    #[case::a_name_twice_in_two_cases(&["TOKEN", "token"])]
     fn are_refused(#[case] list: &[&str]) {
         assert!(names_refusal(&names(list)).is_some());
     }

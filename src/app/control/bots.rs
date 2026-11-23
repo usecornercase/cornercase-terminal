@@ -82,6 +82,11 @@ impl App {
                 let (bot, about) = self.bot_about(&target.bot)?;
                 json!({ "bot": bot, "about": about })
             }
+            BotRequest::Memory(target) => {
+                let (bot, memory) = self.bot_memory(&target.bot)?;
+                json!({ "bot": bot, "memory": memory })
+            }
+            BotRequest::Show(target) => json!({ "bot": self.focus_bot(&target.bot)? }),
             _ => return Err(Refusal::new(Code::Failed, "not a bot request")),
         };
         Ok(Some(answer))

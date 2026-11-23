@@ -181,8 +181,9 @@ impl App {
     }
 
     fn give_checked(&self, at: usize, ask: &Ask, give: &SecretGive) -> Done<()> {
-        let listed = give.values.keys().all(|name| ask.names.contains(name));
-        let covered = ask.missing().iter().all(|name| give.values.contains_key(*name));
+        let asked = |name: &String| ask.names.iter().any(|asked| keeping::same_name(asked, name));
+        let listed = give.values.keys().all(asked);
+        let covered = ask.missing().iter().all(|name| give.values.keys().any(|given| keeping::same_name(given, name)));
         if !listed || !covered {
             return Err(malformed(format!(
                 "give a value for each of: {}, and for no other name",
@@ -234,8 +235,12 @@ impl App {
     pub(super) fn asks_saved(&mut self, at: usize, names: &[String]) {
         let live = &mut self.panels.bots.live[at];
         for ask in &mut live.asks {
-            let listed = names.iter().filter(|name| ask.names.contains(name) && !ask.given.contains(name));
-            let listed: Vec<String> = listed.cloned().collect();
+            let listed: Vec<String> = ask
+                .missing()
+                .into_iter()
+                .filter(|asked| names.iter().any(|name| keeping::same_name(name, asked)))
+                .map(str::to_string)
+                .collect();
             ask.given.extend(listed);
         }
         let (done, waiting): (Vec<Ask>, Vec<Ask>) = std::mem::take(&mut live.asks).into_iter().partition(Ask::done);
@@ -248,7 +253,7 @@ impl App {
     pub(super) fn asks_unsaved(&mut self, at: usize, name: Option<&str>) {
         let live = &mut self.panels.bots.live[at];
         for ask in &mut live.asks {
-            ask.given.retain(|given| name.is_some_and(|name| name != given));
+            ask.given.retain(|given| name.is_some_and(|name| !keeping::same_name(name, given)));
         }
         if let Some(Overlay::BotAsk(form)) = &mut self.overlay
             && let Some(ask) = live.asks.iter().find(|ask| ask.id == form.ask && form.bot == live.key)

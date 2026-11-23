@@ -229,6 +229,17 @@ mod giving {
     }
 
     #[test]
+    fn an_upper_case_name_is_asked_given_and_read_however_its_letters_are_cased() {
+        let mut k = keeper();
+        let ask = ask_id(&k.ask(&["GITHUB_TOKEN"]).expect("asked"));
+        k.give(ask, &[("github_token", VALUE)]).expect("given");
+        assert_eq!(k.waiting(), Vec::<u64>::new());
+        let kept = &k.app.panels.bots.live[k.at()].secrets;
+        assert_eq!(kept.find("GITHUB_TOKEN").map(|entry| entry.name.as_str()), Some("github_token"));
+        assert_eq!(refusal(k.ask(&["Github_Token"])).0, Code::Conflict);
+    }
+
+    #[test]
     fn declining_writes_its_notice_and_tells_the_chat_later() {
         let mut k = keeper();
         let ask = ask_id(&k.ask(&["pw"]).expect("asked"));

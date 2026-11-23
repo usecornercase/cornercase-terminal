@@ -27,6 +27,7 @@ impl App {
                 | Drag::Row(_)
                 | Drag::Pane(_)
                 | Drag::Footer(_)
+                | Drag::Chat
                 | Drag::Remote(RemoteDrag::Divider { .. }),
             ) => {
                 self.screen.drag = None;
@@ -371,6 +372,7 @@ impl App {
             Some(Drag::Row(drag)) => self.drag_row(drag, ev, areas, area),
             Some(Drag::Text(field)) => self.drag_field(field, ev, area),
             Some(Drag::Remote(drag)) => self.drag_remote(drag, ev, areas.pane),
+            Some(Drag::Chat) => self.drag_chat(ev, area),
             Some(Drag::Link(_)) | None => return false,
         }
         true
@@ -522,6 +524,7 @@ impl App {
             Some(Overlay::Processes(dialog)) => dialog.paste(text),
             Some(Overlay::QueueList(dialog)) => dialog.paste(text),
             Some(Overlay::BotAsk(_)) => self.bot_ask_paste(text, area),
+            Some(Overlay::BotMemory(_)) => self.bot_memory_paste(text, area),
             Some(_) => self.name_paste(text, area),
             None => {}
         }

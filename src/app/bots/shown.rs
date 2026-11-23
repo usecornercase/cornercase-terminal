@@ -5,6 +5,7 @@ use std::time::Duration;
 use ratatui::layout::Rect;
 use ratatui::text::Line as Text;
 
+use super::select::Selection;
 use crate::app::App;
 use crate::bots::asks;
 use crate::bots::chat::{self, Kind, Line};
@@ -19,6 +20,7 @@ pub(in crate::app) struct Chat {
     pub(in crate::app) news: bool,
     pub(in crate::app) unfolded: HashSet<u64>,
     pub(in crate::app) anchor: Option<u64>,
+    pub(in crate::app) selection: Option<Selection>,
     pub(super) width: u16,
     pub(super) bodies: HashMap<u64, Vec<Text<'static>>>,
     pub(super) card: Option<DrawnCard>,
@@ -40,6 +42,7 @@ impl Chat {
             news: false,
             unfolded: HashSet::new(),
             anchor: None,
+            selection: None,
             width: 0,
             bodies: HashMap::new(),
             card: None,
@@ -193,6 +196,7 @@ impl Chat {
         if self.width != width {
             self.width = width;
             self.bodies.clear();
+            self.selection = None;
         }
         let all = groups(&self.lines);
         let mut entries = Vec::new();
@@ -237,7 +241,7 @@ impl Chat {
 }
 
 impl App {
-    fn chat_facts(&self, at: usize) -> Facts {
+    pub(super) fn chat_facts(&self, at: usize) -> Facts {
         let live = &self.panels.bots.live[at];
         let last = self
             .panels
@@ -309,6 +313,7 @@ impl App {
         } else {
             shown.visible(&facts, body, tone)
         };
+        let selected = shown.selected(rows.len());
         let live = &self.panels.bots.live[at];
         let view = ui::ChatView {
             name: live.bot.name.clone(),
@@ -321,6 +326,7 @@ impl App {
             input: draft,
             focused,
             placeholder: format!("Message {}…", live.bot.name),
+            selected,
         };
         Some(Shown { view, card: self.bot_card(at) })
     }
@@ -345,6 +351,12 @@ impl Chat {
         let start = end.saturating_sub(height);
         (rows[start..end].to_vec(), self.news)
     }
+
+    fn selected(&self, count: usize) -> Vec<(usize, Range<u16>)> {
+        let Some(selection) = self.selection else { return Vec::new() };
+        let up = |row: usize| self.scroll + count - 1 - row;
+        (0..count).filter_map(|row| selection.cols(up(row)).map(|cols| (row, cols))).collect()
+    }
 }
 
 impl App {
@@ -352,14 +364,16 @@ impl App {
         let id = self.panels.bots.live[at].bot.id.clone();
         let Some(shown) = self.panels.bots.shown.as_ref().filter(|shown| shown.bot == id) else { return };
         let (scrolled, width) = (shown.scroll > 0, shown.width);
+        let measured = scrolled || shown.selection.is_some();
         let (facts, tone) = (self.chat_facts(at), self.chat_tone());
         let Some(shown) = self.panels.bots.shown.as_mut() else { return };
         let tail = shown.tail_start();
         let run = line.routine.filter(|_| line.ask.is_none());
         let from = run.and_then(|run| shown.run_group(run)).map_or(tail, |at| at.min(tail));
-        let before = if scrolled { shown.tail_height(from, &facts, width, tone) } else { 0 };
+        let before = if measured { shown.tail_height(from, &facts, width, tone) } else { 0 };
         shown.lines.push(line.clone());
-        let height = if scrolled { shown.tail_height(from, &facts, width, tone).saturating_sub(before) } else { 0 };
+        let height = if measured { shown.tail_height(from, &facts, width, tone).saturating_sub(before) } else { 0 };
+        shown.selection = shown.selection.map(|selection| selection.shifted(height));
         let extra = shown.lines.len().saturating_sub(super::window::CHAT_KEPT);
         shown.lines.drain(..extra);
         if scrolled {

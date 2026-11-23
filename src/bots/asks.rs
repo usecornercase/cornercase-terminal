@@ -37,7 +37,8 @@ pub(crate) struct Ask {
 
 impl Ask {
     pub(crate) fn missing(&self) -> Vec<&str> {
-        self.names.iter().filter(|name| !self.given.contains(name)).map(String::as_str).collect()
+        let given = |name: &&String| self.given.iter().any(|given| secrets::same_name(given, name));
+        self.names.iter().filter(|name| !given(name)).map(String::as_str).collect()
     }
 
     pub(crate) fn done(&self) -> bool {
@@ -45,9 +46,8 @@ impl Ask {
     }
 
     pub(crate) fn same(&self, names: &[String]) -> bool {
-        let mine: BTreeSet<&String> = self.names.iter().collect();
-        let theirs: BTreeSet<&String> = names.iter().collect();
-        mine == theirs
+        let keys = |names: &[String]| names.iter().map(|name| name.to_ascii_lowercase()).collect::<BTreeSet<String>>();
+        keys(&self.names) == keys(names)
     }
 
     pub(crate) fn joined(&self) -> String {
@@ -62,7 +62,7 @@ pub(crate) fn names_refusal(names: &[String]) -> Option<String> {
     if let Some(why) = names.iter().find_map(|name| secrets::name_refusal(name)) {
         return Some(why);
     }
-    let unique: BTreeSet<&String> = names.iter().collect();
+    let unique: BTreeSet<String> = names.iter().map(|name| name.to_ascii_lowercase()).collect();
     (unique.len() != names.len()).then(|| String::from("a secret's name is there twice"))
 }
 

@@ -60,6 +60,12 @@ impl App {
             run.and_then(|run| shown.lines.iter().find(|line| line.routine == Some(run))).map(|line| line.id);
     }
 
+    pub(in crate::app) fn focus_bot(&mut self, key: &str) -> Result<String, crate::control::contract::Refusal> {
+        let at = self.bot_at(key)?;
+        self.show_bot(at);
+        Ok(self.panels.bots.live[at].bot.id.clone())
+    }
+
     pub(in crate::app) fn show_bot_by_key(&mut self, key: u64) {
         if let Some(at) = self.panels.bots.by_key(key) {
             self.show_bot(at);

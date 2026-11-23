@@ -356,5 +356,17 @@ mod the_settings_a_continued_conversation_is_told {
         for part in ["You are PRs", SEE, FULL, FOLLOW] {
             assert!(text.contains(part), "{part} in {text}");
         }
+        assert!(!text.contains(MEMORY_EDITED), "{text}");
+    }
+
+    #[test]
+    fn a_memory_the_user_replaced_is_said_alone_and_once() {
+        let before = named(Access::Cornercase);
+        let bot = Bot { memory_edits: 2, ..before.clone() };
+        let text = settings(&told(&bot, &before)).expect("a change");
+        assert!(text.starts_with("## Your settings now") && text.ends_with(MEMORY_EDITED), "{text}");
+        assert!(!text.contains(REACH) && !text.contains("You are PRs"), "{text}");
+        assert_eq!(settings(&told(&bot, &bot)), None);
+        assert!(settings(&bot).expect("unknown").ends_with(MEMORY_EDITED));
     }
 }

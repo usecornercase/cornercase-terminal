@@ -21,6 +21,7 @@ pub(in crate::app) enum BotItem {
     Edit,
     Routines,
     Secrets,
+    Memory,
     NewConversation,
     OpenFolder,
     Remove,
@@ -37,6 +38,7 @@ impl App {
                 BotItem::Edit => "edit…",
                 BotItem::Routines => "routines…",
                 BotItem::Secrets => "secrets…",
+                BotItem::Memory => "memory…",
                 BotItem::NewConversation => "new conversation",
                 BotItem::OpenFolder => "open folder",
                 BotItem::Remove => "remove…",
@@ -58,6 +60,7 @@ impl App {
             BotItem::Edit => self.open_bot_form(Some(key)),
             BotItem::Routines => self.open_bot_routines(key, None),
             BotItem::Secrets => self.open_bot_secrets(key, None),
+            BotItem::Memory => self.open_bot_memory(key),
             BotItem::NewConversation => {
                 let id = self.panels.bots.live[bot].bot.id.clone();
                 self.new_conversation(&id);
@@ -189,6 +192,7 @@ impl Overlay {
             Self::BotRoutines(dialog) => dialog.bot == key,
             Self::BotSecrets(secrets) => secrets.bot() == key,
             Self::BotAsk(form) => form.bot == key,
+            Self::BotMemory(dialog) => dialog.bot == key,
             Self::Queue(form) => form.bot() == Some(id),
             Self::Menu { actions, .. } => {
                 actions.iter().any(|action| matches!(action, MenuAction::Bot(found, _) if *found == key))

@@ -145,6 +145,25 @@ fn a_bot_made_with_what_it_is_for_sets_itself_up_and_bot_setup_runs_it_again() {
 }
 
 #[test]
+fn a_bots_memory_is_printed_and_replaced_and_focus_shows_its_chat() {
+    let session = started();
+
+    assert_eq!(session.says(&["bot", "new", "PRs", "--agent", "claude"]), "prs");
+    assert_eq!(String::from_utf8_lossy(&session.cli(&["bot", "memory", "prs"]).stdout), "");
+    session.says(&["bot", "edit", "prs", "--memory", "- squash merges"]);
+    assert_eq!(String::from_utf8_lossy(&session.cli(&["bot", "memory", "prs"]).stdout), "- squash merges\n");
+    let memory: Value = serde_json::from_str(&session.says(&["bot", "memory", "PRs", "--json"])).expect("json");
+    assert_eq!(memory, serde_json::json!({"bot": "prs", "memory": "- squash merges"}));
+    assert!(!session.dir.join("claude-bot.args").exists(), "reading and replacing a memory starts nothing");
+
+    let focused: Value = serde_json::from_str(&session.says(&["focus", "--bot", "PRs", "--json"])).expect("json");
+    assert_eq!(focused, serde_json::json!({"bot": "prs"}));
+    let status: Value = serde_json::from_str(&session.says(&["status", "--json"])).expect("json");
+    assert_eq!(status["shown_bot"], "prs");
+    assert!(!session.cli(&["focus", "--bot", "nobody"]).status.success());
+}
+
+#[test]
 fn inside_a_bot_a_command_must_name_its_place_and_the_server_cannot_be_stopped() {
     let session = started();
     session.says(&["bot", "new", "prs", "--agent", "claude"]);

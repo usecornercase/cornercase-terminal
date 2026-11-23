@@ -97,7 +97,8 @@ impl App {
                         | Drag::Divider { .. }
                         | Drag::Footer(_)
                         | Drag::Text(_)
-                        | Drag::Remote(_),
+                        | Drag::Remote(_)
+                        | Drag::Chat,
                     ) => false,
                     Some(Drag::Border(_) | Drag::Link(_) | Drag::Lines { .. }) | None => true,
                 }

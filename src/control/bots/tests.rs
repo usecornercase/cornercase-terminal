@@ -18,8 +18,12 @@ fn request(args: &str) -> Request {
     BotRequest::New(NewBot { name: "PRs".into(), agent: Some("claude".into()), about: "x".into(), ..NewBot::default() })
 )]
 #[case::edit(
-    r#"{"action":"edit","entry":{"bot":"prs","name":"Other","agent":null,"model":"","effort":null,"account":null,"access":null,"follow":null,"chat_apps":null,"about":null}}"#,
+    r#"{"action":"edit","entry":{"bot":"prs","name":"Other","agent":null,"model":"","effort":null,"account":null,"access":null,"follow":null,"chat_apps":null,"about":null,"memory":null}}"#,
     BotRequest::Edit(EditBot { bot: "prs".into(), name: Some("Other".into()), model: Some(String::new()), ..EditBot::default() })
+)]
+#[case::edit_memory(
+    r#"{"action":"edit","entry":{"bot":"prs","name":null,"agent":null,"model":null,"effort":null,"account":null,"access":null,"follow":null,"chat_apps":null,"about":null,"memory":"- squash"}}"#,
+    BotRequest::Edit(EditBot { bot: "prs".into(), memory: Some("- squash".into()), ..EditBot::default() })
 )]
 #[case::remove(r#"{"action":"remove","entry":{"bot":"prs"}}"#, BotRequest::Remove(BotTarget { bot: "prs".into() }))]
 #[case::reset(r#"{"action":"reset","entry":{"bot":"prs"}}"#, BotRequest::Reset(BotTarget { bot: "prs".into() }))]
@@ -27,6 +31,8 @@ fn request(args: &str) -> Request {
 #[case::stop(r#"{"action":"stop","entry":{"bot":"prs"}}"#, BotRequest::Stop(BotTarget { bot: "prs".into() }))]
 #[case::setup(r#"{"action":"setup","entry":{"bot":"prs"}}"#, BotRequest::Setup(BotTarget { bot: "prs".into() }))]
 #[case::about(r#"{"action":"about","entry":{"bot":"prs"}}"#, BotRequest::About(BotTarget { bot: "prs".into() }))]
+#[case::memory(r#"{"action":"memory","entry":{"bot":"prs"}}"#, BotRequest::Memory(BotTarget { bot: "prs".into() }))]
+#[case::show(r#"{"action":"show","entry":{"bot":"prs"}}"#, BotRequest::Show(BotTarget { bot: "prs".into() }))]
 #[case::say(
     r#"{"action":"say","entry":{"bot":"prs","text":"hi","wait":true}}"#,
     BotRequest::Say(BotSay { bot: "prs".into(), text: "hi".into(), wait: true })
@@ -76,6 +82,15 @@ fn the_log_line_says_how_long_a_message_is_and_never_what_it_says() {
 fn reading_what_a_bot_is_for_logs_the_bot_and_no_text() {
     let fields = Command::Bot(BotRequest::About(BotTarget { bot: "prs".into() })).fields();
     assert_eq!(fields, [("action", "about".to_string()), ("bot", "prs".to_string())]);
+}
+
+#[test]
+fn a_memory_edit_logs_its_size_and_never_its_text() {
+    let edit = BotRequest::Edit(EditBot { bot: "prs".into(), memory: Some("- private".into()), ..EditBot::default() });
+    let text = format!("{:?}", Command::Bot(edit).fields());
+    assert!(text.contains("(\"memory_bytes\", \"9\")") && !text.contains("private"), "{text}");
+    let shown = Command::Bot(BotRequest::Show(BotTarget { bot: "prs".into() })).fields();
+    assert_eq!(shown, [("action", "show".to_string()), ("bot", "prs".to_string())]);
 }
 
 #[test]
@@ -145,7 +160,7 @@ fn the_log_line_of_a_secret_request_never_holds_a_value_or_a_name_that_is_not_on
         text.contains("\"bytes\", \"13\"") && text.contains("\"name\", \"pw\"") && !text.contains("hunter2"),
         "{text}"
     );
-    let mistaken = "hunter2-value-with-Capitals";
+    let mistaken = "hunter2 value with spaces";
     for request in [
         BotRequest::SecretGet(SecretGet { name: mistaken.into() }),
         BotRequest::SecretRemove(SecretRemove { bot: "prs".into(), name: Some(mistaken.into()), all: false }),

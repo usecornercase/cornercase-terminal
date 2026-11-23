@@ -74,3 +74,21 @@ fn a_conversation_kept_before_its_settings_were_is_told_all_of_them_once() {
     assert!(!argv.contains("## bot.md"), "{argv}");
     assert_eq!(c.saved().briefed, Some(Briefed::of(&kept)));
 }
+
+#[test]
+fn a_memory_the_user_edits_between_two_messages_is_told_once() {
+    const MEMORY: &str = "The user changed your memory.md";
+    let mut c = chat(ANSWER);
+    c.answered("first", ANSWER);
+    let edit = EditBot { bot: "prs".into(), memory: Some("- squash merges\n".into()), ..EditBot::default() };
+    c.app.bot_edit(&edit).expect("edited");
+    c.answered("again", ANSWER);
+    c.answered("third", ANSWER);
+    let argvs = c.argvs();
+    assert!(!argvs[0].contains(MEMORY), "{}", argvs[0]);
+    assert!(argvs[1].contains(SETTINGS) && argvs[1].contains(MEMORY), "{}", argvs[1]);
+    assert!(!argvs[1].contains(FULL) && !argvs[2].contains(MEMORY), "{argvs:?}");
+    assert_eq!(c.saved().memory_edits, 1);
+    assert_eq!(c.saved().briefed.map(|told| told.memory), Some(1));
+    assert_eq!(folder::notes(&c.app.panels.bots.live[0].folder).1, "- squash merges\n");
+}

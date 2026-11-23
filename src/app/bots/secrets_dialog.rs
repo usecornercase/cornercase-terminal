@@ -8,7 +8,7 @@ use crate::editor::Editor;
 use crate::queue::clock;
 use crate::ui;
 
-const NAME_HINT: &str = "a-z, 0-9, - and _, such as campus-password";
+const NAME_HINT: &str = "a-z, A-Z, 0-9, - and _, such as campus-password or GITHUB_TOKEN";
 const SAVE_SUBMIT: &str = "save";
 const NEXT_SUBMIT: &str = "next";
 pub(super) const ONE_LINE: &str =

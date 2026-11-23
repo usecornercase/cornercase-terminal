@@ -337,7 +337,8 @@ impl App {
                 | Drag::Lines { .. }
                 | Drag::Footer(_)
                 | Drag::Text(_)
-                | Drag::Remote(_),
+                | Drag::Remote(_)
+                | Drag::Chat,
             )
             | None => return None,
         };
