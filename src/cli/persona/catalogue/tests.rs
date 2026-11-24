@@ -10,7 +10,12 @@ fn gathered() -> Gathered {
     Gathered {
         found: vec![found("engineering/reviewer.md", Some("engineering")), found("loose.md", None)],
         skipped: 3,
-        divisions: vec![Division { key: "engineering".into(), label: "Engineering".into(), icon: Some("code".into()) }],
+        divisions: vec![Division {
+            key: "engineering".into(),
+            label: "Engineering".into(),
+            icon: Some("code".into()),
+            color: Some("#3B82F6".into()),
+        }],
     }
 }
 
@@ -44,7 +49,7 @@ fn the_json_names_each_persona_its_file_division_and_problem() {
             "web": true,
             "check": format!("from octo/agents (see https://github.com/octo/agents), which nobody here reviewed: {CHECK}"),
             "skipped": 3,
-            "divisions": [{"key": "engineering", "label": "Engineering", "icon": "code"}],
+            "divisions": [{"key": "engineering", "label": "Engineering", "icon": "code", "color": "#3B82F6"}],
             "personas": [
                 {"file": "engineering/reviewer.md", "division": "engineering", "id": "reviewer",
                  "name": "Code Reviewer", "description": "", "emoji": "👁️", "color": "", "bytes": 2000,

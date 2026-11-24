@@ -51,6 +51,7 @@ pub(crate) struct Division {
     pub(crate) key: String,
     pub(crate) label: String,
     pub(crate) icon: Option<String>,
+    pub(crate) color: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -337,6 +338,7 @@ fn divisions(text: &str) -> Option<Vec<Division>> {
         key: key.clone(),
         label: text(value, "label").unwrap_or_else(|| key.clone()),
         icon: text(value, "icon"),
+        color: text(value, "color"),
     };
     Some(listed.iter().map(division).collect())
 }

@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use super::Fields;
+use super::persona::PersonasSent;
 use crate::flows::persona::Persona;
 use crate::flows::progress::{Edge, Step};
 use crate::flows::run::{Kind, Message, Run};
@@ -260,6 +261,8 @@ pub(crate) struct RunInfo {
     pub(crate) close_when_merged: bool,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub(crate) free_builds: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) personas: Option<PersonasSent>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -328,6 +331,8 @@ pub(crate) struct MachineFlows {
     pub(crate) same: usize,
     pub(crate) failed: Vec<FlowSyncFailure>,
     pub(crate) error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) personas: Option<PersonasSent>,
 }
 
 impl MachineFlows {
@@ -361,7 +366,8 @@ impl MachineFlows {
                 flows::share::visible(&failed.error)
             )
         });
-        let parts: Vec<String> = std::iter::once(self.outcome()).chain(failed).collect();
+        let personas = self.personas.iter().flat_map(PersonasSent::parts);
+        let parts: Vec<String> = std::iter::once(self.outcome()).chain(personas).chain(failed).collect();
         format!("{}: {}", flows::share::visible(&self.machine), parts.join(" · "))
     }
 }

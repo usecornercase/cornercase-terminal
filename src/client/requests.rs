@@ -204,7 +204,7 @@ pub(crate) fn use_flow_close_when_merged() -> Result<()> {
 }
 
 pub(crate) fn use_flow_personas() -> Result<()> {
-    require("flow-personas", "cannot give a flow's role a persona")
+    require(control::contract::FLOW_PERSONAS, "cannot give a flow's role a persona")
 }
 
 pub(crate) fn use_persona_catalogue() -> Result<()> {

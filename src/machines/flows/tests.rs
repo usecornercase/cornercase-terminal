@@ -17,12 +17,14 @@ struct Machine {
     listed: Value,
     refuses: Option<(&'static str, &'static str)>,
     features: Vec<&'static str>,
+    personas: Vec<(&'static str, &'static str)>,
     asked: Arc<Mutex<Vec<Value>>>,
 }
 
 impl Machine {
     fn new(listed: Value) -> Self {
-        Self { listed, refuses: None, features: vec!["tunnel-machine", FLOW_SYNC], asked: Arc::default() }
+        let features = vec!["tunnel-machine", FLOW_SYNC, FLOW_PERSONAS];
+        Self { listed, refuses: None, features, personas: Vec::new(), asked: Arc::default() }
     }
 
     fn asked(&self) -> Vec<Value> {
@@ -41,11 +43,18 @@ impl Connect for Machine {
         thread::spawn(move || {
             let asked = request(&mut theirs);
             let command = asked["command"].as_str().unwrap_or_default().to_string();
-            machine.asked.lock().push(asked);
+            machine.asked.lock().push(asked.clone());
             if command == "contract" {
                 respond(&mut theirs, &Response::Ok(json!({"version": "0.13.110", "features": machine.features})));
             } else if command == "flow-list" {
                 respond(&mut theirs, &Response::Ok(machine.listed.clone()));
+            } else if command == "persona-list" {
+                let ids: Vec<Value> = machine.personas.iter().map(|(id, _)| json!({"id": id})).collect();
+                respond(&mut theirs, &Response::Ok(json!({"dir": "/far", "personas": ids, "broken": []})));
+            } else if command == "persona-show" {
+                let id = asked["args"]["id"].as_str().unwrap_or_default().to_string();
+                let text = machine.personas.iter().find(|(known, _)| *known == id).map(|(_, text)| *text);
+                respond(&mut theirs, &Response::Ok(json!({"persona": {"id": id}, "text": text})));
             } else if let Some((_, why)) = machine.refuses.filter(|(refused, _)| *refused == command) {
                 let refusal = Structured::Error(Refusal::new(Code::Malformed, why));
                 let text = serde_json::to_string(&refusal).expect("a refusal");
@@ -81,6 +90,7 @@ fn sending(names: &[&str]) -> Sending {
         texts: names.iter().map(|name| ((*name).to_string(), format!("name = \"{name}\""))).collect(),
         left_out: Vec::new(),
         from: Some("laptop".into()),
+        personas: Vec::new(),
     }
 }
 
@@ -167,6 +177,141 @@ mod a_sync {
 
         assert_eq!(synced.sent, ["Duo"]);
         assert_eq!(synced.failed, []);
+    }
+}
+
+const REVIEWER: &str = "---\nname: Reviewer\n---\nReview every line.\n";
+
+fn following(sending: &mut Sending, persona: &str) {
+    let role = crate::control::RoleSpec { persona: Some(persona.into()), ..crate::control::RoleSpec::default() };
+    sending.flows[0].spec.roles = vec![role];
+    sending.personas = vec![("reviewer".into(), REVIEWER.into())];
+}
+
+fn personas_of(synced: &MachineFlows) -> PersonasSent {
+    synced.personas.clone().expect("what became of the personas")
+}
+
+mod personas_with_a_sync {
+    use super::*;
+
+    #[test]
+    fn go_before_the_flow_that_follows_them_when_the_machine_lacks_them() {
+        let machine = Machine::new(listed(&[]));
+        let mut sending = sending(&["Duo"]);
+        following(&mut sending, "reviewer");
+
+        let synced = sync(&machine, "vps", &sending);
+
+        let asked = machine.asked();
+        assert_eq!(machine.commands(), ["contract", "flow-list", "persona-list", "persona-import", "flow-import"]);
+        assert_eq!(asked[3]["args"]["personas"][0]["file"], "reviewer.md");
+        assert_eq!(asked[3]["args"]["personas"][0]["text"], REVIEWER);
+        assert_eq!(asked[3]["args"]["replace"], false);
+        assert_eq!((personas_of(&synced).sent, synced.sent), (vec!["reviewer".to_string()], vec!["Duo".to_string()]));
+    }
+
+    #[test]
+    fn are_counted_as_the_same_when_the_machine_has_the_same_text() {
+        let mut machine = Machine::new(listed(&[]));
+        machine.personas = vec![("reviewer", REVIEWER)];
+        let mut sending = sending(&["Duo"]);
+        following(&mut sending, "reviewer");
+
+        let synced = sync(&machine, "vps", &sending);
+
+        assert_eq!(personas_of(&synced).same, 1);
+        assert!(!machine.commands().contains(&"persona-import".to_string()));
+    }
+
+    #[test]
+    fn never_replace_a_different_one_of_the_same_id_and_name_it() {
+        let mut machine = Machine::new(listed(&[]));
+        machine.personas = vec![("reviewer", "---\nname: Reviewer\n---\nTheirs.\n")];
+        let mut sending = sending(&["Duo"]);
+        following(&mut sending, "reviewer");
+
+        let synced = sync(&machine, "vps", &sending);
+
+        assert_eq!(personas_of(&synced).differ, ["reviewer"]);
+        assert!(!machine.commands().contains(&"persona-import".to_string()));
+        assert!(synced.line().contains("kept its own personas reviewer, which differ from yours"), "{}", synced.line());
+    }
+
+    #[test]
+    fn are_not_sent_to_a_machine_without_personas_and_the_answer_says_so() {
+        let mut machine = Machine::new(listed(&[]));
+        machine.features = vec![FLOW_SYNC];
+        let mut sending = sending(&["Duo"]);
+        following(&mut sending, "reviewer");
+
+        let synced = sync(&machine, "vps", &sending);
+
+        assert_eq!(personas_of(&synced).error.as_deref(), Some(personas::OLDER));
+        assert_eq!(machine.commands(), ["contract", "flow-list", "flow-import"]);
+    }
+
+    #[test]
+    fn name_one_this_computer_does_not_have() {
+        let machine = Machine::new(listed(&[]));
+        let mut sending = sending(&["Duo"]);
+        following(&mut sending, "gone");
+
+        let synced = sync(&machine, "vps", &sending);
+
+        let failed = personas_of(&synced).failed;
+        assert_eq!(
+            (failed[0].id.as_str(), failed[0].error.as_str()),
+            ("gone", "it is not among this computer's personas")
+        );
+    }
+
+    #[test]
+    fn are_left_out_of_the_answer_when_no_flow_sent_follows_one() {
+        let machine = Machine::new(listed(&[]));
+
+        let synced = sync(&machine, "vps", &sending(&["Duo"]));
+
+        assert_eq!(synced.personas, None);
+        assert!(!serde_json::to_string(&synced).expect("json").contains("personas"));
+    }
+}
+
+mod personas_with_a_run {
+    use super::*;
+    use crate::test_util::TempDir;
+
+    fn following_there() -> Value {
+        let role = crate::control::RoleSpec { persona: Some("reviewer".into()), ..crate::control::RoleSpec::default() };
+        let flow = FlowInfo {
+            name: "Duo".into(),
+            origin: "project".into(),
+            flow: FlowSpec { name: "Duo".into(), roles: vec![role], ..FlowSpec::default() },
+            ..FlowInfo::default()
+        };
+        serde_json::to_value(Flows { flows: vec![flow], ..Flows::default() }).expect("a listing")
+    }
+
+    #[test]
+    fn send_the_ones_the_flow_there_follows_from_this_library() {
+        let dir = TempDir::new();
+        std::fs::write(dir.path().join("reviewer.md"), REVIEWER).expect("a persona");
+        let machine = Machine::new(following_there());
+
+        let brought = personas::for_run(&machine, "vps", ("duo", Some(4)), dir.path());
+
+        assert_eq!(brought.map(|brought| brought.sent), Some(vec!["reviewer".to_string()]));
+        assert_eq!(machine.asked()[0]["args"]["project"], 4);
+        assert_eq!(machine.commands(), ["flow-list", "persona-list", "persona-import"]);
+    }
+
+    #[test]
+    fn send_nothing_for_a_flow_that_follows_none() {
+        let dir = TempDir::new();
+        let machine = Machine::new(listed(&[("Duo", "user", None)]));
+
+        assert_eq!(personas::for_run(&machine, "vps", ("Duo", None), dir.path()), None);
+        assert_eq!(machine.commands(), ["flow-list"]);
     }
 }
 

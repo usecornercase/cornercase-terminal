@@ -8,6 +8,7 @@ use super::event::AppEvent;
 use super::machine_links::MachineEvent;
 use super::toast::Toast;
 use crate::control::contract::{Code, Refusal};
+use crate::control::persona::PersonasSent;
 use crate::control::{FlowSpec, FlowSync, FlowSyncFailure, FlowsSynced, MachineFlows};
 use crate::flows::store::{self, Folder, Listing, Origin, Saved};
 use crate::flows::sync::{self, Held};
@@ -257,6 +258,8 @@ impl App {
             }
         }
         outgoing.left_out.extend(unreadable);
+        let ids = sending::personas::named(outgoing.flows.iter().map(|held| &held.spec));
+        outgoing.personas = sending::personas::library(&self.personas_dir(), &ids);
         Ok(outgoing)
     }
 
@@ -412,6 +415,12 @@ fn hidden_report(mut report: MachineFlows, destination: &str) -> MachineFlows {
     for failed in &mut report.failed {
         failed.error = hide(&failed.error);
     }
+    if let Some(personas) = &mut report.personas {
+        personas.error = personas.error.as_deref().map(hide);
+        for failed in &mut personas.failed {
+            failed.error = hide(&failed.error);
+        }
+    }
     report
 }
 
@@ -428,5 +437,23 @@ fn log_report(report: &MachineFlows) {
     }
     if let Some(error) = &report.error {
         log::warning!("flows", "flows not synced", machine = machine, why = error);
+    }
+    if let Some(personas) = &report.personas {
+        log_personas(machine, personas);
+    }
+}
+
+pub(super) fn log_personas(machine: &str, personas: &PersonasSent) {
+    for id in &personas.sent {
+        log::info!("flows", "persona sent", machine = machine, persona = id);
+    }
+    for id in &personas.differ {
+        log::info!("flows", "persona kept, it differs there", machine = machine, persona = id);
+    }
+    for failed in &personas.failed {
+        log::warning!("flows", "persona not sent", machine = machine, persona = failed.id, why = failed.error);
+    }
+    if let Some(error) = &personas.error {
+        log::warning!("flows", "personas not sent", machine = machine, why = error);
     }
 }

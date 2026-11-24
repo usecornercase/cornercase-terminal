@@ -23,7 +23,7 @@ const HIT_WIDTH: usize = 44;
 const WIDE_TOGGLE_ROW: u16 = 96;
 const TOGGLE_TEXT: &str = "show here";
 const FIND_GLYPH: &str = " ⌕ ";
-const FIND_PROMPT: &str = "search settings";
+pub(in crate::ui) const FIND_PROMPT: &str = "search settings";
 
 pub(crate) fn settings_area(area: Rect) -> Rect {
     super::flows::flows_area(area)
@@ -276,6 +276,8 @@ pub(crate) struct SettingsRow {
     pub(crate) mark: Option<State>,
     pub(crate) tail: String,
     pub(crate) toggle: Option<bool>,
+    pub(crate) glyph: Option<&'static str>,
+    pub(crate) tint: Option<Color>,
 }
 
 pub(crate) struct SettingsEdit {
@@ -331,7 +333,7 @@ pub(in crate::ui) fn draw_settings(f: &mut Frame, view: &View, settings: &Settin
     let dim = Style::default().fg(view.muted);
     let mut cursor = None;
     draw_search_tabs(f, view, settings, r);
-    let find = draw_find(f, view, find_row, &settings.find);
+    let find = draw_find(f, view, find_row, (&settings.find, FIND_PROMPT));
 
     if let Some(pick) = &settings.pick {
         cursor = draw_pick(f, view, body, pick);
@@ -371,15 +373,20 @@ fn draw_search_tabs(f: &mut Frame, view: &View, settings: &Settings, r: Rect) {
     }
 }
 
-pub(in crate::ui) fn draw_find_prompt(f: &mut Frame, view: &View, row: Rect) -> Rect {
+pub(in crate::ui) fn draw_find_prompt(f: &mut Frame, view: &View, row: Rect, prompt: &str) -> Rect {
     let dim = Style::default().fg(view.muted);
     let glyph = Span::styled(FIND_GLYPH, Style::default().fg(Color::Cyan));
-    f.render_widget(Paragraph::new(Line::from(vec![glyph, Span::styled(FIND_PROMPT, dim)])), row);
+    f.render_widget(Paragraph::new(Line::from(vec![glyph, Span::styled(prompt.to_string(), dim)])), row);
     find_text(row)
 }
 
-fn draw_find(f: &mut Frame, view: &View, row: Rect, find: &SettingsFind) -> Option<Position> {
-    let text = draw_find_prompt(f, view, row);
+pub(in crate::ui) fn draw_find(
+    f: &mut Frame,
+    view: &View,
+    row: Rect,
+    (find, prompt): (&SettingsFind, &str),
+) -> Option<Position> {
+    let text = draw_find_prompt(f, view, row, prompt);
     if text.is_empty() {
         return None;
     }
@@ -574,11 +581,13 @@ fn mark_colour(view: &View, state: State) -> Color {
 }
 
 fn label_spans(view: &View, row: &SettingsRow, width: usize, bg: Style, style: Style) -> [Span<'static>; 2] {
-    let (mark, width) = match row.mark {
-        Some(state) => {
+    let style = row.tint.map_or(style, |tint| style.fg(tint));
+    let (mark, width) = match (row.mark, row.glyph.filter(|_| view.icons)) {
+        (Some(state), _) => {
             (Span::styled(format!("{} ", state.mark()), bg.fg(mark_colour(view, state))), width.saturating_sub(2))
         }
-        None => (Span::styled("", bg), width),
+        (None, Some(glyph)) => (Span::styled(format!("{glyph} "), style), width.saturating_sub(2)),
+        (None, None) => (Span::styled("", bg), width),
     };
     [mark, Span::styled(format!("{:<width$}", truncate_right(&row.label, width.saturating_sub(2))), style)]
 }

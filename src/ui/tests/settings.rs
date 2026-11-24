@@ -14,6 +14,8 @@ fn row(section: &'static str, label: &str, value: &str, note: &str) -> SettingsR
         mark: None,
         tail: String::new(),
         toggle: None,
+        glyph: None,
+        tint: None,
     }
 }
 

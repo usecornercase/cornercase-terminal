@@ -158,7 +158,7 @@ pub(crate) use dialog::worktrees::{
 pub(crate) use dialog::{CANCEL_LABEL, Note, Overlay};
 pub(crate) use drop::{Drag, Landing, Spot, sidebar_drop, tree_drop, workspace_drop};
 pub(crate) use forum::{ForumHit, ForumSetup, hit as forum_hit};
-pub(crate) use icons::glyphs;
+pub(crate) use icons::{glyphs, lucide, tint};
 pub(crate) use layout::COMPACT_BUTTON_WIDTH;
 pub use layout::{Areas, Border, COMPACT_PITCH, COMPACT_WIDTH, changes_button, layout, layout_with};
 pub(crate) use layout::{BotsShape, Nav, Screen, full_layout};

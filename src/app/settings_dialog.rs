@@ -415,6 +415,8 @@ fn hit_view(hit: &Hit) -> ui::SettingsRow {
         mark: None,
         tail: String::new(),
         toggle: None,
+        glyph: None,
+        tint: None,
     }
 }
 
@@ -432,6 +434,8 @@ fn row_view(settings: &Settings, i: usize, row: &settings::Row) -> ui::SettingsR
         mark: text.mark,
         tail: text.tail,
         toggle: text.toggle,
+        glyph: None,
+        tint: None,
     }
 }
 

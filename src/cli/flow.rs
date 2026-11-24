@@ -9,6 +9,7 @@ use super::args::{
 };
 use super::{note, print_json, print_out, quietly, read_limited, read_prompt, stream_json, workspace};
 use crate::client::{self, answer, ask, confirm};
+use crate::control::persona::PersonasSent;
 use crate::control::{
     self, CloseWhenMergedSet, Exported, FlowBacklog, FlowDefaultSet, FlowInfo, FlowMessage, FlowOrdered, FlowRemoved,
     FlowRuns, FlowSaved, FlowSpec, Flows, Imported, RoleInfo, RunEdge, RunFiles, RunInfo, RunState, contract,
@@ -110,6 +111,9 @@ fn flow_run(run: args::FlowRunArgs) -> Result<()> {
     }
     if let Some(text) = folder_note(&run) {
         note(&format!("{text}\n"));
+    }
+    for part in run.personas.iter().flat_map(PersonasSent::parts) {
+        note(&format!("{part}\n"));
     }
     if run.close_when_merged {
         note(&format!("{}\n", closing_note(&run, on_machine)));

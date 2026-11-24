@@ -212,8 +212,9 @@ mod from_the_web {
     }
 
     #[test]
-    fn a_repository_keeps_each_persona_path_and_the_divisions_labels_and_icons() {
-        let listed = r#"{"divisions": {"engineering": {"label": "Engineering", "icon": "code"}, "testing": {}}}"#;
+    fn a_repository_keeps_each_persona_path_and_the_divisions_labels_icons_and_colours() {
+        let listed = r##"{"divisions": {"engineering": {"label": "Engineering", "icon": "code", "color": "#3B82F6"},
+            "testing": {}}}"##;
         let archive = archive_of(&[("divisions.json", listed), ("engineering/reviewer.md", REVIEWER)]);
         let server = FakeHttp::start(vec![("GET /octo/agents/tar.gz/HEAD", 200, archive)]);
         let source = Source::Repo { repo: "octo/agents".into(), path: String::new() };
@@ -225,8 +226,13 @@ mod from_the_web {
         assert_eq!(
             gathered.divisions,
             [
-                Division { key: "engineering".into(), label: "Engineering".into(), icon: Some("code".into()) },
-                Division { key: "testing".into(), label: "testing".into(), icon: None },
+                Division {
+                    key: "engineering".into(),
+                    label: "Engineering".into(),
+                    icon: Some("code".into()),
+                    color: Some("#3B82F6".into())
+                },
+                Division { key: "testing".into(), label: "testing".into(), icon: None, color: None },
             ]
         );
     }

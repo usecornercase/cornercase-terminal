@@ -3,7 +3,8 @@ use serde_json::Value;
 use super::act::{self, QUICK};
 use super::ask;
 use super::link::{self, Connect};
-use crate::control::contract::FLOW_SYNC;
+use crate::control::contract::{FLOW_PERSONAS, FLOW_SYNC};
+use crate::control::persona::PersonasSent;
 use crate::control::{
     Command, Contract, FlowImport, FlowInfo, FlowList, FlowSpec, FlowSyncFailure, Flows, MachineFlows, Response,
 };
@@ -22,6 +23,7 @@ pub(crate) struct Sending {
     pub(crate) texts: Vec<(String, String)>,
     pub(crate) left_out: Vec<FlowSyncFailure>,
     pub(crate) from: Option<String>,
+    pub(crate) personas: Vec<(String, String)>,
 }
 
 pub(crate) fn sender(text: &str) -> String {
@@ -43,8 +45,8 @@ impl Sending {
 
 pub(crate) fn sync(connect: &dyn Connect, machine: &str, sending: &Sending) -> MachineFlows {
     let mut report = MachineFlows { machine: machine.into(), ..MachineFlows::default() };
-    let theirs = match offers_sync(connect, machine).and_then(|()| listed(connect, machine)) {
-        Ok(theirs) => theirs,
+    let (features, theirs) = match offers_sync(connect, machine).and_then(|f| Ok((f, listed(connect, machine)?))) {
+        Ok(found) => found,
         Err(why) => {
             report.error = Some(why);
             return report;
@@ -53,6 +55,7 @@ pub(crate) fn sync(connect: &dyn Connect, machine: &str, sending: &Sending) -> M
     let plan = sync::plan(&sending.flows, &theirs);
     report.same = plan.same.len();
     report.kept = plan.kept;
+    report.personas = personas_of(connect, machine, (sending, &plan.send), &features);
     for name in plan.send {
         match sending.import(&name).and_then(|command| told(connect, machine, command)) {
             Ok(()) => report.sent.push(name),
@@ -75,10 +78,30 @@ fn told(connect: &dyn Connect, machine: &str, command: Command) -> Result<(), St
     answered(&ask::ask(connect, machine, command, None, QUICK)?).map(drop)
 }
 
-fn offers_sync(connect: &dyn Connect, machine: &str) -> Result<(), String> {
-    let described = answered(&ask::ask(connect, machine, Command::Contract(Contract {}), None, QUICK)?)?;
-    let features = described["features"].as_array().map(Vec::as_slice).unwrap_or_default();
-    if features.iter().any(|feature| feature == FLOW_SYNC) { Ok(()) } else { Err(OLDER.into()) }
+fn personas_of(
+    connect: &dyn Connect,
+    machine: &str,
+    (sending, names): (&Sending, &[String]),
+    features: &[Value],
+) -> Option<PersonasSent> {
+    let sent = sending.flows.iter().filter(|held| names.contains(&held.name)).map(|held| &held.spec);
+    let ids = personas::named(sent);
+    if ids.is_empty() {
+        return None;
+    }
+    if !features.iter().any(|feature| feature == FLOW_PERSONAS) {
+        return Some(PersonasSent { error: Some(personas::OLDER.into()), ..PersonasSent::default() });
+    }
+    Some(personas::send(connect, machine, &ids, &sending.personas))
+}
+
+fn offers_sync(connect: &dyn Connect, machine: &str) -> Result<Vec<Value>, String> {
+    let mut described = answered(&ask::ask(connect, machine, Command::Contract(Contract {}), None, QUICK)?)?;
+    let features = match described["features"].take() {
+        Value::Array(features) => features,
+        _ => Vec::new(),
+    };
+    if features.iter().any(|feature| feature == FLOW_SYNC) { Ok(features) } else { Err(OLDER.into()) }
 }
 
 fn listed(connect: &dyn Connect, machine: &str) -> Result<Vec<Held<FlowSpec>>, String> {
@@ -92,6 +115,8 @@ fn listed(connect: &dyn Connect, machine: &str) -> Result<Vec<Held<FlowSpec>>, S
     };
     Ok(flows.flows.into_iter().filter(|info| info.origin == USER).map(held).collect())
 }
+
+pub(crate) mod personas;
 
 #[cfg(test)]
 mod tests;
