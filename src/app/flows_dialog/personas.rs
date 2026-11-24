@@ -7,14 +7,14 @@ use super::super::event::AppEvent;
 use super::super::input::wheel;
 use super::super::text_fields::FieldArea;
 use super::{FORM_LABEL, LIST_LABEL, settings_row};
-use crate::control::persona::{PersonaImport, PersonaSave, PersonaText};
+use crate::control::persona::{PersonaImport, PersonaInfo, PersonaSave, PersonaText};
 use crate::editor::Editor;
 use crate::flows::dialog::personas::{self, Fetched, Offered, Saving};
 use crate::flows::dialog::{Dialog, Page, PageAction, Room};
-use crate::flows::persona::source::{self, Gathered, Hosts};
-use crate::flows::persona::{self as library, imported};
+use crate::flows::persona::catalogue::Incoming;
+use crate::flows::persona::source::{self, Division, Gathered, Hosts};
+use crate::flows::persona::{self as library};
 use crate::flows::share::visible;
-use crate::flows::store::same_name;
 use crate::log::{self, Job, Level};
 use crate::ui::{self, FlowsHit, SettingsHit};
 
@@ -153,24 +153,32 @@ impl App {
     }
 
     pub(in crate::app) fn personas_fetched(&mut self, typed: &str, result: Result<Gathered, String>) {
-        let dir = self.personas_dir();
-        let mine = library::list(&dir).personas;
+        let fetched = result.map(|gathered| self.fetched_catalogue(typed, gathered));
+        let Some(page) = self.persona_page() else { return };
+        if let Some(catalogue) = &mut page.catalogue {
+            catalogue.loaded(typed, fetched.map_err(|e| visible(&e)));
+        }
+    }
+
+    fn fetched_catalogue(&self, typed: &str, gathered: Gathered) -> Fetched {
+        let incoming: Vec<Incoming> = gathered
+            .found
+            .iter()
+            .map(|found| Incoming { file: &found.file, text: &found.text, source: found.source.as_deref() })
+            .collect();
+        let answer = self.persona_catalogue(&incoming);
         let label = source::source(typed, source::on_disk).ok();
-        let fetched = result.map(|gathered| Fetched {
+        Fetched {
             label: label.as_ref().map_or_else(|| typed.to_string(), source::Source::label),
             page: label.as_ref().map_or_else(|| typed.to_string(), source::Source::page),
             web: label.as_ref().is_some_and(source::Source::is_web),
             divisions: gathered
                 .divisions
                 .into_iter()
-                .map(|(key, label)| personas::Division { key, label: visible(&label) })
+                .map(|division| Division { label: visible(&division.label), ..division })
                 .collect(),
             skipped: gathered.skipped,
-            offered: gathered.found.into_iter().map(|found| offer(found, &dir, &mine)).collect(),
-        });
-        let Some(page) = self.persona_page() else { return };
-        if let Some(catalogue) = &mut page.catalogue {
-            catalogue.loaded(typed, fetched.map_err(|e| visible(&e)));
+            offered: gathered.found.into_iter().zip(answer.personas).map(|(found, info)| offer(found, info)).collect(),
         }
     }
 
@@ -180,7 +188,7 @@ impl App {
             .into_iter()
             .map(|offered| PersonaText { file: offered.file, text: offered.text, source: offered.source })
             .collect();
-        let import = PersonaImport { personas: texts, replace, check: false };
+        let import = PersonaImport { personas: texts, replace, ..PersonaImport::default() };
         let result = self.import_personas(&import);
         self.refresh_personas_page();
         let Some(page) = self.persona_page() else { return };
@@ -203,30 +211,20 @@ fn gathered(typed: &str, hosts: &Hosts) -> Result<Gathered, String> {
     source::gather(&found, hosts)
 }
 
-fn offer(found: source::Found, dir: &std::path::Path, mine: &[library::Persona]) -> Offered {
-    let read = imported(&found.file, &found.text, found.source.as_deref());
-    let mut offered =
-        Offered { file: found.file, source: found.source, division: found.division, ..Offered::default() };
-    match read {
-        Ok(persona) => {
-            offered.replaces = library::taken(dir, &persona.id);
-            offered.problem = mine
-                .iter()
-                .find(|other| other.id != persona.id && same_name(&other.name, &persona.name))
-                .map(|other| format!("your persona {} has this name", other.id));
-            offered.id = persona.id;
-            offered.name = visible(&persona.name);
-            offered.emoji = visible(&persona.emoji);
-            offered.description = visible(&persona.description);
-            offered.text = found.text;
-        }
-        Err(e) => {
-            offered.name = visible(&offered.file);
-            offered.problem = Some(visible(&e));
-            offered.text = found.text;
-        }
+fn offer(found: source::Found, info: PersonaInfo) -> Offered {
+    let name = if info.name.is_empty() { &found.file } else { &info.name };
+    Offered {
+        name: visible(name),
+        emoji: visible(&info.emoji),
+        description: visible(&info.description),
+        problem: info.problem.as_deref().map(visible),
+        replaces: info.replaced,
+        id: info.id,
+        file: found.file,
+        text: found.text,
+        source: found.source,
+        division: found.division,
     }
-    offered
 }
 
 fn place(page: &mut Page, room: Room, line: usize, col: usize) {

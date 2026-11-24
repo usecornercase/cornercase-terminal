@@ -12,8 +12,8 @@ use crate::control::persona::{
 };
 use crate::error::{Error, Result};
 use crate::flows::persona::draft::{self, Draft};
-use crate::flows::persona::source::{self, Gathered, Hosts, Source};
-use crate::flows::persona::{MAX_BYTES, parse};
+use crate::flows::persona::source::{self, Found, Gathered, Hosts, Source};
+use crate::flows::persona::{self as library, MAX_BYTES, parse};
 use crate::flows::share::visible;
 
 pub(super) fn run(action: PersonaAction) -> Result<()> {
@@ -116,20 +116,14 @@ fn gathered(source: &Source) -> Result<Gathered> {
 fn import(args: &PersonaImportArgs) -> Result<()> {
     let source = source::source(&args.source, source::on_disk).map_err(Error::Control)?;
     let gathered = gathered(&source)?;
-    if gathered.skipped > 0 {
-        let files = if gathered.skipped == 1 {
-            "1 file that is not a persona".to_string()
-        } else {
-            format!("{} files that are not personas", gathered.skipped)
-        };
-        note(&format!("skipped {files}\n"));
+    if args.catalogue {
+        return catalogue::run(&source, gathered, args.print.json);
     }
-    let personas = gathered.found.into_iter().map(|found| PersonaText {
-        file: found.file,
-        text: found.text,
-        source: found.source,
-    });
-    let mut request = PersonaImport { personas: personas.collect(), replace: args.replace, check: true };
+    if gathered.skipped > 0 {
+        note(&format!("skipped {}\n", skipped(gathered.skipped)));
+    }
+    let found = only(gathered.found, &args.only, &source)?;
+    let mut request = PersonaImport { personas: texts(&found), replace: args.replace, check: true, catalogue: false };
     let preview = ask("persona import", Command::PersonaImport(request.clone()))?;
     if args.check {
         let preview = with_warning(preview, &source);
@@ -144,6 +138,46 @@ fn import(args: &PersonaImportArgs) -> Result<()> {
         return print_json(&value);
     }
     print_out(&imported(&answer(value)?))
+}
+
+fn skipped(count: usize) -> String {
+    if count == 1 { "1 file that is not a persona".to_string() } else { format!("{count} files that are not personas") }
+}
+
+fn texts(found: &[Found]) -> Vec<PersonaText> {
+    let text = |found: &Found| PersonaText {
+        file: found.file.clone(),
+        text: found.text.clone(),
+        source: found.source.clone(),
+    };
+    found.iter().map(text).collect()
+}
+
+fn only(found: Vec<Found>, ids: &[String], source: &Source) -> Result<Vec<Found>> {
+    if ids.is_empty() {
+        return Ok(found);
+    }
+    let id = |found: &Found| {
+        library::imported(&found.file, &found.text, found.source.as_deref()).ok().map(|persona| persona.id)
+    };
+    let (kept, ids_of): (Vec<Found>, Vec<String>) = found
+        .into_iter()
+        .filter_map(|found| Some((id(&found)?, found)))
+        .filter(|(id, _)| ids.contains(id))
+        .map(|(id, found)| (found, id))
+        .unzip();
+    let missing: Vec<String> =
+        ids.iter().filter(|id| !ids_of.contains(id)).map(|id| format!("`{}`", visible(id))).collect();
+    if missing.is_empty() {
+        return Ok(kept);
+    }
+    let what = if missing.len() == 1 { "no persona" } else { "no personas" };
+    Err(Error::Control(format!(
+        "{} has {what} {}: `persona import {} --catalogue` lists its ids",
+        visible(&source.label()),
+        missing.join(", "),
+        visible(&source.label())
+    )))
 }
 
 fn warning(source: &Source, check: &str) -> String {
@@ -222,6 +256,8 @@ pub(super) fn listing(personas: &Personas) -> String {
     }
     out
 }
+
+mod catalogue;
 
 #[cfg(test)]
 mod tests;

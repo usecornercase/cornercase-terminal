@@ -109,6 +109,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "flow-personas",
     "bot-memory",
     "focus-bot",
+    "persona-catalogue",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

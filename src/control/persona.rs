@@ -20,6 +20,8 @@ pub(crate) struct PersonaImport {
     pub(crate) personas: Vec<PersonaText>,
     pub(crate) replace: bool,
     pub(crate) check: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) catalogue: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -63,6 +65,10 @@ pub(crate) struct PersonaInfo {
     pub(crate) path: Option<PathBuf>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub(crate) replaced: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) file: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) problem: Option<String>,
 }
 
 impl From<&Persona> for PersonaInfo {
@@ -77,6 +83,8 @@ impl From<&Persona> for PersonaInfo {
             bytes: persona.text.len(),
             path: None,
             replaced: false,
+            file: None,
+            problem: None,
         }
     }
 }
@@ -135,7 +143,7 @@ impl PersonaImport {
     pub(super) fn fields(&self, fields: &mut Fields) {
         let bytes: usize = self.personas.iter().map(|persona| persona.text.len()).sum();
         fields.add("count", self.personas.len()).add("text_bytes", bytes);
-        fields.add("replace", self.replace).add("check", self.check);
+        fields.add("replace", self.replace).add("check", self.check).add("catalogue", self.catalogue);
     }
 }
 

@@ -3,6 +3,7 @@ use std::path::{Component, Path, PathBuf};
 use std::time::Duration;
 
 use flate2::read::GzDecoder;
+use serde::Serialize;
 
 use super::{EXTENSION, MAX_BYTES, MAX_IMPORT, UNREAD, is_persona, read_text, too_long};
 use crate::http::{self, Service};
@@ -32,6 +33,7 @@ pub(crate) enum Source {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Found {
     pub(crate) file: String,
+    pub(crate) path: String,
     pub(crate) text: String,
     pub(crate) source: Option<String>,
     pub(crate) division: Option<String>,
@@ -41,7 +43,14 @@ pub(crate) struct Found {
 pub(crate) struct Gathered {
     pub(crate) found: Vec<Found>,
     pub(crate) skipped: usize,
-    pub(crate) divisions: Vec<(String, String)>,
+    pub(crate) divisions: Vec<Division>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub(crate) struct Division {
+    pub(crate) key: String,
+    pub(crate) label: String,
+    pub(crate) icon: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -137,7 +146,7 @@ pub(crate) fn single(file: &str, text: String, source: Option<String>, what: &st
     if !is_persona(&text) {
         return Err(not_persona(what));
     }
-    let found = Found { file: file.to_string(), text, source, division: None };
+    let found = Found { file: file.to_string(), path: file.to_string(), text, source, division: None };
     Ok(Gathered { found: vec![found], ..Gathered::default() })
 }
 
@@ -317,21 +326,26 @@ fn inner(path: &Path) -> Option<String> {
     names.filter(|names| !names.is_empty()).map(|names| names.join("/"))
 }
 
-fn divisions(text: &str) -> Option<Vec<(String, String)>> {
+fn divisions(text: &str) -> Option<Vec<Division>> {
     let value: serde_json::Value = serde_json::from_str(text).ok()?;
     let listed = value.get("divisions")?.as_object()?;
-    let label = |key: &String, value: &serde_json::Value| {
-        let named = value.get("label").and_then(serde_json::Value::as_str).map(str::trim).filter(|l| !l.is_empty());
-        named.filter(|label| !label.contains(char::is_control)).map_or_else(|| key.clone(), str::to_string)
+    let text = |value: &serde_json::Value, key: &str| {
+        let named = value.get(key).and_then(serde_json::Value::as_str).map(str::trim).filter(|t| !t.is_empty());
+        named.filter(|text| !text.contains(char::is_control)).map(str::to_string)
     };
-    Some(listed.iter().map(|(key, value)| (key.clone(), label(key, value))).collect())
+    let division = |(key, value): (&String, &serde_json::Value)| Division {
+        key: key.clone(),
+        label: text(value, "label").unwrap_or_else(|| key.clone()),
+        icon: text(value, "icon"),
+    };
+    Some(listed.iter().map(division).collect())
 }
 
 fn picked(tree: Tree, what: &str) -> Result<Gathered, String> {
     let kept = tree.divisions.as_deref().and_then(divisions);
     let in_division = |relative: &str| {
         kept.as_ref()
-            .is_none_or(|kept| relative.split_once('/').is_some_and(|(top, _)| kept.iter().any(|(k, _)| k == top)))
+            .is_none_or(|kept| relative.split_once('/').is_some_and(|(top, _)| kept.iter().any(|d| d.key == top)))
     };
     let mut gathered =
         Gathered { skipped: tree.skipped, divisions: kept.clone().unwrap_or_default(), ..Gathered::default() };
@@ -341,7 +355,8 @@ fn picked(tree: Tree, what: &str) -> Result<Gathered, String> {
         if in_division(&entry.relative) {
             let file = entry.relative.rsplit('/').next().unwrap_or_default().to_string();
             let division = entry.relative.split_once('/').map(|(top, _)| top.to_string());
-            gathered.found.push(Found { file, text: entry.text, source: Some(entry.source), division });
+            let found = Found { file, path: entry.relative, text: entry.text, source: Some(entry.source), division };
+            gathered.found.push(found);
         } else {
             gathered.skipped += 1;
         }

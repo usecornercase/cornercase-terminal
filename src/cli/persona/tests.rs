@@ -77,3 +77,45 @@ fn an_import_names_each_persona_and_its_file() {
 
     assert_eq!(imported(&answer), "imported Code Reviewer as engineering-code-reviewer: /c/personas/r.md\n");
 }
+
+mod only {
+    use super::*;
+
+    const REVIEWER: &str = "---\nname: Code Reviewer\n---\nReview it.\n";
+    const TESTER: &str = "---\nname: Tester\n---\nTest it.\n";
+
+    fn found(file: &str, text: &str) -> Found {
+        Found { file: file.into(), path: file.into(), text: text.into(), source: None, division: None }
+    }
+
+    fn all() -> Vec<Found> {
+        vec![found("reviewer.md", REVIEWER), found("tester.md", TESTER), found("broken.md", "---\nname:\n---\n")]
+    }
+
+    fn octo() -> Source {
+        Source::Repo { repo: "octo/agents".into(), path: String::new() }
+    }
+
+    #[test]
+    fn keeps_only_the_ids_asked_for() {
+        let kept = only(all(), &["tester".into()], &octo()).expect("kept");
+        assert_eq!(kept.iter().map(|found| found.file.as_str()).collect::<Vec<_>>(), ["tester.md"]);
+    }
+
+    #[test]
+    fn without_ids_keeps_everything() {
+        assert_eq!(only(all(), &[], &octo()).expect("kept").len(), 3);
+    }
+
+    #[test]
+    fn an_id_not_in_the_source_is_an_error_naming_it() {
+        let Err(Error::Control(e)) = only(all(), &["tester".into(), "nobody".into(), "nul\u{1b}".into()], &octo())
+        else {
+            panic!("refused")
+        };
+        assert_eq!(
+            e,
+            "octo/agents has no personas `nobody`, `nul\\u{1b}`: `persona import octo/agents --catalogue` lists its ids"
+        );
+    }
+}

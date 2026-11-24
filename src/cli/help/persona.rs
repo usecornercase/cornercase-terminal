@@ -9,6 +9,8 @@ Examples:
   cornercase persona import msitarzewski/agency-agents/engineering/engineering-code-reviewer.md
   cornercase persona import msitarzewski/agency-agents/engineering
   cornercase persona import msitarzewski/agency-agents --check
+  cornercase persona import msitarzewski/agency-agents --catalogue
+  cornercase persona import msitarzewski/agency-agents --only engineering-code-reviewer --only testing-reality-checker
   cornercase persona import ./reviewer.md
   cornercase persona new --name \"Careful Tester\" --emoji 🧪 ./tester.md
   cornercase persona edit careful-tester --description \"Tests before it fixes\"
@@ -46,5 +48,12 @@ A persona is prompt text that agents read and follow without asking for permissi
 address or a repository it asks `[y/N]` first (without a terminal it refuses unless --yes);
 --check lists what would be imported and saves nothing.
 
+--only ID imports only the persona with that ID (repeat it for more), still all or nothing; an ID
+that SOURCE does not have is an error. --catalogue lists every persona of SOURCE by division, each
+with why it cannot be imported (not a persona, an ID or a name that appears twice in SOURCE, or a
+name one of yours has), and saves nothing; unlike --check it never refuses because of one persona.
+
 With --json it prints {\"personas\": [{\"id\", \"name\", \"description\", \"emoji\", \"color\", \"source\",
-\"bytes\", \"path\", \"replaced\"}], \"check\", \"saved\"}.";
+\"bytes\", \"path\", \"replaced\"}], \"check\", \"saved\"}; with --catalogue, {\"label\", \"page\", \"web\",
+\"check\", \"skipped\", \"divisions\": [{\"key\", \"label\", \"icon\"}], \"personas\": [{\"file\", \"division\",
+\"id\", \"name\", \"description\", \"emoji\", \"color\", \"bytes\", \"replaced\", \"problem\"}]}.";

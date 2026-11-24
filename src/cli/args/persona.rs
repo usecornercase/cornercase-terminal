@@ -31,6 +31,7 @@ pub(crate) enum PersonaAction {
 }
 
 #[derive(Debug, Args)]
+#[expect(clippy::struct_excessive_bools, reason = "each flag is its own command-line switch")]
 pub(crate) struct PersonaImportArgs {
     #[arg(value_name = "SOURCE", help = "A .md file, a folder, -, an https:// address, or OWNER/REPO[/PATH]")]
     pub(crate) source: String,
@@ -38,6 +39,14 @@ pub(crate) struct PersonaImportArgs {
     pub(crate) replace: bool,
     #[arg(long, conflicts_with = "yes", help = "List what would be imported without asking or importing")]
     pub(crate) check: bool,
+    #[arg(
+        long,
+        conflicts_with_all = ["check", "yes", "replace", "only"],
+        help = "List every persona of SOURCE by division, with why each one cannot be imported; saves nothing"
+    )]
+    pub(crate) catalogue: bool,
+    #[arg(long, value_name = "ID", help = "Import only the persona with this id from SOURCE (repeatable)")]
+    pub(crate) only: Vec<String>,
     #[arg(short = 'y', long, help = "Import without asking, though the personas come from the web")]
     pub(crate) yes: bool,
     #[command(flatten)]
