@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -244,7 +246,20 @@ pub(crate) fn describe(boot: &str, unavailable: &[(&str, &str)]) -> Descriptor {
 const ITEM: &str = "#";
 
 pub(crate) fn unknown_fields(raw: &Value, parsed: &impl Serialize) -> Option<String> {
-    serde_json::to_value(parsed).ok().and_then(|known| stray(raw, &known, ["", ""]))
+    let known = serde_json::to_value(parsed).ok()?;
+    stray(&without_skipped_false(raw), &known, ["", ""])
+}
+
+fn without_skipped_false(raw: &Value) -> Cow<'_, Value> {
+    let skipped = raw["command"] == "persona-import" && raw["args"]["catalogue"] == Value::Bool(false);
+    if !skipped {
+        return Cow::Borrowed(raw);
+    }
+    let mut kept = raw.clone();
+    if let Some(args) = kept["args"].as_object_mut() {
+        args.remove("catalogue");
+    }
+    Cow::Owned(kept)
 }
 
 fn skipped_when_null(key: &str, up: [&str; 2]) -> bool {

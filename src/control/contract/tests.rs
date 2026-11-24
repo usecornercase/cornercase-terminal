@@ -370,8 +370,21 @@ mod finding_unknown_fields {
     #[case::tunnel_failed(json!({"command": "tunnel-failed", "args": {"port": 3000, "error": "refused"}}))]
     #[case::contract(json!({"contract": 1, "command": "contract", "args": {}}))]
     #[case::watch(json!({"contract": 1, "boot": "1-2", "command": "watch", "args": {}}))]
+    #[case::persona_import_without_its_catalogue(json!({"command": "persona-import", "args": {"personas": [],
+        "replace": false, "check": true, "catalogue": false}}))]
     fn a_request_the_server_knows_has_none(#[case] raw: Value) {
         assert_eq!(stray_in(&raw), None);
+    }
+
+    #[test]
+    fn an_explicit_false_is_allowed_only_for_a_persona_import_catalogue() {
+        let elsewhere = json!({"command": "persona-list", "args": {"catalogue": false}});
+        let on_another_import = json!({"command": "flow-import", "args": {"text": "x", "catalogue": false}});
+        let other_false = json!({"command": "persona-import", "args": {"personas": [], "listed": false}});
+
+        assert_eq!(stray_in(&elsewhere).as_deref(), Some("args.catalogue"));
+        assert_eq!(stray_in(&on_another_import).as_deref(), Some("args.catalogue"));
+        assert_eq!(stray_in(&other_false).as_deref(), Some("args.listed"));
     }
 
     #[rstest]
