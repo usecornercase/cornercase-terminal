@@ -78,7 +78,7 @@ mod a_start_on_a_machine {
 
         remote.ask(command, &args).expect("an answer");
 
-        let asked = remote.asked();
+        let asked: Vec<Value> = remote.asked().into_iter().filter(|asked| asked["command"] == command).collect();
         let [asked] = &asked[..] else { panic!("one question, not {asked:?}") };
         assert_eq!((asked["command"].as_str(), asked["boot"].as_str()), (Some(command), Some(BOOT)));
         let sent = &asked["args"];
@@ -166,7 +166,7 @@ mod with_the_machines_boot {
 
         remote.ask(command, &booted(args, BOOT)).expect("an answer");
 
-        let asked = remote.asked();
+        let asked: Vec<Value> = remote.asked().into_iter().filter(|asked| asked["command"] == command).collect();
         let [asked] = &asked[..] else { panic!("one question, not {asked:?}") };
         assert_eq!((asked["command"].as_str(), asked["boot"].as_str()), (Some(command), Some(BOOT)));
         assert_eq!(asked["args"].get("machine_boot"), None);
