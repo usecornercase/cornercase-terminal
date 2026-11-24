@@ -1,6 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use super::PageAction;
+use crate::editor::Editor;
 use crate::flows::dialog::{CANCEL, IMPORT, Room, RowText};
 use crate::flows::persona::source::Division;
 
@@ -38,6 +39,13 @@ pub(crate) enum Pressed {
     Stay,
 }
 
+struct Group {
+    label: String,
+    icon: Option<String>,
+    tint: Option<String>,
+    members: Vec<usize>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Entry {
     Division(usize),
@@ -52,6 +60,7 @@ pub(crate) struct Catalogue {
     pub(crate) checked: Vec<bool>,
     pub(crate) cursor: usize,
     pub(crate) error: Option<String>,
+    pub(crate) filter: Editor,
 }
 
 impl Catalogue {
@@ -59,33 +68,52 @@ impl Catalogue {
         self.fetched.is_none()
     }
 
-    fn groups(&self) -> Vec<(String, Vec<usize>)> {
+    fn groups(&self) -> Vec<Group> {
         let Some(fetched) = &self.fetched else { return Vec::new() };
-        let label = |key: &str| {
-            fetched.divisions.iter().find(|d| d.key == key).map_or_else(|| key.to_string(), |d| d.label.clone())
-        };
-        let mut groups: Vec<(String, Vec<usize>)> = Vec::new();
+        let words = words(&self.filter.text());
+        let mut groups: Vec<Group> = Vec::new();
         for (i, offered) in fetched.offered.iter().enumerate() {
-            let name = offered.division.as_deref().map_or_else(|| NO_DIVISION.to_string(), label);
-            match groups.iter_mut().find(|(group, _)| *group == name) {
-                Some((_, members)) => members.push(i),
-                None => groups.push((name, vec![i])),
+            let division = offered.division.as_deref().and_then(|key| fetched.divisions.iter().find(|d| d.key == key));
+            let label = division.map(|d| d.label.clone()).or_else(|| offered.division.clone());
+            let label = label.unwrap_or_else(|| NO_DIVISION.to_string());
+            if !matches(offered, &label, &words) {
+                continue;
+            }
+            match groups.iter_mut().find(|group| group.label == label) {
+                Some(group) => group.members.push(i),
+                None => groups.push(Group {
+                    icon: division.and_then(|d| d.icon.clone()),
+                    tint: division.and_then(|d| d.color.clone()),
+                    label,
+                    members: vec![i],
+                }),
             }
         }
         groups
     }
 
+    fn divided(&self) -> bool {
+        self.fetched.as_ref().is_some_and(|fetched| {
+            let mut divisions = fetched.offered.iter().map(|offered| offered.division.as_deref());
+            let first = divisions.next();
+            !fetched.divisions.is_empty() || divisions.any(|division| Some(division) != first)
+        })
+    }
+
     fn entries(&self) -> Vec<Entry> {
-        let groups = self.groups();
-        let divided = groups.len() > 1 || self.fetched.as_ref().is_some_and(|f| !f.divisions.is_empty());
+        let divided = self.divided();
         let mut entries = Vec::new();
-        for (n, (_, members)) in groups.iter().enumerate() {
+        for (n, group) in self.groups().iter().enumerate() {
             if divided {
                 entries.push(Entry::Division(n));
             }
-            entries.extend(members.iter().map(|&i| Entry::Persona(i)));
+            entries.extend(group.members.iter().map(|&i| Entry::Persona(i)));
         }
         entries
+    }
+
+    fn shown(&self) -> usize {
+        self.groups().iter().map(|group| group.members.len()).sum()
     }
 
     pub(crate) fn rows(&self) -> Vec<RowText> {
@@ -100,14 +128,18 @@ impl Catalogue {
             .collect()
     }
 
-    fn division_row(&self, (name, members): &(String, Vec<usize>)) -> RowText {
+    fn division_row(&self, group: &Group) -> RowText {
+        let members = &group.members;
         let chosen = members.iter().filter(|&&i| self.checked.get(i).copied().unwrap_or(false)).count();
         let all = chosen == members.len();
+        let every = if self.filter.is_empty() { "check all" } else { "check all shown" };
         RowText {
-            label: format!("{} {name}", if all { "[x]" } else { "[ ]" }),
+            label: format!("{} {}", if all { "[x]" } else { "[ ]" }, group.label),
             value: count(members.len()),
-            note: if chosen == 0 { "check all".into() } else { format!("{chosen} checked") },
+            note: if chosen == 0 { every.into() } else { format!("{chosen} checked") },
             muted: true,
+            icon: group.icon.clone(),
+            tint: group.tint.clone(),
             ..RowText::default()
         }
     }
@@ -133,8 +165,12 @@ impl Catalogue {
 
     pub(crate) fn heading(&self) -> String {
         match &self.fetched {
-            Some(fetched) => {
+            Some(fetched) if self.filter.is_empty() => {
                 format!("{} in {}: check the ones to import", count(fetched.offered.len()), fetched.label)
+            }
+            Some(fetched) => {
+                let total = fetched.offered.len();
+                format!("{} of {total} in {} match: check the ones to import", self.shown(), fetched.label)
             }
             None => "a GitHub repository as owner/repo[/folder], an https address, or a folder or .md file here".into(),
         }
@@ -153,7 +189,9 @@ impl Catalogue {
             return format!("fetching {source}…");
         }
         match &self.fetched {
-            Some(_) => "enter or a click checks a persona or a whole division · import selected asks first".into(),
+            Some(_) => "type to filter · enter or a click checks a persona or a whole division · import selected asks \
+                        first"
+                .into(),
             None => "enter fetches the list, nothing is saved yet · esc goes back".into(),
         }
     }
@@ -214,7 +252,7 @@ impl Catalogue {
                 }
             }
             Some(Entry::Division(n)) => {
-                let members = &groups[*n].1;
+                let members = &groups[*n].members;
                 let all = members.iter().all(|&i| self.checked.get(i).copied().unwrap_or(false));
                 for &i in members {
                     self.checked[i] = !all;
@@ -256,19 +294,34 @@ impl Catalogue {
         Pressed::Ask
     }
 
-    pub(crate) fn key(&mut self, key: KeyEvent, _room: Room) -> Pressed {
+    pub(crate) fn key(&mut self, key: KeyEvent, room: Room) -> Pressed {
         if self.fetched.is_none() {
             return self.source_key(key);
         }
         let last = self.entries().len().saturating_sub(1);
         match key.code {
-            KeyCode::Esc => return Pressed::Close,
-            KeyCode::Enter | KeyCode::Char(' ') => self.toggle(self.cursor),
+            KeyCode::Esc if self.filter.is_empty() => return Pressed::Close,
+            KeyCode::Esc => self.filtered(Editor::default()),
+            KeyCode::Enter => self.toggle(self.cursor),
             KeyCode::Up | KeyCode::BackTab => self.cursor = self.cursor.saturating_sub(1),
             KeyCode::Down | KeyCode::Tab => self.cursor = (self.cursor + 1).min(last),
-            _ => {}
+            _ => {
+                let mut filter = self.filter.clone();
+                if filter.one_line_key(key, room.width.max(1)) {
+                    self.filtered(filter);
+                }
+            }
         }
         Pressed::Stay
+    }
+
+    fn filtered(&mut self, filter: Editor) {
+        let changed = filter.text() != self.filter.text();
+        self.filter = filter;
+        if changed {
+            self.cursor = 0;
+            self.error = None;
+        }
     }
 
     fn source_key(&mut self, key: KeyEvent) -> Pressed {
@@ -287,7 +340,11 @@ impl Catalogue {
     }
 
     pub(crate) fn paste(&mut self, text: &str) {
-        if self.fetched.is_none() && self.fetching.is_none() {
+        if self.fetched.is_some() {
+            let mut filter = self.filter.clone();
+            filter.insert(text);
+            self.filtered(filter);
+        } else if self.fetching.is_none() {
             self.source.extend(text.chars().filter(|c| !c.is_control()));
         }
     }
@@ -296,6 +353,16 @@ impl Catalogue {
         let last = self.entries().len().saturating_sub(1);
         self.cursor = self.cursor.saturating_add_signed(delta).min(last);
     }
+}
+
+fn words(filter: &str) -> Vec<String> {
+    filter.split_whitespace().map(str::to_lowercase).collect()
+}
+
+fn matches(offered: &Offered, division: &str, words: &[String]) -> bool {
+    let fields = [offered.name.as_str(), &offered.description, &offered.id, division];
+    let fields: Vec<String> = fields.iter().map(|field| field.to_lowercase()).collect();
+    words.iter().all(|word| fields.iter().any(|field| field.contains(word.as_str())))
 }
 
 fn count(n: usize) -> String {

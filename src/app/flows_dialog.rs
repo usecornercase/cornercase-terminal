@@ -568,6 +568,8 @@ pub(super) fn settings_row(text: &RowText) -> ui::SettingsRow {
         mark: None,
         tail: String::new(),
         toggle: None,
+        glyph: text.icon.as_deref().and_then(ui::lucide),
+        tint: text.tint.as_deref().and_then(ui::tint),
     }
 }
 
@@ -725,6 +727,7 @@ pub(super) fn flows_view(dialog: &Dialog, area: Rect) -> ui::Overlay {
             Preview::Note(note) => ui::FlowPreview::Note(note),
         }),
         preview_scroll: dialog.preview_scroll(),
+        find: None,
         personas: dialog.agents.persona_labels(),
         focus: edit.and_then(Editing::preview_stage),
         diagram: dialog.diagram(),

@@ -125,6 +125,8 @@ pub(crate) struct RowText {
     pub(crate) muted: bool,
     pub(crate) removable: bool,
     pub(crate) movable: bool,
+    pub(crate) icon: Option<String>,
+    pub(crate) tint: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

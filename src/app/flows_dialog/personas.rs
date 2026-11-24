@@ -18,6 +18,7 @@ use crate::flows::share::visible;
 use crate::log::{self, Job, Level};
 use crate::ui::{self, FlowsHit, SettingsHit};
 
+const FILTER_PROMPT: &str = "filter by name, description, id or division";
 const HEADING: &str = "personas: how a role's agent works, picked in a role's persona row";
 
 impl App {
@@ -262,6 +263,13 @@ fn field(page: &Page) -> Option<ui::SettingsEdit> {
     Some(ui::SettingsEdit { label: "source".into(), value: catalogue.source.clone() })
 }
 
+fn filter(page: &Page) -> Option<(ui::SettingsFind, &'static str)> {
+    let catalogue = page.catalogue.as_ref().filter(|catalogue| !catalogue.editing_source())?;
+    let field = catalogue.filter.clone();
+    let searching = !field.is_empty();
+    Some((ui::SettingsFind { field, focused: page.ask.is_none(), searching }, FILTER_PROMPT))
+}
+
 pub(in crate::app) fn page_view(page: &Page) -> ui::Overlay {
     if let Some((title, message, submit)) = page.ask_text() {
         return confirm_view(title, message, submit, None);
@@ -273,6 +281,7 @@ pub(in crate::app) fn page_view(page: &Page) -> ui::Overlay {
         title: page.title(),
         heading: heading(page),
         search: false,
+        find: filter(page),
         tabs: Vec::new(),
         tab: 0,
         rows: page.rows().iter().map(settings_row).collect(),

@@ -124,4 +124,21 @@ mod what_a_sync_sends {
 
         assert_eq!((outgoing.flows.len(), outgoing.left_out.len()), (0, 0));
     }
+
+    #[test]
+    fn carries_the_text_of_each_persona_its_flows_follow_and_only_those() {
+        let here = Here::with_a_copy_saved_at("2026-11-20T12:00:00.000Z");
+        let mut followed = duo("2026-11-20T12:00:00.000Z", "here");
+        followed.roles[0].persona = Some("reviewer".into());
+        store::save(&here.yours(), &followed, Some(&here.yours().join("duo.toml"))).expect("the flow follows it");
+        let personas = paths::personas(&here.config.path().join("config.json"));
+        std::fs::create_dir_all(&personas).expect("the library");
+        let reviewer = "---\nname: Reviewer\n---\nReview.\n";
+        std::fs::write(personas.join("reviewer.md"), reviewer).expect("followed");
+        std::fs::write(personas.join("other.md"), "---\nname: Other\n---\nNo.\n").expect("not followed");
+
+        let outgoing = here.app.flows_to_send(None).expect("what is sent");
+
+        assert_eq!(outgoing.personas, [("reviewer".to_string(), reviewer.to_string())]);
+    }
 }

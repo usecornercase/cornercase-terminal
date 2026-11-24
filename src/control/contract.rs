@@ -7,6 +7,7 @@ use super::{Command, Response};
 
 pub(crate) const CONTRACT: u32 = 1;
 pub(crate) const FLOW_SYNC: &str = "flow-sync";
+pub(crate) const FLOW_PERSONAS: &str = "flow-personas";
 pub(crate) const EVENTS_VERSION: u32 = 1;
 pub(crate) const WATCH_VERSION: u32 = 1;
 pub(crate) const SURFACE_VERSION: u32 = 1;
@@ -108,7 +109,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "bot-chat-apps",
     FLOW_SYNC,
     "tunnel-machine",
-    "flow-personas",
+    FLOW_PERSONAS,
     "bot-memory",
     "focus-bot",
     "persona-catalogue",

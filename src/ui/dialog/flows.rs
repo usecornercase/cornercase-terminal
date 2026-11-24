@@ -6,8 +6,8 @@ use ratatui::widgets::{Clear, Paragraph, Wrap};
 
 use super::issues::issue_buttons_in;
 use super::settings::{
-    Columns, SettingsEdit, SettingsHit, SettingsPick, SettingsRow, Table, draw_find_prompt, draw_pick, draw_rows,
-    hit_in_rows, line_rect, pick_hit, pick_list_in,
+    Columns, FIND_PROMPT, SettingsEdit, SettingsFind, SettingsHit, SettingsPick, SettingsRow, Table, draw_find,
+    draw_find_prompt, draw_pick, draw_rows, hit_in_rows, line_rect, pick_hit, pick_list_in,
 };
 use super::{Note, draw_input, draw_secondary, draw_submit, draw_tabs, form_inner, tabs_in};
 use crate::editor::Editor;
@@ -103,6 +103,7 @@ pub(crate) struct Flows {
     pub(crate) title: String,
     pub(crate) heading: String,
     pub(crate) search: bool,
+    pub(crate) find: Option<(SettingsFind, &'static str)>,
     pub(crate) tabs: Vec<String>,
     pub(crate) tab: usize,
     pub(crate) rows: Vec<SettingsRow>,
@@ -234,10 +235,14 @@ fn draw_flows_heading(f: &mut Frame, view: &View, flows: &Flows, area: Rect, tab
         let names = flows.tab_names();
         draw_tabs(f, view, &flows_tabs(area, &names), &names, flows.tab);
     }
+    let below = Rect { y: tabs.bottom(), ..tabs };
+    if let Some((find, prompt)) = &flows.find {
+        return draw_find(f, view, below, (find, prompt));
+    }
     if !flows.search {
         return None;
     }
-    let text = draw_find_prompt(f, view, Rect { y: tabs.bottom(), ..tabs });
+    let text = draw_find_prompt(f, view, below, FIND_PROMPT);
     (!text.is_empty()).then(|| text.as_position())
 }
 

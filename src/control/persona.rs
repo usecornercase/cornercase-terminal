@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use super::Fields;
 use crate::flows::persona::Persona;
+use crate::flows::share::visible;
 
 pub(crate) const CHECK_SHORT: &str =
     "personas are prompt text that a flow's agents read and follow without asking for permission";
@@ -137,6 +138,46 @@ pub(crate) struct PersonaShown {
 #[serde(default)]
 pub(crate) struct PersonaSaved {
     pub(crate) persona: PersonaInfo,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct PersonasSent {
+    pub(crate) sent: Vec<String>,
+    pub(crate) same: usize,
+    pub(crate) differ: Vec<String>,
+    pub(crate) failed: Vec<PersonaNotSent>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) error: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct PersonaNotSent {
+    pub(crate) id: String,
+    pub(crate) error: String,
+}
+
+impl PersonasSent {
+    pub(crate) fn parts(&self) -> Vec<String> {
+        if let Some(error) = &self.error {
+            return vec![format!("personas not sent: {}", visible(error))];
+        }
+        let ids = |ids: &[String]| ids.iter().map(|id| visible(id)).collect::<Vec<_>>().join(", ");
+        let mut parts = Vec::new();
+        if !self.sent.is_empty() {
+            parts.push(format!("sent the personas {}", ids(&self.sent)));
+        }
+        if !self.differ.is_empty() {
+            parts.push(format!("kept its own personas {}, which differ from yours", ids(&self.differ)));
+        }
+        let failed = self
+            .failed
+            .iter()
+            .map(|failed| format!("persona {} not sent: {}", visible(&failed.id), visible(&failed.error)));
+        parts.extend(failed);
+        parts
+    }
 }
 
 impl PersonaImport {

@@ -1,13 +1,13 @@
 ---
 source: src/app/tests/flows_dialog/personas.rs
-assertion_line: 215
+assertion_line: 216
 expression: "shown(&mut s.app, WIDE).replace(&server.url(), \"SERVER\")"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                                                            "
 "                                                         │                                                                                            "
 " Proj╭─ Flows › personas › import ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮     "
 "     │ 2 personas in octo/agents: check the ones to import                                                                                      │     "
-"  + N│                                                                                                                                          │     "
+"  + N│  ⌕ filter by name, description, id or division                                                                                           │     "
 "     │ ▌ [ ] Engineering           1 persona  check all                                                                                         │     "
 "     │     [ ] 👁️ Code Reviewer    1 KiB · replaces yours  Reviews code.                                                                        │     " Hidden by multi-width symbols: [(16, " ")]
 "     │   [ ] Testing               1 persona  check all                                                                                         │     "
@@ -42,7 +42,7 @@ expression: "shown(&mut s.app, WIDE).replace(&server.url(), \"SERVER\")"
 "     │ personas are prompt text that a flow's agents read and follow without asking for permission: read them first                             │     "
 "     │ from octo/agents, which nobody here reviewed: https://github.com/octo/agents                                                             │     "
 "     │                                                                                                                                          │     "
-"     │ enter or a click checks a persona or a whole division · import selected asks first                                                       │     "
+"     │ type to filter · enter or a click checks a persona or a whole division · import selected asks first                                      │     "
 "     │                                                                                                                import selected   cancel  │     "
 " ────╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯     "
 "  Worktrees      Recap         │                         │                                                                                            "

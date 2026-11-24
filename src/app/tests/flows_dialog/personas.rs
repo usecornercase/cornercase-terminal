@@ -10,7 +10,8 @@ use crate::test_util::{FakeHttp, tarball as archive_of};
 
 const REVIEWER: &str = "---\nname: Code Reviewer\ndescription: Reviews code.\nemoji: 👁️\n---\n\nYou review code.\n";
 const TESTER: &str = "---\nname: Tester\ndescription: Tests it.\n---\n\nYou test.\n";
-const DIVISIONS: &str = r#"{"divisions": {"engineering": {"label": "Engineering"}, "testing": {"label": "Testing"}}}"#;
+const DIVISIONS: &str = r##"{"divisions": {"engineering": {"label": "Engineering", "icon": "Code", "color": "#3B82F6"},
+    "testing": {"label": "Testing", "icon": "FlaskConical"}}}"##;
 
 fn library(s: &Setup) -> PathBuf {
     paths::personas(&s.config.path().join("config.json"))
@@ -214,4 +215,44 @@ mod pages {
         let server = open_catalogue(&mut s);
         insta::assert_snapshot!(shown(&mut s.app, WIDE).replace(&server.url(), "SERVER"));
     }
+
+    #[test]
+    fn the_catalogue_with_icons() {
+        let mut s = with_reviewer();
+        s.app.config.icons = "on".into();
+        let server = open_catalogue(&mut s);
+        insta::assert_snapshot!(shown(&mut s.app, WIDE).replace(&server.url(), "SERVER"));
+    }
+
+    #[test]
+    fn the_catalogue_filtered() {
+        let mut s = with_reviewer();
+        let server = open_catalogue(&mut s);
+        type_in(&mut s.app, "test", WIDE);
+        insta::assert_snapshot!(shown(&mut s.app, WIDE).replace(&server.url(), "SERVER"));
+    }
+}
+
+#[test]
+fn a_division_row_takes_its_colour_and_its_icon_only_when_icons_are_on() {
+    let mut s = with_reviewer();
+    let _server = open_catalogue(&mut s);
+    let glyph = ui::lucide("Code").expect("a glyph");
+    let row_of = |terminal: &Terminal<TestBackend>, text: &str| {
+        let buffer = terminal.backend().buffer();
+        let width = usize::from(buffer.area.width);
+        let rows: Vec<&[ratatui::buffer::Cell]> = buffer.content().chunks(width).collect();
+        let joined =
+            |cells: &[ratatui::buffer::Cell]| cells.iter().map(ratatui::buffer::Cell::symbol).collect::<String>();
+        let row = rows.iter().find(|row| joined(row).contains(text)).expect("the row");
+        let at = (0..width).find(|&x| joined(&row[x..]).starts_with(text)).expect("the label");
+        (joined(row).contains(glyph), row[at].fg)
+    };
+
+    let off = row_of(&render(&mut s.app, WIDE), "Engineering");
+    s.app.config.icons = "on".into();
+    let on = row_of(&render(&mut s.app, WIDE), "Engineering");
+
+    assert_eq!(off, (false, ratatui::style::Color::Rgb(0x3b, 0x82, 0xf6)));
+    assert_eq!(on, (true, ratatui::style::Color::Rgb(0x3b, 0x82, 0xf6)));
 }

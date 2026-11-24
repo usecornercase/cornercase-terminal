@@ -1,6 +1,10 @@
 mod kinds;
+mod lucide;
+
+use ratatui::style::Color;
 
 pub(crate) use kinds::{Icon, SLOT, file, file_at, folder};
+pub(crate) use lucide::lucide;
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Glyphs {
@@ -78,6 +82,15 @@ const MANY: &str = "\u{f0cb2}";
 
 pub(crate) fn count(n: usize) -> &'static str {
     n.checked_sub(1).and_then(|i| COUNTS.get(i)).copied().unwrap_or(MANY)
+}
+
+pub(crate) fn tint(hex: &str) -> Option<Color> {
+    let hex = hex.trim();
+    let digits = hex.strip_prefix('#')?;
+    if digits.len() != 6 || !digits.chars().all(|c| c.is_ascii_hexdigit()) {
+        return None;
+    }
+    hex.parse().ok()
 }
 
 #[cfg(test)]

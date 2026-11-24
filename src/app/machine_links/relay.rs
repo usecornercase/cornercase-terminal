@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::time::Duration;
 
 use serde_json::Value;
@@ -6,10 +7,14 @@ use super::checks::Checking;
 use super::{Held, MachineEvent};
 use crate::app::App;
 use crate::app::event::AppEvent;
+use crate::app::flow_sync::log_personas;
 use crate::app::machine_links::RemoteItem;
 use crate::control::Command;
 use crate::control::contract::{Code, Refusal};
+use crate::control::persona::PersonasSent;
 use crate::log::{self, Job, Level};
+use crate::machines::flows::personas;
+use crate::machines::link::Connect;
 use crate::machines::{self, State, act, ask, send};
 
 type Hear = fn(&str) -> Result<Value, Refusal>;
@@ -100,12 +105,29 @@ impl App {
         command: Command,
         told: impl FnOnce(Result<String, String>, &Asking, &mut Job) -> AppEvent + Send + 'static,
     ) {
+        let before = |_: &dyn Connect, _: &str| ();
+        self.spawn_ask_after(job, (asking, command), before, move |result, _, asking, job| told(result, asking, job));
+    }
+
+    fn spawn_ask_after<B: Send + 'static>(
+        &self,
+        job: Job,
+        (asking, command): (Asking, Command),
+        before: impl FnOnce(&dyn Connect, &str) -> B + Send + 'static,
+        told: impl FnOnce(Result<String, String>, Option<B>, &Asking, &mut Job) -> AppEvent + Send + 'static,
+    ) {
         let connect = self.machines.connector(&asking.destination);
         let (there, boot, timeout) = (asking.machine.clone(), asking.boot.clone(), asking.timeout);
-        let work = move || Ok(ask::ask(connect.as_ref(), &there, command, boot, timeout));
+        let work = move || {
+            let brought = before(connect.as_ref(), &there);
+            Ok((ask::ask(connect.as_ref(), &there, command, boot, timeout), brought))
+        };
         self.spawn_job(job.slow_after(timeout), work, move |result, job| {
-            let result = result.map_err(|error| error.to_string()).and_then(std::convert::identity);
-            Some(told(result, &asking, job))
+            let (result, brought) = match result {
+                Ok((answer, brought)) => (answer, Some(brought)),
+                Err(error) => (Err(error.to_string()), None),
+            };
+            Some(told(result, brought, &asking, job))
         });
     }
 
@@ -139,8 +161,13 @@ impl App {
             Asking { machine: held.name.clone(), destination: held.destination.clone(), boot, timeout: send.timeout() };
         let job = Job::new(Level::Info, "machines", "relay").with("name", &asking.machine).with("verb", send.verb());
         let hear = send.hearing();
-        self.spawn_ask(send.logged(job), asking, send.command(), move |result, asking, job| {
-            let result = asking.heard_as(result, job, hear);
+        let bring = self.personas_to_bring(&send);
+        let before = move |connect: &dyn Connect, there: &str| {
+            bring.and_then(|(name, project, dir)| personas::for_run(connect, there, (&name, project), &dir))
+        };
+        let job = send.logged(job);
+        self.spawn_ask_after(job, (asking, send.command()), before, move |result, brought, asking, job| {
+            let result = with_personas(asking.heard_as(result, job, hear), brought.flatten(), &asking.machine);
             AppEvent::Machine(MachineEvent::Relayed(Relayed { then, sent: awaited, result }))
         });
         Ok(target)
@@ -157,6 +184,13 @@ impl App {
         }
     }
 
+    fn personas_to_bring(&self, send: &send::Send) -> Option<(String, Option<u64>, PathBuf)> {
+        match send {
+            send::Send::FlowRun(run) => Some((run.name.clone(), run.project, self.personas_dir())),
+            _ => None,
+        }
+    }
+
     pub(super) fn relayed(&mut self, relayed: Relayed) {
         let Relayed { then, sent, result } = relayed;
         match then {
@@ -166,5 +200,26 @@ impl App {
             Then::Clone(key) => self.clone_relayed(key, result),
             Then::Fold { collapse } => self.fold_relayed(&sent, collapse, result),
         }
+    }
+}
+
+fn with_personas(
+    result: Result<Value, Refusal>,
+    brought: Option<PersonasSent>,
+    machine: &str,
+) -> Result<Value, Refusal> {
+    let Some(brought) = brought else { return result };
+    log_personas(machine, &brought);
+    match result {
+        Ok(Value::Object(mut answer)) => {
+            answer.insert("personas".into(), serde_json::to_value(&brought).unwrap_or_default());
+            Ok(Value::Object(answer))
+        }
+        Ok(other) => Ok(other),
+        Err(mut refusal) if brought.error.is_some() || !brought.failed.is_empty() => {
+            refusal.message = format!("{} ({})", refusal.message, brought.parts().join(" · "));
+            Err(refusal)
+        }
+        Err(refusal) => Err(refusal),
     }
 }
