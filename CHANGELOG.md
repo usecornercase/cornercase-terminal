@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.118
+
+- **Pick the personas to import from the command line.** `persona import SOURCE --catalogue` lists every persona of a repository, a folder or a file by division, each with why it cannot be imported when it cannot (not a persona, an id or a name that appears twice, or a name one of yours already has), and saves nothing; unlike `--check`, one such persona no longer fails the whole list. `--only ID`, repeated, imports just those ids.
+- The Personas page's catalogue says the same thing as the command line for each persona, and also marks two personas of the source that share an id or a name.
+- **For programs**: `persona import --catalogue --json` prints the source, its divisions with their labels and icons, and each persona with its file, division and `problem`; the request `persona-import` takes `catalogue`, which answers one `problem` per persona (with its `file`) and saves nothing; and the feature `persona-catalogue` in `cornercase contract`.
+
 ## 0.13.117
 
 - **Personas for a flow's roles.** A persona is how an agent works, written in Markdown with a front matter that gives its `name`, such as the ones in [agency-agents](https://github.com/msitarzewski/agency-agents). Import some or write your own, then give one to any role of a flow, on any agent: the same Code Reviewer can run on Claude Code or Codex.
