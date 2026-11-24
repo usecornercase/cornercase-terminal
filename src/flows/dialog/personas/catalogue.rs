@@ -340,13 +340,12 @@ impl Catalogue {
     }
 
     pub(crate) fn paste(&mut self, text: &str) {
-        let clean: String = text.chars().filter(|c| !c.is_control()).collect();
         if self.fetched.is_some() {
             let mut filter = self.filter.clone();
-            filter.insert(&clean);
+            filter.insert(text);
             self.filtered(filter);
         } else if self.fetching.is_none() {
-            self.source.push_str(&clean);
+            self.source.extend(text.chars().filter(|c| !c.is_control()));
         }
     }
 

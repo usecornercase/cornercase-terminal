@@ -184,6 +184,16 @@ mod the_catalogue_filter {
     }
 
     #[test]
+    fn keeps_a_pasted_line_break_or_tab_as_a_space_between_words() {
+        let mut catalogue = catalogue();
+
+        catalogue.paste("eng\tada");
+
+        assert_eq!(catalogue.filter.text(), "eng ada");
+        assert_eq!(labels(&catalogue), ["[ ] Engineering", "  [ ] Ada"]);
+    }
+
+    #[test]
     fn clears_on_the_first_esc_and_closes_on_the_second() {
         let mut catalogue = catalogue();
         typed(&mut catalogue, "zzz");
