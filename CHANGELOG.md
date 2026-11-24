@@ -2,6 +2,15 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.119
+
+- **Personas go with your flows to your machines.** `flow sync` (and **sync** / **sync all** in Settings → Flows) now sends the personas a flow follows along with it, so the flow no longer lands on the machine unable to run. A persona the machine lacks is imported there first; one it already has with the same text is left alone; and one it has under the same id with a different text is **never replaced**: the result names it, and the flow follows the machine's copy until you replace it there with `persona import --replace`.
+- `flow run --machine` does the same for the flow it starts there: the personas that flow follows and the machine lacks are sent first, and the command says what it sent or kept.
+- A machine on a cornercase without personas still gets your flows, as before, and the result says the personas were not sent.
+- **Search the persona catalogue.** On the Personas page's import, type to filter the list by name, description, id or division; Esc clears the filter. Checking a division while filtered checks only the personas shown.
+- **Division icons and colours.** The catalogue shows each division in the colour its `divisions.json` gives, and, when the window draws Nerd Font icons, with its icon (agency-agents' divisions all have one).
+- **For programs**: the `flow-sync` answer and a relayed `flow-run` answer carry `personas` (`sent`, `same`, `differ`, `failed`, `error`) when a flow follows some, and `persona import --catalogue --json` gives each division its `color`.
+
 ## 0.13.118
 
 - **Pick the personas to import from the command line.** `persona import SOURCE --catalogue` lists every persona of a repository, a folder or a file by division, each with why it cannot be imported when it cannot (not a persona, an id or a name that appears twice, or a name one of yours already has), and saves nothing; unlike `--check`, one such persona no longer fails the whole list. `--only ID`, repeated, imports just those ids.
