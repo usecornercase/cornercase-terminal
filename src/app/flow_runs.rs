@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
@@ -44,6 +45,7 @@ pub(super) struct Runs {
     wakes: Vec<Wake>,
     woken: u64,
     to_free: Vec<merged::BuildsToFree>,
+    pub(super) persona_hosts: flows::persona::source::Hosts,
 }
 
 pub(super) struct Wake {
@@ -68,6 +70,7 @@ impl Runs {
             wakes: Vec::new(),
             woken: 0,
             to_free: Vec::new(),
+            persona_hosts: flows::persona::source::Hosts::from_env(),
         }
     }
 
@@ -237,6 +240,7 @@ struct RunPanes<'a> {
     setup: bool,
     dir: &'a Path,
     accounts: &'a Accounts,
+    personas: &'a BTreeMap<String, String>,
 }
 
 #[derive(Debug)]
@@ -399,7 +403,8 @@ impl App {
     }
 
     pub(super) fn run_refusal(&self, p: usize, starting: &Starting) -> Result<(), String> {
-        let problems = starting.flow.problems();
+        let mut problems = starting.flow.problems();
+        problems.extend(starting.flow.persona_problems(&self.persona_ids()));
         if !problems.is_empty() {
             return Err(format!("flow {} cannot run: {}", starting.flow.name, problems.join("; ")));
         }
@@ -448,7 +453,7 @@ impl App {
     }
 
     fn spawn_run_panes(&mut self, area: Rect, at: WorkspaceAt, panes: &RunPanes) -> Result<Vec<Term>, String> {
-        let RunPanes { roles, trees, setup, dir, accounts } = *panes;
+        let RunPanes { roles, trees, setup, dir, accounts, personas } = *panes;
         let (p, workspace) = (at.project(), self.projects.workspace(at));
         let (id, path) = (workspace.id, workspace.path.clone());
         let mut terms = Vec::with_capacity(roles.len());
@@ -475,7 +480,7 @@ impl App {
             match term {
                 Ok(term) => terms.push(term),
                 Err(e) => {
-                    folder::discard(dir);
+                    folder::discard(dir, personas);
                     self.projects.workspace_mut(at).run_dirs.retain(|kept| kept != dir);
                     return Err(e.to_string());
                 }
@@ -529,8 +534,10 @@ impl App {
         let named = Some(flow.orchestrator.agent.as_str()).filter(|agent| !agent.trim().is_empty());
         let orchestrator = agents::resolve(&self.config, named, None);
         let roles: Vec<Role> = std::iter::once(flow.orchestrator.clone()).chain(flow.roles.iter().cloned()).collect();
+        let personas = self.run_personas(&flow)?;
         let mut run = self.new_run(id, (flow, task), (starting.close_when_merged, starting.summary));
         run.free_builds = starting.free_builds;
+        run.personas = personas;
         let project = self.projects[place.project()].id;
         let mut info = RunInfo {
             run: run.id,
@@ -542,8 +549,9 @@ impl App {
             free_builds: starting.free_builds,
             ..RunInfo::default()
         };
-        let dir = self.make_run_dir(place, &run.task)?;
-        let panes = RunPanes { roles: &roles, trees: &trees, setup, dir: &dir, accounts: &accounts };
+        let dir = self.make_run_dir(place, &run.task, &run.personas)?;
+        let panes =
+            RunPanes { roles: &roles, trees: &trees, setup, dir: &dir, accounts: &accounts, personas: &run.personas };
         let terms = self.spawn_run_panes(area, place, &panes)?;
         self.name_flow_workspace(place, name);
         let seats: Vec<RoleWorktree> = trees.iter().map(|(tree, _)| tree.clone()).collect();
@@ -562,14 +570,23 @@ impl App {
         Ok(info)
     }
 
-    fn make_run_dir(&mut self, place: WorkspaceAt, task: &str) -> Result<PathBuf, String> {
+    fn make_run_dir(
+        &mut self,
+        place: WorkspaceAt,
+        task: &str,
+        personas: &BTreeMap<String, String>,
+    ) -> Result<PathBuf, String> {
         let path = self.projects.workspace(place).path.clone();
         let day = queue::clock::day(time::now(), &self.window_zone());
         let dir =
             folder::make(&self.runs.dir, &path, &day).map_err(|e| format!("could not make the run's folder: {e}"))?;
         if let Err(e) = folder::write_task(&dir, task) {
-            folder::discard(&dir);
+            folder::discard(&dir, personas);
             return Err(format!("could not write the task to the run's folder: {e}"));
+        }
+        if let Err(e) = folder::ensure_personas(&dir, personas) {
+            folder::discard(&dir, personas);
+            return Err(format!("could not write the personas to the run's folder: {e}"));
         }
         self.projects.workspace_mut(place).run_dirs.push(dir.clone());
         Ok(dir)

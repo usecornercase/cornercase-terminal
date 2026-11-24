@@ -1,5 +1,6 @@
 ---
 source: src/app/tests/flows_dialog/order.rs
+assertion_line: 236
 expression: "shown(&mut s.app, WIDE)"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                                                            "
@@ -42,7 +43,7 @@ expression: "shown(&mut s.app, WIDE)"
 "     │                                                                                           ╰────────────────────────────────────────────╯ │     "
 "     │                                                                                                                                          │     "
 "     │ release to move Quick there · esc puts it back                                                                                           │     "
-"     │                                                edit   duplicate   set default   export   delete   import   new   share   restart   done  │     "
+"     │                                     edit   duplicate   set default   export   delete   personas   import   new   share   restart   done  │     "
 " ────╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯     "
 "  Worktrees      Recap         │                         │                                                                                            "
 "  More ▴                 Help  │                         │                                                                                            "

@@ -134,6 +134,9 @@ const MAX_DRAFT: usize = 4 * share::MAX_BYTES;
 
 fn save_flow(args: FlowSaveArgs) -> Result<()> {
     let flow = draft(&args.source)?;
+    if std::iter::once(&flow.orchestrator).chain(&flow.roles).any(|role| role.persona.is_some()) {
+        client::use_flow_personas()?;
+    }
     let path = args.path.map(|path| listed_path(&path)).transpose()?;
     let to = match (args.to, &path) {
         (None, Some(path)) => place_of(path, args.project)?,
@@ -366,6 +369,9 @@ fn import_flow(args: FlowImportArgs) -> Result<()> {
     let text = import_text(&source)?;
     let flow = share::from_share(&text)
         .map_err(|e| Error::Control(share::visible(&format!("cannot read `{}`: {e}", args.source))))?;
+    if std::iter::once(&flow.orchestrator).chain(&flow.roles).any(|role| role.persona().is_some()) {
+        client::use_flow_personas()?;
+    }
     let risks = share::risks(&flow, "it");
     let asked = match &source {
         Source::Url(_) | Source::Repo(_) => Some(fetched(&source, risks)),
@@ -520,7 +526,7 @@ pub(super) fn listing(flows: &Flows) -> String {
     out
 }
 
-fn role_summary(role: &RoleInfo) -> String {
+pub(super) fn role_summary(role: &RoleInfo) -> String {
     let model = role.model.as_deref().map(|m| format!(" · {m}")).unwrap_or_default();
     let effort = role.effort.as_deref().map(|e| format!(" · {e}")).unwrap_or_default();
     let edits = match (role.edits, role.worktree) {
@@ -529,7 +535,14 @@ fn role_summary(role: &RoleInfo) -> String {
         (false, Worktree::Own) => " (own worktree)",
         (false, Worktree::Shared) => "",
     };
-    format!("{}: {}{model}{effort}{edits}", role.role, role.agent)
+    format!("{}: {}{model}{effort}{}{edits}", role.role, role.agent, persona_tag(role))
+}
+
+fn persona_tag(role: &RoleInfo) -> String {
+    let Some(id) = role.persona.as_deref() else { return String::new() };
+    let name = if role.persona_name.is_empty() { id } else { role.persona_name.as_str() };
+    let emoji = if role.persona_emoji.is_empty() { String::new() } else { format!("{} ", role.persona_emoji) };
+    share::visible(&format!(" · {emoji}{name}"))
 }
 
 fn heading(flow: &FlowInfo) -> String {

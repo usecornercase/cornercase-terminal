@@ -26,6 +26,7 @@ pub(crate) mod issues;
 pub(crate) mod machines;
 pub(crate) mod pair;
 mod panes;
+pub(crate) mod persona;
 pub(crate) mod plugins;
 pub(crate) mod ports;
 pub(crate) mod processes;
@@ -49,7 +50,7 @@ pub(crate) mod worktrees;
 
 use fields::{Fields, chosen};
 pub(crate) use panes::{NewTab, Split};
-pub(crate) use todo::{Todo, TodoSend};
+pub(crate) use todo::{Todo, TodoItem, TodoList, TodoSend};
 
 pub(crate) use accounts::{
     AccountAdd, AccountList, AccountLogin, AccountRemove, AccountRename, AccountRestart, AccountUse, AccountsInfo,
@@ -298,6 +299,11 @@ pub(crate) enum Command {
     FreeMergedBuilds(FreeMergedBuilds),
     Bot(bots::BotRequest),
     AppRoutes(AppRoutes),
+    PersonaList(persona::PersonaList),
+    PersonaImport(persona::PersonaImport),
+    PersonaRemove(persona::PersonaRemove),
+    PersonaSave(persona::PersonaSave),
+    PersonaShow(persona::PersonaShow),
 }
 
 impl Command {
@@ -447,6 +453,11 @@ impl Command {
             Self::FlowMessages(_) => 76,
             Self::FlowFiles(_) => 77,
             Self::FlowSync(_) => 138,
+            Self::PersonaList(_) => 139,
+            Self::PersonaImport(_) => 140,
+            Self::PersonaRemove(_) => 141,
+            Self::PersonaSave(_) => 142,
+            Self::PersonaShow(_) => 143,
             _ => return None,
         })
     }
@@ -662,6 +673,11 @@ impl Command {
         "bot",
         "app-routes",
         "flow-sync",
+        "persona-list",
+        "persona-import",
+        "persona-remove",
+        "persona-save",
+        "persona-show",
     ];
 
     pub(crate) fn unreported_request(text: &str) -> bool {
@@ -955,22 +971,6 @@ pub(crate) struct Done {
     pub(crate) projection: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) group: Option<u64>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub(crate) struct TodoList {
-    pub(crate) todos: Vec<TodoItem>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) undo: Option<u64>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub(crate) struct TodoItem {
-    pub(crate) id: u64,
-    pub(crate) text: String,
-    pub(crate) done: bool,
 }
 
 pub(crate) fn unknown_command(name: &str) -> String {

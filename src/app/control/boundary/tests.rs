@@ -62,6 +62,10 @@ fn flow_import(check: bool) -> Command {
     Command::FlowImport(FlowImport { check, ..FlowImport::default() })
 }
 
+fn persona_import(check: bool) -> Command {
+    Command::PersonaImport(crate::control::persona::PersonaImport { check, ..Default::default() })
+}
+
 fn flow_save(check: bool) -> Command {
     Command::FlowSave(FlowSave { check, ..FlowSave::default() })
 }
@@ -96,6 +100,8 @@ fn typed(text: &str) -> Gated {
 #[case::preview_a_flow_import(flow_import(true), None)]
 #[case::save_a_flow(flow_save(false), Some(Gated::Flows))]
 #[case::check_a_flow(flow_save(true), None)]
+#[case::import_personas(persona_import(false), Some(Gated::Flows))]
+#[case::preview_a_persona_import(persona_import(true), None)]
 #[case::list_machines(Command::Machines(Machines::List), None)]
 #[case::retry_machines(Command::Machines(Machines::Retry(None)), None)]
 #[case::set_a_machine(Command::Machines(Machines::Set(MachineSet::default())), Some(Gated::Machines))]
@@ -156,6 +162,8 @@ fn every_request_is_decided_once() {
 #[case::flow_run("flow-run", "a bot cannot run a flow")]
 #[case::flows("flow-delete", "a bot cannot change cornercase's flows")]
 #[case::flow_sync("flow-sync", "a bot cannot change cornercase's flows")]
+#[case::persona_save("persona-save", "a bot cannot change cornercase's flows")]
+#[case::persona_remove("persona-remove", "a bot cannot change cornercase's flows")]
 #[case::plugins("plugin-run", "a bot cannot run or change cornercase's plugins")]
 #[case::stop("stop-port", "a bot cannot stop a process")]
 #[case::discard("changes-discard", "a bot cannot discard changes")]

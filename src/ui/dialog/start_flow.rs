@@ -168,6 +168,7 @@ pub(crate) struct StartFlow {
     pub(crate) hint: String,
     pub(crate) buttons: Vec<&'static str>,
     pub(crate) preview: Option<Flow>,
+    pub(crate) personas: Vec<(String, String)>,
     pub(crate) diagram: bool,
     pub(crate) accounts: Vec<AccountField>,
     pub(crate) focused_account: Option<usize>,
@@ -351,12 +352,9 @@ pub(in crate::ui) fn draw_start_flow(f: &mut Frame, view: &View, start: &StartFl
         row.draw(f, view, run_on);
     }
     if let Some(preview) = start.preview_area(area) {
-        draw_preview(
-            f,
-            view,
-            preview,
-            Previewed { flow: start.preview.as_ref(), scroll: start.preview_scroll, focus: None },
-        );
+        let shown =
+            Previewed { flow: start.preview.as_ref(), scroll: start.preview_scroll, focus: None, personas: &[] };
+        draw_preview(f, view, preview, Previewed { personas: &start.personas, ..shown });
     }
     if !start.list_hidden(area) {
         draw_items(f, view, start.list(area), start);

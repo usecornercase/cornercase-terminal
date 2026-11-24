@@ -154,6 +154,8 @@ pub(crate) struct RunState {
     pub(crate) free_builds: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) exits_told: Vec<String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(crate) personas: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -192,6 +194,7 @@ impl RunState {
             close_when_merged: run.close_when_merged,
             free_builds: run.free_builds,
             exits_told: run.exits_told.clone(),
+            personas: run.personas.clone(),
         }
     }
 
@@ -200,6 +203,7 @@ impl RunState {
         run.close_when_merged = self.close_when_merged;
         run.free_builds = self.free_builds;
         run.exits_told.clone_from(&self.exits_told);
+        run.personas.clone_from(&self.personas);
     }
 
     pub(crate) fn role_at(&self, tab: usize, pane: usize) -> Option<&crate::flows::Role> {

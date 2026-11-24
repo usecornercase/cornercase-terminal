@@ -101,6 +101,7 @@ pub(crate) struct Start {
     pub(crate) there: Option<There>,
     pub(crate) asked: Option<(String, String)>,
     picked_there: BTreeMap<String, String>,
+    pub(crate) personas: Vec<(String, String)>,
 }
 
 impl Start {
@@ -128,9 +129,17 @@ impl Start {
             there: None,
             asked: None,
             picked_there: BTreeMap::new(),
+            personas: Vec::new(),
         };
         start.cursor = start.first_choice();
         start
+    }
+
+    #[must_use]
+    pub(crate) fn with_personas(mut self, personas: Vec<(String, String)>) -> Self {
+        self.personas = personas;
+        self.cursor = self.first_choice();
+        self
     }
 
     fn first_choice(&self) -> usize {
@@ -210,7 +219,10 @@ impl Start {
     }
 
     fn problems(&self, saved: &Saved) -> Vec<String> {
-        store::conflict(&self.flows, &self.builtins, saved).into_iter().chain(saved.flow.problems()).collect()
+        let known: Vec<String> = self.personas.iter().map(|(id, _)| id.clone()).collect();
+        let personas = if self.there.is_none() { saved.flow.persona_problems(&known) } else { Vec::new() };
+        let own = store::conflict(&self.flows, &self.builtins, saved).into_iter().chain(saved.flow.problems());
+        own.chain(personas).collect()
     }
 
     pub(crate) fn items(&self) -> Vec<Item> {

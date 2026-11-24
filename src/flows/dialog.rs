@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use super::persona::Persona;
 use super::registry;
 use super::store::{self, Listing, Origin, Saved};
 use super::{Flow, builtin, share};
@@ -69,6 +70,7 @@ pub(crate) enum Action {
     Sync(Option<String>),
     ReadModels(Known),
     Fetch(registry::Source),
+    Personas,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -126,17 +128,43 @@ pub(crate) struct RowText {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct Named {
+    pub(crate) id: String,
+    pub(crate) name: String,
+    pub(crate) emoji: String,
+}
+
+impl Named {
+    pub(crate) fn of(persona: &Persona) -> Self {
+        Self { id: persona.id.clone(), name: persona.name.clone(), emoji: persona.emoji.clone() }
+    }
+
+    pub(crate) fn label(&self) -> String {
+        if self.emoji.is_empty() { self.name.clone() } else { format!("{} {}", self.emoji, self.name) }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct Agents {
     pub(crate) installed: Vec<Known>,
     pub(crate) default: Option<Known>,
     pub(crate) project: bool,
+    pub(crate) personas: Vec<Named>,
     models: Vec<(Known, Vec<String>)>,
     reading: Vec<Known>,
 }
 
 impl Agents {
     pub(crate) fn new(installed: Vec<Known>, default: Option<Known>, project: bool) -> Self {
-        Self { installed, default, project, models: Vec::new(), reading: Vec::new() }
+        Self { installed, default, project, personas: Vec::new(), models: Vec::new(), reading: Vec::new() }
+    }
+
+    pub(crate) fn persona(&self, id: &str) -> Option<&Named> {
+        self.personas.iter().find(|named| named.id == id)
+    }
+
+    pub(crate) fn persona_labels(&self) -> Vec<(String, String)> {
+        self.personas.iter().map(|named| (named.id.clone(), named.label())).collect()
     }
 
     pub(crate) fn models(&self, kind: Known) -> Vec<String> {
@@ -185,6 +213,7 @@ pub(crate) struct Dialog {
     pub(crate) importing: Option<Importing>,
     pub(crate) preview: u16,
     pub(crate) diagram: bool,
+    pub(crate) personas: Option<Box<Page>>,
     pub(crate) sync_to: Vec<String>,
 }
 
@@ -210,6 +239,7 @@ impl Dialog {
             importing: None,
             preview: 0,
             diagram: false,
+            personas: None,
             sync_to: Vec::new(),
         }
     }
@@ -296,7 +326,7 @@ impl Dialog {
     }
 
     pub(crate) fn settings_tabs(&self) -> bool {
-        self.in_settings && self.edit.is_none() && self.importing.is_none()
+        self.in_settings && self.edit.is_none() && self.importing.is_none() && self.personas.is_none()
     }
 
     pub(crate) fn toggle_deleted(&mut self) {
@@ -589,7 +619,7 @@ impl Dialog {
         if !room.wide {
             buttons.push(if self.diagram { LIST } else { DIAGRAM });
         }
-        buttons.extend([IMPORT, NEW]);
+        buttons.extend([PERSONAS, IMPORT, NEW]);
         if !self.sync_to.is_empty() {
             buttons.push(SYNC_ALL);
         }
@@ -597,7 +627,7 @@ impl Dialog {
             buttons.extend([crate::settings::SHARE, crate::settings::RESTART]);
         }
         buttons.push(DONE);
-        for dropped in [crate::settings::SHARE, SYNC_ALL, SYNC, IMPORT, EXPORT, SET_DEFAULT, DUPLICATE] {
+        for dropped in [crate::settings::SHARE, SYNC_ALL, SYNC, IMPORT, EXPORT, SET_DEFAULT, DUPLICATE, PERSONAS] {
             if !room.wide && room.width > 0 && row_width(&buttons) > room.width {
                 buttons.retain(|label| *label != dropped);
             }
@@ -670,7 +700,9 @@ impl Dialog {
         let Some(edit) = &self.edit else { return Vec::new() };
         let risks = edit.is_project_flow().then(|| project_risks(&edit.flow)).flatten();
         let imported = edit.imported.then(|| share::risks(&edit.flow, "this imported flow")).flatten();
-        risks.into_iter().chain(imported).chain(edit.flow.problems().iter().map(|p| share::visible(p))).collect()
+        let known: Vec<String> = self.agents.personas.iter().map(|named| named.id.clone()).collect();
+        let problems = edit.flow.problems().into_iter().chain(edit.flow.persona_problems(&known));
+        risks.into_iter().chain(imported).chain(problems.map(|p| share::visible(&p))).collect()
     }
 
     pub(crate) fn press(&mut self, label: &str) -> Action {
@@ -696,6 +728,7 @@ impl Dialog {
             SYNC_ALL => return Action::Sync(None),
             SYNC => return self.selected().map_or(Action::None, |saved| Action::Sync(Some(saved.flow.name.clone()))),
             NEW => self.open_new(),
+            PERSONAS => return Action::Personas,
             DONE => return Action::Close,
             _ => {}
         }
@@ -718,8 +751,9 @@ impl Dialog {
     }
 
     pub(crate) fn save(&mut self) -> Action {
+        let known: Vec<String> = self.agents.personas.iter().map(|named| named.id.clone()).collect();
         let Some(edit) = &mut self.edit else { return Action::None };
-        if !edit.flow.problems().is_empty() {
+        if !edit.flow.problems().is_empty() || !edit.flow.persona_problems(&known).is_empty() {
             self.notice = Some("fix the problems in red to save the flow".into());
             return Action::None;
         }
@@ -783,6 +817,7 @@ mod edit;
 mod import;
 mod input;
 mod order;
+pub(crate) mod personas;
 mod rows;
 
 pub(crate) use edit::Editing;
@@ -790,6 +825,7 @@ pub(crate) use edit::Editing;
 pub(crate) use edit::{Row, Tab};
 pub(crate) use import::Importing;
 pub(crate) use order::Dragging;
+pub(crate) use personas::{PERSONAS, Page, PageAction};
 
 #[cfg(test)]
 mod tests;

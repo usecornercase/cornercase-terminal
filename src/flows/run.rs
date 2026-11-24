@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 use std::path::PathBuf;
 use std::time::{Duration, Instant, SystemTime};
 
@@ -132,6 +132,7 @@ pub(crate) struct Run {
     pub(crate) workspace: u64,
     pub(crate) flow: Flow,
     pub(crate) task: String,
+    pub(crate) personas: BTreeMap<String, String>,
     pub(crate) members: Vec<Member>,
     pub(crate) messages: VecDeque<Message>,
     pub(crate) progress: Progress,
@@ -161,6 +162,7 @@ impl Run {
             workspace,
             flow,
             task,
+            personas: BTreeMap::new(),
             members: Vec::new(),
             messages: VecDeque::new(),
             progress: Progress::default(),

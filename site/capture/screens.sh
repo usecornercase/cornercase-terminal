@@ -1,5 +1,5 @@
 #!/bin/sh
-CC_SCREENS="first-run tour sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents close-agent close-agents agents-closed agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu open-in group-style rename-menu rename-form remove-workspace worktrees worktrees-confirm worktrees-free pull-requests pull-request-checks pull-request-stack issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-names issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every changes-discard changes-stage files files-file files-full files-find files-search files-names files-link todo todo-add recap settings-worktrees settings-agents settings-flows settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui settings-share settings-import context usage usage-stats usage-accounts settings-accounts account-pills tab-account keys-menu processes remote-reconnecting queue queue-form queue-routine bots bots-lobby bot-form bot-routines flow-run flow-messages flow-agents flows-list flows-deleted flows-import flows-edit flow-start settings-machines machine-menu machines-sidebar machines-agents machines-run-on machines-clone"
+CC_SCREENS="first-run tour sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents close-agent close-agents agents-closed agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu open-in group-style rename-menu rename-form remove-workspace worktrees worktrees-confirm worktrees-free pull-requests pull-request-checks pull-request-stack issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-names issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every changes-discard changes-stage files files-file files-full files-find files-search files-names files-link todo todo-add recap settings-worktrees settings-agents settings-flows settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui settings-share settings-import context usage usage-stats usage-accounts settings-accounts account-pills tab-account keys-menu processes remote-reconnecting queue queue-form queue-routine bots bots-lobby bot-form bot-routines flow-run flow-messages flow-agents flows-list flows-personas flows-deleted flows-import flows-edit flow-start settings-machines machine-menu machines-sidebar machines-agents machines-run-on machines-clone"
 
 pane_in() {
   cc status --json | node -e '
@@ -1265,6 +1265,34 @@ flows_open() {
   cc_more settings
   cc_click 'Flows   Issues'
   cc_wait 'a built-in flow: edit saves'
+}
+
+screen_flows_personas() {
+  mkdir -p "$CC_RUN/personas"
+  cat > "$CC_RUN/personas/engineering-code-reviewer.md" <<'MD'
+---
+name: Code Reviewer
+description: Expert code reviewer who gives actionable feedback on correctness, security and maintainability.
+emoji: 🔍
+source: "msitarzewski/agency-agents/engineering/engineering-code-reviewer.md"
+---
+
+You are **Code Reviewer**.
+MD
+  cat > "$CC_RUN/personas/careful-tester.md" <<'MD'
+---
+name: "Careful Tester"
+description: "Writes a failing test before it fixes anything."
+emoji: "🧪"
+---
+
+Write a test that fails first, then make it pass.
+MD
+  flows_open
+  cc_click 'personas'
+  cc_wait 'Flows › personas'
+  cc_hover '╭─ Flows'
+  cc_shot flows-personas
 }
 
 screen_settings_flows() {

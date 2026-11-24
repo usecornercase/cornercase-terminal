@@ -13,6 +13,7 @@ import { Aside } from '@astrojs/starlight/components';
 | `config.json` | Your [settings](../configuration/). | `~/.config/cornercase/` |
 | `config.json.lock` | Empty. Makes `cornercase remote --remember` and `--forget` and a window that reaches a machine wait for each other while they change your list of machines. The Settings form and `cornercase machines` do not use it. Safe to delete. | Next to `config.json` |
 | `flows/` | Your [flows](../../guides/flows/#where-flows-are-kept), one TOML file each, readable only by you (`0600`) once saved on Linux and macOS; on Windows they are in your user profile. A project's flows are in `.cornercase/flows/` in its repository. | Next to `config.json` |
+| `personas/` | Your [personas](../../guides/flows/#personas), one Markdown file each, named after its id. | Next to `config.json` |
 | `secrets.json` | GitLab, Shortcut, Linear, Jira, Plane and Asana tokens and the [Telegram](../../guides/telegram/) and [Discord](../../guides/discord/) bots' tokens, typed in the app. Readable only by you (mode `0600`); removed when its last token is. | Next to `config.json` |
 | `apps.json` | The phone apps paired to reach cornercase [from the app](../../guides/phone/#the-phone-app): a name and a hash of each one's secret, never the secret. Readable only by you (mode `0600`). | Next to `config.json` |
 | `browsers.json` | The browsers paired to open cornercase [from your phone](../../guides/phone/): a hash of each one's secret, never the secret. Readable only by you (mode `0600`). | Next to `config.json` |
@@ -60,6 +61,7 @@ When `CORNERCASE_SOCKET` is set, everything moves next to that socket, so a sepa
 | Socket, lock and log | `/tmp/cc-demo/server.sock`, `server.lock`, `server.log` |
 | Settings and tokens | `/tmp/cc-demo/config.json`, `secrets.json` |
 | Your flows | `/tmp/cc-demo/flows/` |
+| Your personas | `/tmp/cc-demo/personas/` |
 | Paired browsers | `/tmp/cc-demo/browsers.json` |
 | Paired phone apps | `/tmp/cc-demo/apps.json` |
 | Telegram bot and chat | `/tmp/cc-demo/telegram.json` |

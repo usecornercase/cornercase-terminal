@@ -192,6 +192,11 @@ impl App {
             Command::FlowMessages(messages) => self.flow_messages_request(client, caller, &messages),
             Command::FlowFiles(files) => self.flow_files_request(client, caller, &files),
             Command::FlowSync(sync) => self.flow_sync_request(client, &sync),
+            Command::PersonaList(_) => Ok(Some(self.persona_listing())),
+            Command::PersonaImport(import) => self.persona_import_request(&import),
+            Command::PersonaRemove(remove) => self.persona_remove_request(&remove),
+            Command::PersonaSave(save) => self.persona_save_request(&save),
+            Command::PersonaShow(show) => self.persona_show_request(&show),
             other => return ControlFlow::Continue(other),
         })
     }

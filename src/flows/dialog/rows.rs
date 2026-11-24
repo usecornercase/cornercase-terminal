@@ -1,4 +1,4 @@
-use super::edit::{Choice, DEFAULT_MODEL, Editing, Row, Tab};
+use super::edit::{Choice, DEFAULT_MODEL, Editing, NO_PERSONA, Row, Tab};
 use super::{Agents, RowText};
 use crate::agents::{self, Known};
 use crate::flows::{Role, takes};
@@ -41,6 +41,7 @@ impl Editing {
             | Row::Agent
             | Row::Model
             | Row::Effort
+            | Row::Persona
             | Row::Args
             | Row::Env
             | Row::Edits
@@ -83,6 +84,7 @@ impl Editing {
                 }
                 None => text("effort", "none".into(), format!("{} has no effort switch", role.agent)),
             },
+            Row::Persona => persona_text(role, agents),
             Row::Args => text("args", or_none(agents::join_args(&role.args)), "added to the agent's command".into()),
             Row::Env => {
                 let env = role.env.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<_>>().join(" ");
@@ -131,6 +133,7 @@ impl Editing {
             Row::Agent => format!("Which agent is the {role}?"),
             Row::Model => format!("Which model does the {role} use?"),
             Row::Effort => format!("How hard does the {role} think?"),
+            Row::Persona => format!("Which persona does the {role} follow?"),
             Row::Worktree => format!("Where does the {role} work?"),
             _ => String::new(),
         }
@@ -163,6 +166,16 @@ fn agent_text(role: &Role, agents: &Agents) -> RowText {
         _ => "not an agent a flow can start".to_string(),
     };
     RowText { red: !taken, ..role_text("agent", role.agent.clone(), note) }
+}
+
+fn persona_text(role: &Role, agents: &Agents) -> RowText {
+    let Some(id) = role.persona() else {
+        return role_text("persona", NO_PERSONA.into(), "how it works, from your personas".into());
+    };
+    match agents.persona(id) {
+        Some(named) => role_text("persona", named.label(), id.to_string()),
+        None => RowText { red: true, ..role_text("persona", id.to_string(), "not among your personas".into()) },
+    }
 }
 
 fn or_none(value: String) -> String {

@@ -1,5 +1,6 @@
 ---
 source: src/app/tests/flows_dialog.rs
+assertion_line: 699
 expression: "shown(&mut s.app, NARROW)"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                "
@@ -29,6 +30,6 @@ expression: "shown(&mut s.app, NARROW)"
 "  │ ╰────────────────────────────────────────────────────────────────────────────────╯ │  "
 "  │                                                                                    │  "
 "  │ a built-in flow: edit saves your version in your folder, in its place; delete hid… │  "
-" ─│     edit   duplicate   set default   export   delete   list   import   new   done  │  "
+" ─│            edit   duplicate   set default   delete   list   personas   new   done  │  "
 "  ╰────────────────────────────────────────────────────────────────────────────────────╯  "
 "  More ▴                 Help  │                         │                                "

@@ -63,15 +63,19 @@ pub(crate) fn is_repo(text: &str) -> bool {
     text.split_once('/').is_some_and(|(owner, repo)| part(owner) && part(repo))
 }
 
+pub(crate) fn address(arg: &str) -> Result<Option<String>, String> {
+    if arg.starts_with("http://") {
+        return Err("use an https:// address".to_string());
+    }
+    Ok(arg.starts_with("https://").then(|| arg.to_string()))
+}
+
 pub(crate) fn source(arg: &str, exists: impl Fn(&Path) -> bool) -> Result<Source, String> {
     if arg == "-" {
         return Ok(Source::Stdin);
     }
-    if arg.starts_with("https://") {
-        return Ok(Source::Url(arg.to_string()));
-    }
-    if arg.starts_with("http://") {
-        return Err("use an https:// address".to_string());
+    if let Some(url) = address(arg)? {
+        return Ok(Source::Url(url));
     }
     let path = Path::new(arg);
     if exists(path) {

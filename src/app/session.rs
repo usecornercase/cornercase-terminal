@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -117,10 +117,15 @@ impl App {
 
     fn restore_run_dir(&self, saved: &WorkspaceState) -> Option<PathBuf> {
         let run = saved.run.as_ref()?;
-        self.ensure_run_dir(run.dir.as_deref(), &run.task)
+        self.ensure_run_dir(run.dir.as_deref(), &run.task, &run.personas)
     }
 
-    pub(super) fn ensure_run_dir(&self, name: Option<&str>, task: &str) -> Option<PathBuf> {
+    pub(super) fn ensure_run_dir(
+        &self,
+        name: Option<&str>,
+        task: &str,
+        personas: &BTreeMap<String, String>,
+    ) -> Option<PathBuf> {
         let name = name.filter(|name| folder::valid(name))?;
         let dir = self.runs.dir().join(name);
         match folder::ensure(&dir) {
@@ -132,6 +137,7 @@ impl App {
             }
         }
         ensure_task(&dir, task);
+        ensure_personas(&dir, personas);
         Some(dir)
     }
 
@@ -368,6 +374,14 @@ pub(super) fn not_restored(missed: &[(String, usize)]) -> String {
     };
     let projects: Vec<&str> = missed.iter().map(|(name, _)| name.as_str()).collect();
     format!("could not restore {tabs} ({}), see server.log", projects.join(", "))
+}
+
+fn ensure_personas(dir: &Path, personas: &BTreeMap<String, String>) {
+    match folder::ensure_personas(dir, personas) {
+        Ok(0) => {}
+        Ok(count) => log::info!("flow", "run personas written again", path = dir.display(), count = count),
+        Err(e) => log::warning!("flow", "cannot write the run's personas", path = dir.display(), error = e),
+    }
 }
 
 fn ensure_task(dir: &Path, task: &str) {

@@ -53,7 +53,7 @@ fn the_deleted_entry_comes_last_and_folds() {
     let row = d.list_rows().pop().expect("a row");
     assert_eq!((d.entries(), row.label.as_str(), row.muted), (toggle() + 1, "▸ deleted built-ins (1)", true));
     d.select(toggle());
-    assert_eq!(d.buttons(ROOM), [IMPORT, NEW, DONE]);
+    assert_eq!(d.buttons(ROOM), [PERSONAS, IMPORT, NEW, DONE]);
     key(&mut d, KeyCode::Enter);
     let rows = d.list_rows();
     assert_eq!((d.entries(), rows[toggle()].label.as_str()), (toggle() + 2, "▾ deleted built-ins (1)"));
@@ -64,7 +64,7 @@ fn the_deleted_entry_comes_last_and_folds() {
     );
     d.select(toggle() + 1);
     assert!(matches!(d.preview(), Some(Preview::Flow(flow)) if flow.name == "Arena"));
-    assert_eq!(d.buttons(ROOM), [RESTORE_BUILT_IN, IMPORT, NEW, DONE]);
+    assert_eq!(d.buttons(ROOM), [RESTORE_BUILT_IN, PERSONAS, IMPORT, NEW, DONE]);
     assert_eq!(
         [key(&mut d, KeyCode::Enter), d.press(RESTORE_BUILT_IN)],
         [Action::Unhide("Arena".into()), Action::Unhide("Arena".into())]
@@ -136,6 +136,7 @@ fn the_list_is_titled_settings_and_ends_with_share_restart_and_done() {
             SET_DEFAULT,
             EXPORT,
             DELETE,
+            PERSONAS,
             IMPORT,
             NEW,
             crate::settings::SHARE,

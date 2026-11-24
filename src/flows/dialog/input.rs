@@ -13,6 +13,9 @@ impl Dialog {
         if self.confirm.is_some() || self.drag.is_some() {
             return None;
         }
+        if let Some(page) = &self.personas {
+            return page.ask.is_none().then(|| page.form.as_ref()?.text.as_ref()).flatten();
+        }
         match &self.importing {
             Some(importing) => Some(&importing.editor),
             None => self.edit.as_ref()?.text.as_ref().map(|text| &text.editor),
@@ -22,6 +25,9 @@ impl Dialog {
     pub(crate) fn text_mut(&mut self) -> Option<&mut Editor> {
         if self.confirm.is_some() || self.drag.is_some() {
             return None;
+        }
+        if let Some(page) = &mut self.personas {
+            return if page.ask.is_some() { None } else { page.form.as_mut()?.text.as_mut() };
         }
         match &mut self.importing {
             Some(importing) => Some(&mut importing.editor),

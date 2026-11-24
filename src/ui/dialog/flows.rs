@@ -96,6 +96,7 @@ pub(crate) fn flows_buttons(area: Rect, warnings: usize, labels: &[&str]) -> Vec
 pub(crate) enum FlowPreview {
     Plan(Box<Flow>),
     Note(String),
+    Persona(String),
 }
 
 pub(crate) struct Flows {
@@ -117,6 +118,7 @@ pub(crate) struct Flows {
     pub(crate) submit: &'static str,
     pub(crate) preview: Option<FlowPreview>,
     pub(crate) preview_scroll: u16,
+    pub(crate) personas: Vec<(String, String)>,
     pub(crate) focus: Option<usize>,
     pub(crate) diagram: bool,
     pub(crate) landing: Option<usize>,
@@ -241,19 +243,12 @@ fn draw_flows_heading(f: &mut Frame, view: &View, flows: &Flows, area: Rect, tab
 
 fn draw_flows_preview(f: &mut Frame, view: &View, flows: &Flows, area: Rect) {
     let Some(preview) = flows.preview_area(area) else { return };
+    let shown = |flow| Previewed { flow, scroll: flows.preview_scroll, focus: flows.focus, personas: &flows.personas };
     match &flows.preview {
-        Some(FlowPreview::Note(note)) => draw_preview_note(f, view, preview, note),
-        Some(FlowPreview::Plan(flow)) => {
-            draw_preview(
-                f,
-                view,
-                preview,
-                Previewed { flow: Some(&**flow), scroll: flows.preview_scroll, focus: flows.focus },
-            );
-        }
-        None => {
-            draw_preview(f, view, preview, Previewed { flow: None, scroll: flows.preview_scroll, focus: flows.focus });
-        }
+        Some(FlowPreview::Note(note)) => draw_preview_note(f, view, preview, ("Diagram", note)),
+        Some(FlowPreview::Persona(note)) => draw_preview_note(f, view, preview, ("Persona", note)),
+        Some(FlowPreview::Plan(flow)) => draw_preview(f, view, preview, shown(Some(&**flow))),
+        None => draw_preview(f, view, preview, shown(None)),
     }
 }
 
@@ -303,21 +298,22 @@ pub(in crate::ui) struct Previewed<'a> {
     pub(in crate::ui) flow: Option<&'a Flow>,
     pub(in crate::ui) scroll: u16,
     pub(in crate::ui) focus: Option<usize>,
+    pub(in crate::ui) personas: &'a [(String, String)],
 }
 
 pub(in crate::ui) fn draw_preview(f: &mut Frame, view: &View, r: Rect, shown: Previewed) {
-    let Previewed { flow, scroll, focus } = shown;
+    let Previewed { flow, scroll, focus, personas } = shown;
     f.render_widget(Clear, r);
     f.render_widget(overlay_block(view.muted, "Diagram"), r);
     if let Some(flow) = flow {
-        let diagram = Diagram::plan(flow, view.muted, view.light).focused(focus);
+        let diagram = Diagram::plan(flow, view.muted, view.light).focused(focus).named(personas);
         draw_scrolled(f.buffer_mut(), preview_body(r), &diagram, scroll, None);
     }
 }
 
-fn draw_preview_note(f: &mut Frame, view: &View, r: Rect, note: &str) {
+fn draw_preview_note(f: &mut Frame, view: &View, r: Rect, (title, note): (&str, &str)) {
     f.render_widget(Clear, r);
-    f.render_widget(overlay_block(view.muted, "Diagram"), r);
+    f.render_widget(overlay_block(view.muted, title), r);
     let text = Paragraph::new(note).style(Style::default().fg(view.muted)).wrap(Wrap { trim: true });
     f.render_widget(text, preview_body(r));
 }

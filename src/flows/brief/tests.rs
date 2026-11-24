@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use super::{
-    Closed, Exited, Team, back, brief, exited, exited_stands, failed, finished, member, reopened, restored,
+    Closed, Exited, Team, WAIT_FIRST, back, brief, exited, exited_stands, failed, finished, member, reopened, restored,
     where_it_stands, woken,
 };
 use crate::agents::Known;
@@ -587,5 +587,59 @@ mod owed_stages {
     #[test]
     fn nothing_owed_is_not_told() {
         assert_eq!(owed(&builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0), &[], Some(0)), None);
+    }
+}
+
+mod with_a_persona {
+    use super::*;
+
+    fn shown(text: &str) -> String {
+        text.replace('\\', "/")
+    }
+
+    fn reviewer() -> Role {
+        Role {
+            name: "reviewer".into(),
+            persona: Some("engineering-code-reviewer".into()),
+            prompt: "Review the change.".into(),
+            ..Role::default()
+        }
+    }
+
+    #[test]
+    fn a_member_reads_it_from_the_run_folder_before_its_first_work_and_still_waits_last() {
+        let text = member(&reviewer(), None, Some(folder()));
+
+        insta::assert_snapshot!(shown(&text));
+        assert_eq!(text.matches("Wait for the orchestrator's first message").count(), 1, "{text}");
+        assert!(text.ends_with(WAIT_FIRST), "{text}");
+    }
+
+    #[test]
+    fn a_member_without_a_folder_or_a_persona_is_told_nothing_of_it() {
+        assert!(!member(&reviewer(), None, None).contains("persona"));
+        let plain = Role { persona: None, ..reviewer() };
+        assert!(!member(&plain, None, Some(folder())).contains("persona"));
+    }
+
+    #[test]
+    fn the_orchestrator_names_each_roles_persona_and_reads_its_own_first() {
+        let mut flow = builtin::flows(&Known::ALL, Some(Known::Claude)).remove(0);
+        flow.roles[1].persona = Some("engineering-code-reviewer".into());
+        flow.orchestrator.persona = Some("specialized-agents-orchestrator".into());
+        let team = Team { members: &members(), trees: &[] };
+
+        let text = brief(&flow, "Fix the login form", "fix-login", team, Some(folder()));
+
+        let persona =
+            &text[text.find("\n## Persona").expect("a persona section")..text.find("\n## Files").expect("files")];
+        insta::assert_snapshot!(shown(persona));
+        assert!(
+            text.contains(
+                "- reviewer (pane 15): codex, must not edit files, follows the persona engineering-code-reviewer,"
+            ),
+            "{text}"
+        );
+        assert!(text.find("## Persona") < text.find("## How to drive the agents"), "{text}");
     }
 }

@@ -13,7 +13,7 @@ use super::text_fields::FieldArea;
 use crate::agents::Known;
 use crate::editor::Editor;
 use crate::error::Error;
-use crate::flows::dialog::{Action, Agents, Dialog, Editing, Hit, Place, Preview, Room, RowText};
+use crate::flows::dialog::{Action, Agents, Dialog, Editing, Hit, Named, Place, Preview, Room, RowText};
 use crate::flows::registry::{self, Source};
 use crate::flows::store::{self, Folder, Origin};
 use crate::flows::{Flow, builtin, share};
@@ -33,7 +33,8 @@ impl App {
         let project = project.or_else(|| self.project().map(|p| p.id));
         let path = project.and_then(|id| self.project_path(id));
         let installed = builtin::installed(&self.config);
-        let agents = Agents::new(installed, Known::of(&self.config.agent), path.is_some());
+        let mut agents = Agents::new(installed, Known::of(&self.config.agent), path.is_some());
+        agents.personas = self.persona_names();
         let mut dialog = Dialog::new(self.flow_listing(path.as_deref()), agents);
         dialog.project = project;
         dialog.sync_to = self.flow_sync_machines();
@@ -72,6 +73,9 @@ impl App {
     }
 
     pub(super) fn flows_text_field(&mut self, area: Rect) -> Option<(FieldArea, &mut Editor)> {
+        if self.flows_dialog()?.personas.is_some() {
+            return self.personas_text_field(area);
+        }
         let dialog = self.flows_dialog()?;
         let text = ui::flows_text(area, dialog.warnings().len(), dialog.preview().is_some());
         let editor = dialog.text_mut()?;
@@ -80,6 +84,9 @@ impl App {
 
     pub(super) fn flows_key(&mut self, key: KeyEvent, area: Rect) {
         let Some(dialog) = self.flows_dialog() else { return };
+        if dialog.personas.is_some() {
+            return self.personas_key(key, area);
+        }
         let room = room(dialog, area);
         let action = dialog.key(key, room);
         follow_preview(dialog, area);
@@ -87,6 +94,9 @@ impl App {
     }
 
     pub(super) fn flows_paste(&mut self, text: &str, area: Rect) {
+        if self.flows_dialog().is_some_and(|dialog| dialog.personas.is_some()) {
+            return self.personas_paste(text, area);
+        }
         if let Some(dialog) = self.flows_dialog() {
             let room = room(dialog, area);
             dialog.paste(text, room);
@@ -104,6 +114,9 @@ impl App {
 
     pub(super) fn flows_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) {
         let Some(dialog) = self.flows_dialog() else { return };
+        if dialog.personas.is_some() {
+            return self.personas_mouse(ev, pos, area);
+        }
         let room = room(dialog, area);
         if dialog.confirm_text().is_some() {
             if ev.kind == MouseEventKind::Down(MouseButton::Left)
@@ -171,6 +184,7 @@ impl App {
             Action::Export(flow) => self.flow_exported(&flow),
             Action::ReadModels(kind) => self.read_models(kind),
             Action::Fetch(source) => self.fetch_flow(source),
+            Action::Personas => self.open_personas(),
             Action::Sync(name) => self.flows_sync_now(name),
         }
     }
@@ -183,7 +197,9 @@ impl App {
             _ => None,
         };
         let listing = starting.map(|project| self.flow_listing(self.project_path(project).as_deref()));
+        let personas = self.persona_labels();
         if let (Some(Overlay::StartFlow { start, .. }), Some(listing)) = (&mut self.overlay, listing) {
+            start.personas = personas;
             start.set_listing(listing, dialog.last.as_ref());
         }
     }
@@ -448,11 +464,21 @@ impl App {
 
     pub(in crate::app) fn refresh_flows(&mut self) {
         let listing = self.flow_listing(self.flows_project().as_deref());
+        let personas = self.persona_names();
         let sync = self.flow_sync_machines();
         if let Some(dialog) = self.flows_dialog() {
             dialog.set_listing(listing);
+            dialog.agents.personas = personas;
             dialog.sync_to = sync;
         }
+    }
+
+    pub(in crate::app) fn persona_names(&self) -> Vec<Named> {
+        self.persona_library().iter().map(Named::of).collect()
+    }
+
+    pub(in crate::app) fn persona_labels(&self) -> Vec<(String, String)> {
+        self.persona_names().iter().map(|named| (named.id.clone(), named.label())).collect()
     }
 
     fn read_models(&self, kind: Known) {
@@ -665,6 +691,9 @@ fn flows_text(dialog: &Dialog, edit: Option<&Editing>) -> Option<Editor> {
 }
 
 pub(super) fn flows_view(dialog: &Dialog, area: Rect) -> ui::Overlay {
+    if let Some(page) = &dialog.personas {
+        return personas::page_view(page);
+    }
     if let Some((title, message, submit)) = dialog.confirm_text() {
         return confirm_view(title, message, submit, None);
     }
@@ -696,8 +725,11 @@ pub(super) fn flows_view(dialog: &Dialog, area: Rect) -> ui::Overlay {
             Preview::Note(note) => ui::FlowPreview::Note(note),
         }),
         preview_scroll: dialog.preview_scroll(),
+        personas: dialog.agents.persona_labels(),
         focus: edit.and_then(Editing::preview_stage),
         diagram: dialog.diagram(),
         landing: dialog.drag.filter(|drag| drag.moved).and_then(|drag| drag.landing),
     }))
 }
+
+mod personas;

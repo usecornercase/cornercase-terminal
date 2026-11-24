@@ -286,9 +286,22 @@ fn draw_words(frame: &mut Canvas, d: &Diagram, node: &Node, (r, hover): (Rect, O
     let icon = node.state.and_then(|state| state.icon(d.muted, d.spin, lit));
     let reserve = if icon.is_some() { 6 } else { 4 };
     let words = node.state.map_or(node.text.as_str(), |state| state.words(&node.text));
-    let words = text::truncate_cells(words, usize::from(r.width.saturating_sub(reserve)));
+    let room = usize::from(r.width.saturating_sub(reserve));
+    let words = with_persona(words, node.persona.as_deref().filter(|_| node.state.is_none_or(|s| !s.gone())), room);
+    let words = text::truncate_cells(&words, room);
     frame.put((r.x + 2, r.y + 1), &words, bg.fg(d.muted));
     if let (Some(icon), Some(cell)) = (icon, cell) {
         frame.put(cell, &icon.content, bg.patch(icon.style));
     }
+}
+
+fn with_persona(words: &str, persona: Option<&str>, room: usize) -> String {
+    let Some(persona) = persona else { return words.to_string() };
+    let emoji = persona.split_once(' ').map(|(first, _)| first).filter(|first| !first.is_ascii());
+    [Some(persona), emoji]
+        .into_iter()
+        .flatten()
+        .map(|tag| format!("{words}{TAG_GAP}{tag}"))
+        .find(|both| text::cells(both) <= room)
+        .unwrap_or_else(|| words.to_string())
 }

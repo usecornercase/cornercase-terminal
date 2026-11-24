@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use super::Fields;
+use crate::flows::persona::Persona;
 use crate::flows::progress::{Edge, Step};
 use crate::flows::run::{Kind, Message, Run};
 use crate::flows::{self, Back, End, Flow, Role, Stage, Worktree};
@@ -87,6 +88,8 @@ pub(crate) struct RoleSpec {
     pub(crate) agent: String,
     pub(crate) model: Option<String>,
     pub(crate) effort: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) persona: Option<String>,
     pub(crate) args: Vec<String>,
     pub(crate) env: BTreeMap<String, String>,
     pub(crate) edits: bool,
@@ -116,6 +119,7 @@ impl From<&Role> for RoleSpec {
             agent: role.agent.clone(),
             model: role.model.clone(),
             effort: role.effort.clone(),
+            persona: role.persona.clone(),
             args: role.args.clone(),
             env: role.env.clone(),
             edits: role.edits,
@@ -154,6 +158,7 @@ impl RoleSpec {
             agent: self.agent,
             model: self.model,
             effort: self.effort,
+            persona: self.persona,
             args: self.args,
             env: self.env,
             edits: self.edits,
@@ -192,6 +197,12 @@ pub(crate) struct RoleInfo {
     pub(crate) agent: String,
     pub(crate) model: Option<String>,
     pub(crate) effort: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) persona: Option<String>,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub(crate) persona_name: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub(crate) persona_emoji: String,
     pub(crate) edits: bool,
     #[serde(skip_serializing_if = "Worktree::is_shared")]
     pub(crate) worktree: Worktree,
@@ -204,10 +215,23 @@ impl RoleInfo {
             agent: role.agent.clone(),
             model: role.model.clone(),
             effort: role.effort.clone(),
+            persona: role.persona.clone(),
+            persona_name: String::new(),
+            persona_emoji: String::new(),
             edits: role.edits,
             worktree: role.worktree,
         };
         std::iter::once(&flow.orchestrator).chain(&flow.roles).map(role).collect()
+    }
+
+    pub(crate) fn name_personas(roles: &mut [Self], library: &[Persona]) {
+        for role in roles {
+            let found = role.persona.as_deref().and_then(|id| library.iter().find(|persona| persona.id == id));
+            if let Some(persona) = found {
+                role.persona_name.clone_from(&persona.name);
+                role.persona_emoji.clone_from(&persona.emoji);
+            }
+        }
     }
 }
 
