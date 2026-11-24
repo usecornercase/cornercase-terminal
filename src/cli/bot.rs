@@ -7,7 +7,8 @@ use super::{line, note, partial_unless, print_json, print_out};
 use crate::bots::MESSAGE_MAX;
 use crate::bots::chat::{Kind, Line};
 use crate::client::{
-    answer, ask, use_bot_about, use_bot_about_read, use_bot_chat_apps, use_bot_follow, use_bot_setup, use_bots,
+    answer, ask, use_bot_about, use_bot_about_read, use_bot_chat_apps, use_bot_follow, use_bot_memory, use_bot_setup,
+    use_bots,
 };
 use crate::control::Command;
 use crate::control::bots::{AgentInfo, BotHistory, BotInfo, BotRequest, BotSay, BotTarget, EditBot, NewBot};
@@ -35,6 +36,7 @@ pub(super) fn run(action: BotAction) -> Result<bool> {
         BotAction::List(print) => list(print.json),
         BotAction::Edit(args) => edited(&args),
         BotAction::About(args) => about(&args),
+        BotAction::Memory(args) => memory(&args),
         BotAction::Remove(args) => removed(args),
         BotAction::Setup(args) => set_up(&args),
         BotAction::Say(args) => said(&args),
@@ -71,6 +73,17 @@ fn about(args: &BotNameArgs) -> Result<bool> {
         print_json(&value)?;
     } else {
         print_out(&text::about(value["about"].as_str().unwrap_or_default()))?;
+    }
+    Ok(true)
+}
+
+fn memory(args: &BotNameArgs) -> Result<bool> {
+    use_bot_memory()?;
+    let value = send(BotRequest::Memory(target(args.bot.clone())))?;
+    if args.print.json {
+        print_json(&value)?;
+    } else {
+        print_out(&text::about(value["memory"].as_str().unwrap_or_default()))?;
     }
     Ok(true)
 }
@@ -157,9 +170,13 @@ fn edited(args: &EditArgs) -> Result<bool> {
         follow,
         chat_apps,
         about: args.about.clone(),
+        memory: args.memory.clone(),
     };
     if edit.about.is_some() {
         use_bot_about()?;
+    }
+    if edit.memory.is_some() {
+        use_bot_memory()?;
     }
     let value = send(BotRequest::Edit(edit))?;
     if args.print.json {

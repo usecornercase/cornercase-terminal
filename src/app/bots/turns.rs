@@ -11,7 +11,7 @@ use crate::app::notifications::BotGoal;
 use crate::bots::brief::Told;
 use crate::bots::chat::{self, Answer, Kind, Line};
 use crate::bots::turn::Session;
-use crate::bots::{brief, folder, turn};
+use crate::bots::{Briefed, brief, folder, turn};
 use crate::control::contract::{Code, Refusal};
 use crate::error::Result;
 use crate::log::{self, Job, Level};
@@ -133,6 +133,7 @@ impl App {
             dropped: Vec::new(),
             started: Instant::now(),
             steps: 0,
+            briefed: Briefed::of(&input.bot),
         });
         self.spawn_bot_job(input, id, running);
     }
@@ -223,9 +224,8 @@ impl App {
         }
     }
 
-    fn bot_outcome(&mut self, at: usize, result: Result<Ran>, how: (Thread, bool)) -> (Line, &'static str) {
-        let (thread, stopping) = how;
-        let run = match thread {
+    fn bot_outcome(&mut self, at: usize, result: Result<Ran>, finished: &Turn) -> (Line, &'static str) {
+        let run = match finished.thread {
             Thread::Run(run) => Some(run),
             Thread::Chat => None,
         };
@@ -235,6 +235,7 @@ impl App {
                 let state = &mut self.panels.bots.live[at];
                 if run.is_none() && ran.session.is_some() {
                     state.bot.conversation.clone_from(&ran.session);
+                    state.bot.briefed = Some(finished.briefed.clone());
                     let _ = folder::save(&state.folder, &state.bot);
                 }
                 let model = ran.model.clone().or_else(|| state.bot.model.clone());
@@ -245,7 +246,9 @@ impl App {
                 }
                 (line, "answered")
             }
-            Err(_) if stopping => (self.bot_append(at, |id, now| Line::notice(id, now, chat::STOPPED)), "stopped"),
+            Err(_) if finished.stopping => {
+                (self.bot_append(at, |id, now| Line::notice(id, now, chat::STOPPED)), "stopped")
+            }
             Err(error) => {
                 let text = turn::failure(&agent, &error, &self.panels.bots.live[at].bot.id);
                 let how = if text.contains("did not answer in time") { "timeout" } else { "error" };
@@ -258,7 +261,7 @@ impl App {
         let Some(at) = self.running_turn(bot, turn) else { return };
         let Some(finished) = self.panels.bots.live[at].turn.take() else { return };
         let tokens = result.as_ref().map_or(0, |ran| ran.tokens.total());
-        let (line, how) = self.bot_outcome(at, result, (finished.thread, finished.stopping));
+        let (line, how) = self.bot_outcome(at, result, &finished);
         let dropped = self.bot_dropped(at, &finished);
         let on_screen = self.bot_on_screen(at);
         let state = &mut self.panels.bots.live[at];
@@ -402,6 +405,7 @@ impl App {
         self.chat_idle(at, "is answering")?;
         let state = &mut self.panels.bots.live[at];
         state.bot.conversation = None;
+        state.bot.briefed = None;
         let _ = folder::save(&state.folder, &state.bot);
         self.bot_append(at, |id, now| Line::notice(id, now, chat::NEW_CONVERSATION));
         Ok(())
@@ -434,7 +438,7 @@ impl App {
         self.forget_bot_asks(removed.key);
         let entries = self.panels.queued.remove_bot(&removed.bot.id);
         if self.panels.bots.shown.as_ref().is_some_and(|shown| shown.bot == removed.bot.id) {
-            self.leave_bot();
+            self.leave_chat();
         }
         self.views_leave_bot(&removed.bot.id);
         if self.overlay.as_ref().is_some_and(|overlay| overlay.names_bot(removed.key, &removed.bot.id)) {

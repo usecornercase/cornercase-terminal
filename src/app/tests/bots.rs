@@ -392,6 +392,20 @@ fn the_server_stopping_ends_the_turns_that_run() {
     std::fs::remove_file(c.claude.with_extension("hold")).expect("release");
 }
 
+pub(in crate::app::tests) fn bot_row(app: &mut App, i: usize) -> Rect {
+    app.panels.bots.page = true;
+    let a = app.layout(AREA);
+    let scroll = app.scroll.of(List::Bots);
+    ui::bot_rows(a.bots_list, a.pitch, app.panels.bots.live.len(), scroll).item(i)
+}
+
+pub(in crate::app::tests) fn press_back(app: &mut App) {
+    render(app, AREA);
+    let back = app.layout(AREA).back;
+    assert!(!back.is_empty(), "the page shows its way back");
+    click(app, Position::new(back.x + 2, back.y));
+}
+
 pub(in crate::app::tests) fn root_pid(claude: &Path) -> Option<i32> {
     let pids = std::fs::read_to_string(claude.with_extension("pid")).ok()?;
     pids.lines().next().and_then(|pid| pid.parse().ok())
@@ -433,11 +447,15 @@ mod compact;
 mod form;
 mod git;
 mod links;
+mod memory;
 mod menu;
+mod page;
+mod reading;
 pub(in crate::app::tests) mod routines;
 mod routines_dialog;
 pub(in crate::app::tests) mod secrets;
 mod secrets_window;
 mod setup;
+mod told_settings;
 mod views;
 mod window;

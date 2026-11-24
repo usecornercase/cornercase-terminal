@@ -179,6 +179,7 @@ impl App {
             Some(Overlay::CloneOnMachine(_)) => self.clone_on_machine_key(key, area),
             Some(Overlay::ProjectSettings(_)) => self.project_settings_key(key, area),
             Some(Overlay::BotAsk(_)) => self.bot_ask_key(key, area),
+            Some(Overlay::BotMemory(_)) => self.bot_memory_key(key, area),
             _ => {}
         }
     }
@@ -193,6 +194,7 @@ impl App {
             Some(Overlay::CloneOnMachine(_)) => self.clone_on_machine_mouse(ev, pos, area),
             Some(Overlay::ProjectSettings(_)) => self.project_settings_mouse(ev, pos, area),
             Some(Overlay::BotAsk(_)) => self.bot_ask_mouse(ev, pos, area),
+            Some(Overlay::BotMemory(_)) => self.bot_memory_mouse(ev, pos, area),
             _ => {}
         }
     }
@@ -444,13 +446,13 @@ impl App {
 
     pub(super) fn close_tab_message(&self, project: u64, workspace: u64, tab: u64) -> Option<String> {
         let name = self.projects.tab(self.projects.tab_in(project, workspace, tab)?).label(&self.config);
-        Some(format!("Close the tab {name}? The programs running in it are stopped."))
+        Some(close_tab_question(&name, None))
     }
 
     pub(super) fn close_pane_message(&self, pane: u64) -> Option<String> {
         let term = self.projects.pane_by(pane)?;
         let name = term.program(&self.config).unwrap_or_else(|| "?".into());
-        Some(format!("Close the pane running {name}? What runs in it is stopped."))
+        Some(close_pane_question(&name, None))
     }
 }
 
@@ -477,6 +479,14 @@ pub(super) fn rename_form(title: &'static str, hint: &str, input: &Editor) -> ui
 
 pub(super) fn close_question(label: &str, tabs: usize, closed: &str, on: Option<&str>) -> String {
     format!("Close the workspace {}?{}{closed}", named(label, on), stopped_tabs(tabs))
+}
+
+pub(super) fn close_tab_question(name: &str, on: Option<&str>) -> String {
+    format!("Close the tab {}? The programs running in it are stopped.", named(name, on))
+}
+
+pub(super) fn close_pane_question(program: &str, on: Option<&str>) -> String {
+    format!("Close the pane running {}? What runs in it is stopped.", named(program, on))
 }
 
 pub(super) fn named(label: &str, on: Option<&str>) -> String {

@@ -64,7 +64,15 @@ fn tab_skips_the_agent_when_editing() {
     let bot = crate::bots::sample("prs", "PRs");
     let mut form = Form::editing(agents(), &bot, "");
     key(&mut form, KeyCode::Tab);
+    assert_eq!(form.focus, Field::About);
+    key(&mut form, KeyCode::Tab);
     assert_eq!(form.focus, Field::Model);
+}
+
+#[test]
+fn what_it_is_for_comes_right_after_the_name() {
+    let form = Form::new(agents(), "claude");
+    assert_eq!(form.fields()[..2], [Field::Name, Field::About]);
 }
 
 #[test]
@@ -168,13 +176,13 @@ fn editing_starts_from_the_bots_follow() {
 }
 
 #[test]
-fn tab_reaches_follow_after_access() {
+fn tab_reaches_follow_after_access_and_then_the_name_again() {
     let mut form = Form::new(agents(), "claude");
     form.focus_on(Field::Access);
     key(&mut form, KeyCode::Tab);
     assert_eq!(form.focus, Field::Follow);
     key(&mut form, KeyCode::Tab);
-    assert_eq!(form.focus, Field::About);
+    assert_eq!(form.focus, Field::Name);
 }
 
 #[test]
@@ -183,7 +191,7 @@ fn the_chat_apps_row_is_reached_by_tab_only_when_a_chat_app_is_paired() {
     assert!(form.fields().contains(&Field::ChatApps));
     form.focus_on(Field::Follow);
     key(&mut form, KeyCode::Tab);
-    assert_eq!(form.focus, Field::About);
+    assert_eq!(form.focus, Field::Name);
     form.chat_ready = true;
     form.focus_on(Field::Follow);
     key(&mut form, KeyCode::Tab);

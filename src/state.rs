@@ -29,7 +29,6 @@ pub struct Widths {
     pub(crate) agents: Option<u16>,
 }
 
-#[expect(clippy::struct_excessive_bools, reason = "each flag is a panel or section the session reopens")]
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub(crate) struct State {
     pub(crate) version: u32,
@@ -49,8 +48,6 @@ pub(crate) struct State {
     pub(crate) files: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub(crate) flow: bool,
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub(crate) bots_collapsed: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -496,7 +493,6 @@ impl From<V2State> for State {
             todo: false,
             files: false,
             flow: false,
-            bots_collapsed: false,
         }
     }
 }

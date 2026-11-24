@@ -1,0 +1,22 @@
+---
+source: src/ui/tests/bot_memory.rs
+expression: "render(&shown(memory(kept, true, None))).backend()"
+---
+"  ⌕ search projects, workspaces, tabs                    │                                          "
+"          ╭─ Memory › PRs ───────────────────────────────────────────────────────────────╮          "
+" Projects │ What PRs keeps from one conversation to the next, in memory.md. A new        │          "
+"          │ conversation reads its first 8 KB, and the bot keeps it up to date itself.   │          "
+"▌ ~ (1)   │                                                                              │          "
+"          │  - prefers squash merges                                                     │          "
+"  + New   │  - runs `cargo test` before a PR                                             │          "
+"          │                                                                              │          "
+"          │                                                                              │          "
+"          │                                                                              │          "
+"          │                                                                              │          "
+"          │                                                                              │          "
+"          │                                                                              │          "
+"          │                                                                              │          "
+"          │ enter breaks the line · tab moves to save · esc cancels                      │          "
+" ─────────│                                                               cancel   save  │          "
+"  Worktree╰──────────────────────────────────────────────────────────────────────────────╯          "
+"  More ▴                 Help  │                         │                                          "

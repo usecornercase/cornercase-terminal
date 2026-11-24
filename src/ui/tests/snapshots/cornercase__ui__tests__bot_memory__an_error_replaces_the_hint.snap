@@ -1,0 +1,22 @@
+---
+source: src/ui/tests/bot_memory.rs
+expression: "render(&shown(memory(\"- mine\", false, note))).backend()"
+---
+"  ⌕ search projects, workspaces, tabs                    │                                          "
+"          ╭─ Memory › PRs ───────────────────────────────────────────────────────────────╮          "
+" Projects │ What PRs keeps from one conversation to the next, in memory.md. A new        │          "
+"          │ conversation reads its first 8 KB, and the bot keeps it up to date itself.   │          "
+"▌ ~ (1)   │                                                                              │          "
+"          │  - mine                                                                      │          "
+"  + New   │                                                                              │          "
+"          │                                                                              │          "
+"          │                                                                              │          "
+"          │                                                                              │          "
+"          │                                                                              │          "
+"          │                                                                              │          "
+"          │                                                                              │          "
+"          │                                                                              │          "
+"          │ PRs changed its memory meanwhile: save again to replace it with yours        │          "
+" ─────────│                                                               cancel   save  │          "
+"  Worktree╰──────────────────────────────────────────────────────────────────────────────╯          "
+"  More ▴                 Help  │                         │                                          "

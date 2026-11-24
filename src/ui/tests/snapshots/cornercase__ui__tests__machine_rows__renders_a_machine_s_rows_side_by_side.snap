@@ -1,5 +1,6 @@
 ---
 source: src/ui/tests/machine_rows.rs
+assertion_line: 109
 expression: "rendered(Sidebar::SideBySide, None).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
@@ -13,16 +14,16 @@ expression: "rendered(Sidebar::SideBySide, None).backend()"
 "  + New                        │  ▾ api-vps   ☁ vps      │                                          "
 "                               │  ├ ⠸ claude             │                                          "
 "                               │  │   opus · 40%         │                                          "
-"                               │  └ › zsh                │                                          "
+"                               │  ├ › zsh                │                                          "
+"                               │  └ + Tab                │                                          "
 "                               │                         │                                          "
 "                               │  ▾ api-pi     ☁ pi      │                                          "
 "                               │  ├ ⠋ claude             │                                          "
 "                               │working · seen 2 min ago │                                          "
-"                               │  └ › zsh                │                                          "
+"                               │  ├ › zsh                │                                          "
+"                               │  └ + Tab                │                                          "
 "                               │                         │                                          "
 "                               │  + New                  │                                          "
-"                               │                         │                                          "
-"                               │                         │                                          "
 "                               │                         │                                          "
 "                               │                         │                                          "
 "                               │                         │                                          "

@@ -30,6 +30,7 @@ pub(super) mod checks;
 mod clicks;
 mod column;
 mod drag;
+mod keys;
 mod mouse;
 mod notices;
 pub(super) mod panels;
@@ -41,6 +42,7 @@ mod rows;
 mod run_on;
 mod selection;
 mod stream;
+mod tabs;
 pub(super) mod tunnels;
 mod typing;
 
@@ -51,6 +53,7 @@ pub(super) use ports::STOPS_THERE;
 pub(super) use rows::{RemoteProject, machine_project, machine_shape, paired, remote_only, statuses};
 pub(super) use selection::{RemoteItem, RemoteShown};
 pub(super) use stream::Flow;
+pub(super) use tabs::TabAim;
 
 pub(super) const OLDER: &str = "its cornercase is older than this one";
 

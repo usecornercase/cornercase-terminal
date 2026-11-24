@@ -30,6 +30,7 @@ impl App {
             }
             KeyCode::Esc if self.panel_shown() => self.close_panel(),
             KeyCode::Esc => {}
+            KeyCode::PageUp | KeyCode::PageDown => self.page_chat(key.code == KeyCode::PageUp, area),
             _ => {
                 let width = usize::from(self.chat_geometry(area).input_text.width.max(1));
                 self.panels.bots.live[at].draft.key(key, width, INPUT_ROWS);
@@ -87,16 +88,21 @@ impl App {
     pub(in crate::app) fn chat_mouse(&mut self, ev: MouseEvent, pos: Position, area: Rect) {
         match ev.kind {
             MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
-                self.scroll_chat(ev.kind == MouseEventKind::ScrollUp);
+                self.scroll_chat(ev.kind == MouseEventKind::ScrollUp, usize::try_from(WHEEL_ROWS).unwrap_or(3));
             }
             MouseEventKind::Down(MouseButton::Left) => self.press_chat(pos, area),
             _ => {}
         }
     }
 
-    fn scroll_chat(&mut self, up: bool) {
+    fn page_chat(&mut self, up: bool, area: Rect) {
+        let thinking = self.shown_bot().is_some_and(|at| self.panels.bots.live[at].turn.is_some());
+        let body = ui::chat_body(self.chat_geometry(area).lines, thinking);
+        self.scroll_chat(up, usize::from(body.height.saturating_sub(1).max(1)));
+    }
+
+    pub(super) fn scroll_chat(&mut self, up: bool, step: usize) {
         let Some(shown) = self.panels.bots.shown.as_mut() else { return };
-        let step = usize::try_from(WHEEL_ROWS).unwrap_or(3);
         shown.scroll = if up { shown.scroll.saturating_add(step) } else { shown.scroll.saturating_sub(step) };
         if shown.scroll == 0 {
             shown.news = false;
@@ -107,8 +113,13 @@ impl App {
         let Some(at) = self.shown_bot() else { return };
         let Some(shown) = self.shown_chat(area) else { return };
         let areas = self.chat_geometry(area);
-        let Some(hit) = ui::chat_hit(&areas, &shown.view, pos) else { return };
-        self.chat_hit(at, hit, (areas.input_text, pos));
+        match ui::chat_hit(&areas, &shown.view, pos) {
+            Some(hit) => {
+                self.clear_chat_selection();
+                self.chat_hit(at, hit, (areas.input_text, pos));
+            }
+            None => self.press_chat_text(&areas, &shown.view, pos),
+        }
     }
 
     fn chat_hit(&mut self, at: usize, hit: ChatHit, (field, pos): (Rect, Position)) {

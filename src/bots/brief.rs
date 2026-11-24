@@ -5,7 +5,7 @@ use crate::agents::Known;
 use crate::agents::headless::BotSupport;
 use crate::queue::repeat::Repeat;
 
-use super::{Access, Bot, NOTES_CAP};
+use super::{Access, Bot, Briefed, NOTES_CAP};
 
 const WHO: &str = "You are {name}, a cornercase bot: an assistant that lives outside any project. The user talks to you in a chat in cornercase. Answer briefly, in the user's language, in Markdown.";
 const FOLDER: &str = "Your folder is `{folder}`. `bot.md` is what you are for: update it when the user gives you a job or changes one. `memory.md` is what you keep between conversations: add what will matter next time, keep it short and prune it.";
@@ -28,6 +28,8 @@ const NOT_FOLLOWING: &str =
     "You are not told when an agent you started finishes: when the user asks, look with `cornercase status --json`.";
 pub(crate) const SECRETS: &str = "When a site or a tool asks for a password or a token, run `cornercase bot secret list` to see the names the user saved for you, and `cornercase bot secret get NAME` to read one. Use it only where it is needed. Never write a secret's value in your answer, in `bot.md` or in `memory.md`: write its name and where it is used. If the secret you need is not saved, run `cornercase bot secret ask NAME --about 'why you need it'`, tell the user what you asked for, and end your answer: you are written to when they save it. Never ask for a password or a token in the chat. If the user writes one there, do not use it: tell them it is now in the chat's file, and to give it in the dialog instead.";
 const SETUP: &str = "## You were just made\n\nThe user has just made you, and `bot.md` above is what they wrote you are for. Set yourself up now, in a few steps, and do not do the work itself unless `bot.md` asks for it now. Schedule what it asks for at a time or again and again (`cornercase queue add`, as above), but first look at what is scheduled already (`cornercase queue list --bot {id} --json`): a setup that was cut short may have done some of it. Write in `memory.md` what your runs will need. Then tell the user, in a few lines, what you will do, what you scheduled and when it runs next, and what you need from them, if anything. Your runs can look commands up when they run, so do not read every `--help` now.";
+const MEMORY_EDITED: &str = "The user changed your memory.md since you last read it. Read it again before you rely on it or change it, and keep what they wrote.";
+const SETTINGS: &str = "## Your settings now\n\nThe user may have changed them since this conversation began. What follows replaces what the brief at its start said about them.";
 pub(crate) const TOLD_KEPT: usize = 10;
 const TOLD_CAP: usize = 16 * 1024;
 
@@ -38,16 +40,52 @@ pub(crate) struct Told {
 }
 
 pub(crate) fn brief(bot: &Bot, folder: &Path) -> String {
-    let who = WHO.replace("{name}", &bot.name);
     let folder = FOLDER.replace("{folder}", &folder.display().to_string());
-    let access = match bot.access {
+    let schedule = SCHEDULE.replace("{id}", &bot.id);
+    [who(bot).as_str(), &folder, &seeing(bot), ACT, &schedule, SECRETS, &access(bot), later(bot)].join("\n\n")
+}
+
+fn who(bot: &Bot) -> String {
+    WHO.replace("{name}", &bot.name)
+}
+
+fn access(bot: &Bot) -> String {
+    match bot.access {
         Access::Cornercase if reads_only_folder(bot) => [REACH_FOLDER, BOUNDED].join(" "),
         Access::Cornercase => [REACH, BOUNDED].join(" "),
         Access::Full => FULL.to_string(),
-    };
-    let schedule = SCHEDULE.replace("{id}", &bot.id);
-    let later = if bot.follow { FOLLOW } else { NOT_FOLLOWING };
-    [who.as_str(), &folder, &seeing(bot), ACT, &schedule, SECRETS, &access, later].join("\n\n")
+    }
+}
+
+fn later(bot: &Bot) -> &'static str {
+    if bot.follow { FOLLOW } else { NOT_FOLLOWING }
+}
+
+pub(crate) fn settings(bot: &Bot) -> Option<String> {
+    let now = Briefed::of(bot);
+    let told = bot.briefed.as_ref();
+    if told == Some(&now) {
+        return None;
+    }
+    let changed = |same: fn(&Briefed, &Briefed) -> bool| told.is_none_or(|told| !same(told, &now));
+    let mut parts = vec![SETTINGS.to_string()];
+    if changed(|told, now| told.name == now.name) {
+        parts.push(who(bot));
+    }
+    if changed(|told, now| told.access == now.access) {
+        let seen = seeing(bot);
+        if told.is_none_or(|told| seeing(&Bot { access: told.access, ..bot.clone() }) != seen) {
+            parts.push(seen);
+        }
+        parts.push(access(bot));
+    }
+    if changed(|told, now| told.follow == now.follow) {
+        parts.push(later(bot).to_string());
+    }
+    if told.map_or(now.memory > 0, |told| told.memory != now.memory) {
+        parts.push(MEMORY_EDITED.to_string());
+    }
+    Some(parts.join("\n\n"))
 }
 
 fn support(bot: &Bot) -> Option<BotSupport> {

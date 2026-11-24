@@ -2,7 +2,7 @@ import { type Rect, rect } from '../term/grid';
 import type { Key } from './programs';
 import type { PanePlace } from './split';
 
-export type KeysGroup = 'find' | 'git' | 'workspace';
+export type KeysGroup = 'find' | 'git' | 'workspace' | 'bots';
 
 export type KeysAction =
   | { kind: 'nextTab' }
@@ -39,6 +39,10 @@ export type KeysAction =
   | { kind: 'todo' }
   | { kind: 'recap' }
   | { kind: 'newBot' }
+  | { kind: 'botsPage' }
+  | { kind: 'nextBot' }
+  | { kind: 'previousBot' }
+  | { kind: 'botMemory' }
   | { kind: 'settings' }
   | { kind: 'usage' }
   | { kind: 'processes' }
@@ -81,7 +85,7 @@ const ROOT: KeysItem[] = [
   run('e', 'queue', { kind: 'queue' }),
   run('t', 'todo', { kind: 'todo' }),
   run('s', 'recap', { kind: 'recap' }),
-  run('b', 'new bot', { kind: 'newBot' }),
+  open('b', 'bots'),
   run(',', 'settings', { kind: 'settings' }),
   run('u', 'usage', { kind: 'usage' }),
   run('k', 'processes', { kind: 'processes' }),
@@ -112,6 +116,13 @@ const GROUPS: Record<KeysGroup, KeysItem[]> = {
     run('a', 'close agents', { kind: 'closeAgents' }),
     run('o', 'reopen agents', { kind: 'reopenAgents' }),
     run('x', 'close workspace', { kind: 'closeWorkspace' }),
+  ],
+  bots: [
+    run('b', 'bots page', { kind: 'botsPage' }),
+    run('n', 'new bot', { kind: 'newBot' }),
+    run(']', 'next bot', { kind: 'nextBot' }),
+    run('[', 'previous bot', { kind: 'previousBot' }),
+    run('m', 'memory of the bot on screen', { kind: 'botMemory' }),
   ],
 };
 

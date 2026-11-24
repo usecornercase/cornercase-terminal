@@ -93,13 +93,9 @@ pub(crate) fn ask(input: &Input, first: Option<&Path>, path: Option<&OsStr>) -> 
         Session::Setup => (brief::setup_opening(bot, &input.folder, notes, input.told.as_deref()), None),
         Session::Chat => {
             let said = brief::said(input.from_cornercase, &input.text);
-            let told = input.told.as_deref();
             match &bot.conversation {
-                None => (brief::opening(bot, &input.folder, notes, told, &said), None),
-                Some(session) => {
-                    let text = if told.is_some() || input.from_cornercase { &said } else { &input.text };
-                    (brief::resumed(told, text), Some(session.clone()))
-                }
+                None => (brief::opening(bot, &input.folder, notes, input.told.as_deref(), &said), None),
+                Some(session) => (resumed(input, &said), Some(session.clone())),
             }
         }
     };
@@ -118,6 +114,12 @@ pub(crate) fn ask(input: &Input, first: Option<&Path>, path: Option<&OsStr>) -> 
         stops: super::stop_commands(),
         repositories: input.repositories.clone(),
     }
+}
+
+fn resumed(input: &Input, said: &str) -> String {
+    let told = brief::joined_told(brief::settings(&input.bot), input.told.clone());
+    let text = if told.is_some() || input.from_cornercase { said } else { &input.text };
+    brief::resumed(told.as_deref(), text)
 }
 
 pub(crate) fn first_on_path(bin: Option<&Path>, binary: &Path) -> Option<PathBuf> {

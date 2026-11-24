@@ -110,6 +110,7 @@ pub(super) enum Drag {
     Footer(u64),
     Text(TextField),
     Remote(RemoteDrag),
+    Chat,
 }
 
 impl Drag {
@@ -124,7 +125,8 @@ impl Drag {
             | Self::Lines { .. }
             | Self::Text(_)
             | Self::Footer(_)
-            | Self::Remote(_) => None,
+            | Self::Remote(_)
+            | Self::Chat => None,
         }
     }
 
@@ -139,7 +141,8 @@ impl Drag {
             | Self::Lines { .. }
             | Self::Text(_)
             | Self::Footer(_)
-            | Self::Remote(_) => None,
+            | Self::Remote(_)
+            | Self::Chat => None,
         }
     }
 
@@ -154,7 +157,8 @@ impl Drag {
             | Self::Lines { .. }
             | Self::Text(_)
             | Self::Footer(_)
-            | Self::Remote(_) => None,
+            | Self::Remote(_)
+            | Self::Chat => None,
         }
     }
 
@@ -169,7 +173,8 @@ impl Drag {
             | Self::Lines { .. }
             | Self::Text(_)
             | Self::Footer(_)
-            | Self::Remote(_) => true,
+            | Self::Remote(_)
+            | Self::Chat => true,
         }
     }
 }
@@ -187,7 +192,8 @@ impl App {
                 | Drag::Lines { .. }
                 | Drag::Text(_)
                 | Drag::Footer(_)
-                | Drag::Remote(_),
+                | Drag::Remote(_)
+                | Drag::Chat,
             )
             | None => None,
         }

@@ -6,14 +6,15 @@ use super::selection::RemoteItem;
 use crate::app::App;
 use crate::app::overlay::Overlay;
 use crate::app::toast::Toast;
-use crate::control::{Command, Ports, ProjectInfo, StopPort, WorkspaceInfo};
+use crate::control::{Command, Ports, ProjectInfo, Report, StopPort, TabInfo, WorkspaceInfo};
 use crate::log;
 use crate::machines::follow::{Event, Follow, Followed};
 use crate::machines::heard;
 use crate::ports::Port;
-use crate::ports::dialog::{Dialog, There};
+use crate::ports::dialog::{Asked, Dialog, There};
 use crate::ports::stop::Target;
 use crate::process::escalation::KILLED_BECAUSE;
+use crate::text::CRUMB_SEPARATOR;
 use crate::ui;
 
 pub(in crate::app) const STOPS_THERE: &str = "The machine stops only that process: it asks it to end, \
@@ -39,16 +40,27 @@ impl App {
         let there = There { link: aim.link, boot, machine: held.name.clone() };
         let generation = self.panels.ports.refresh.open();
         self.machines.ports.listing = None;
-        self.overlay = Some(Overlay::Ports(Box::new(Dialog::on(aim.workspace, generation, Some(there)))));
+        self.overlay = Some(Overlay::Ports(Box::new(Dialog::on(Some(aim.workspace), generation, Some(there)))));
         self.watch_ports_dialog(Instant::now());
     }
 
-    pub(in crate::app) fn watch_remote_ports(&mut self, workspace: u64, generation: u64, there: &There, now: Instant) {
-        if self.remote_ports_place(there, workspace).is_none() {
+    pub(in crate::app) fn watch_remote_ports(&mut self, generation: u64, there: &There, now: Instant) {
+        let workspace = match &self.overlay {
+            Some(Overlay::Ports(dialog)) => dialog.workspace,
+            _ => None,
+        };
+        let gone = workspace.is_some_and(|id| self.remote_ports_place(there, id).is_none());
+        if self.remote_seen(there).is_none() {
             self.overlay = None;
-            self.machines.ports.listing = None;
-            return;
         }
+        let only = match self.ports_asked(gone) {
+            Asked::Workspace(workspace) => Some(workspace),
+            Asked::Every => None,
+            Asked::Nothing => {
+                self.machines.ports.listing = None;
+                return;
+            }
+        };
         if !self.panels.ports.refresh.due(now, crate::app::ports_dialog::REFRESH_EVERY) {
             return;
         }
@@ -58,8 +70,8 @@ impl App {
             self.ports_listed(generation, Err(why));
             return;
         }
-        let aim = RemoteAim { link: there.link, boot: there.boot.clone(), workspace };
-        let command = Command::Ports(Ports { workspace: Some(workspace), all: false });
+        let aim = RemoteAim { link: there.link, boot: there.boot.clone(), workspace: only.unwrap_or_default() };
+        let command = Command::Ports(Ports { workspace: only, all: only.is_none() });
         match self.follow_machine(&aim, command, true) {
             Some(follow) => self.machines.ports.listing = Some((follow, generation)),
             None => {
@@ -68,14 +80,17 @@ impl App {
         }
     }
 
+    fn remote_seen(&self, there: &There) -> Option<&Report> {
+        self.held_by(there.link)?.seen.as_deref().filter(|seen| seen.boot == there.boot)
+    }
+
     pub(in crate::app) fn remote_ports_place(
         &self,
         there: &There,
         workspace: u64,
     ) -> Option<(&ProjectInfo, &WorkspaceInfo)> {
-        let held = self.held_by(there.link)?;
-        let seen = held.seen.as_deref().filter(|seen| seen.boot == there.boot)?;
-        seen.projects
+        self.remote_seen(there)?
+            .projects
             .iter()
             .find_map(|project| project.workspaces.iter().find(|w| w.id == workspace).map(|w| (project, w)))
     }
@@ -122,8 +137,8 @@ impl App {
         self.messages.toast = Some(Toast::new(message, icon));
     }
 
-    pub(in crate::app) fn stop_remote_ports(&mut self, there: &There, workspace: u64, targets: Vec<Target>) {
-        let aim = RemoteAim { link: there.link, boot: there.boot.clone(), workspace };
+    pub(in crate::app) fn stop_remote_ports(&mut self, there: &There, targets: Vec<Target>) {
+        let aim = RemoteAim { link: there.link, boot: there.boot.clone(), workspace: 0 };
         if let Err(why) = self.linked_held(there.link).map(|_| ()) {
             self.not_sent(&why);
             return;
@@ -141,29 +156,37 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn remote_port_place(&self, there: &There, workspace: u64, port: &Port) -> String {
-        let tab = |pane: u64| {
-            let (_, place) = self.remote_ports_place(there, workspace)?;
-            let tab = place.tabs.iter().find(|tab| tab.panes.iter().any(|p| p.id == pane))?;
-            Some(tab.custom_name.clone().unwrap_or_else(|| tab.name.clone()))
-        };
-        let pane = |id: u64| tab(id).map_or_else(|| format!("pane {id}"), |tab| format!("pane {id} · {tab}"));
-        crate::app::ports_dialog::place_text(port, pane)
+    fn remote_port_tab(&self, there: &There, pane: u64) -> Option<&TabInfo> {
+        let workspaces = self.remote_seen(there)?.projects.iter().flat_map(|project| &project.workspaces);
+        workspaces.flat_map(|w| &w.tabs).find(|tab| tab.panes.iter().any(|p| p.id == pane))
     }
 
-    pub(in crate::app) fn go_remote_port(&mut self, there: &There, workspace: u64, pane: u64) {
-        let tab = self.remote_ports_place(there, workspace).and_then(|(_, place)| {
-            place.tabs.iter().find(|tab| tab.panes.iter().any(|p| p.id == pane)).map(|tab| tab.id)
-        });
+    pub(in crate::app) fn remote_port_place(&self, there: &There, port: &Port, every: bool) -> String {
+        let tab = |pane: u64| {
+            self.remote_port_tab(there, pane).map(|tab| tab.custom_name.clone().unwrap_or(tab.name.clone()))
+        };
+        let pane = |id: u64| tab(id).map_or_else(|| format!("pane {id}"), |tab| format!("pane {id} · {tab}"));
+        let crumb = |id: u64| {
+            let (project, workspace) = self.remote_ports_place(there, id)?;
+            let workspace = workspace.custom_name.as_ref().unwrap_or(&workspace.name);
+            Some(format!("{}{CRUMB_SEPARATOR}{workspace}", project.name))
+        };
+        let how = crate::app::ports_dialog::place_text(port, pane);
+        let crumb = port.place.workspace.filter(|_| every).and_then(crumb);
+        crate::app::ports_dialog::scoped_place(port, how, (every, crumb))
+    }
+
+    pub(in crate::app) fn go_remote_port(&mut self, there: &There, pane: u64) {
+        let tab = self.remote_port_tab(there, pane).map(|tab| tab.id);
         self.overlay = None;
         if let Some(tab) = tab {
             self.select_on(there.link, RemoteItem::Tab(tab));
         }
     }
 
-    pub(in crate::app) fn remote_ports_title(&self, there: &There, workspace: u64) -> String {
-        let label = self
-            .remote_ports_place(there, workspace)
+    pub(in crate::app) fn remote_ports_title(&self, there: &There, workspace: Option<u64>) -> String {
+        let label = workspace
+            .and_then(|id| self.remote_ports_place(there, id))
             .map(|(_, w)| w.custom_name.clone().unwrap_or_else(|| w.name.clone()));
         label.map_or_else(
             || format!("Ports › {}", there.machine),

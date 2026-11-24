@@ -29,6 +29,7 @@ pub(super) enum TextField {
     Name,
     BotChat,
     Bot(BotField),
+    BotMemory,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -97,6 +98,7 @@ impl App {
             TextField::Name => self.name_text(area),
             TextField::BotChat => self.chat_text(area),
             TextField::Bot(field) => self.bot_text(area, field),
+            TextField::BotMemory => self.bot_memory_text(area),
         }
     }
 
@@ -117,6 +119,9 @@ impl App {
             Some(Overlay::Settings(s)) => s.idle().then_some(TextField::SettingsFind),
             Some(Overlay::BotForm(form)) => {
                 (form.opened().is_none() && form.editor_of(form.focus).is_some()).then_some(TextField::Bot(form.focus))
+            }
+            Some(Overlay::BotMemory(dialog)) => {
+                (dialog.focus == crate::bots::memory::Focus::Text).then_some(TextField::BotMemory)
             }
             Some(overlay) if overlay.takes_input() => Some(TextField::Name),
             None if self.chat_typing() => Some(TextField::BotChat),
@@ -154,6 +159,7 @@ impl App {
             Some(Overlay::BotForm(form)) if form.opened().is_none() => {
                 [BotField::Name, BotField::About].map(TextField::Bot).into()
             }
+            Some(Overlay::BotMemory(_)) => vec![TextField::BotMemory],
             Some(overlay) if overlay.takes_input() => vec![TextField::Name],
             None if self.chat_typing() => vec![TextField::BotChat],
             None if self.screen.side == Some(Side::Todo) => vec![TextField::Todo],

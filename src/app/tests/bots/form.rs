@@ -18,9 +18,11 @@ fn typed(c: &mut Chat, text: &str) {
 }
 
 fn plus(c: &mut Chat) {
+    c.app.panels.bots.page = true;
     render(&mut c.app, AREA);
-    let title = c.app.layout(AREA).bots_title;
-    click(&mut c.app, Position::new(title.right() - 2, title.y));
+    let a = c.app.layout(AREA);
+    let new = ui::bots_new(a.bots_list, a.pitch, c.app.panels.bots.live.len(), 0);
+    click(&mut c.app, Position::new(new.x + 3, new.y));
 }
 
 fn drawn(app: &mut App) -> String {
@@ -28,7 +30,7 @@ fn drawn(app: &mut App) -> String {
 }
 
 #[test]
-fn the_plus_of_the_section_opens_the_form() {
+fn new_on_the_page_opens_the_form() {
     let mut c = chat(ANSWER);
     plus(&mut c);
     assert!(bot_form(&c.app).editing.is_none());
@@ -42,11 +44,12 @@ fn more_and_its_new_bot_open_the_form() {
 }
 
 #[test]
-fn b_in_the_keys_menu_opens_the_form() {
+fn b_n_in_the_keys_menu_opens_the_form() {
     let mut c = chat(ANSWER);
     c.app.config.prefix_key = "ctrl+]".into();
     send_key(&mut c.app, KeyCode::Char(']'), KeyModifiers::CONTROL);
     send_key(&mut c.app, KeyCode::Char('b'), KeyModifiers::NONE);
+    send_key(&mut c.app, KeyCode::Char('n'), KeyModifiers::NONE);
     assert!(matches!(c.app.overlay, Some(Overlay::BotForm(_))));
 }
 
@@ -153,6 +156,8 @@ fn the_agent_is_not_focusable_when_editing() {
     let mut c = chat(ANSWER);
     c.app.open_bot_form(Some(c.app.panels.bots.live[0].key));
     send_key(&mut c.app, KeyCode::Tab, KeyModifiers::NONE);
+    assert_eq!(bot_form(&c.app).focus, Field::About);
+    send_key(&mut c.app, KeyCode::Tab, KeyModifiers::NONE);
     assert_eq!(bot_form(&c.app).focus, Field::Model);
 }
 
@@ -160,9 +165,7 @@ fn the_agent_is_not_focusable_when_editing() {
 fn a_paste_into_what_it_is_for_keeps_its_line_breaks() {
     let mut c = chat(ANSWER);
     plus(&mut c);
-    for _ in 0..6 {
-        send_key(&mut c.app, KeyCode::Tab, KeyModifiers::NONE);
-    }
+    send_key(&mut c.app, KeyCode::Tab, KeyModifiers::NONE);
     assert_eq!(bot_form(&c.app).focus, Field::About);
     c.app.handle_event(AppEvent::Input(Event::Paste("a\nb".into())), AREA).expect("paste");
     assert_eq!(bot_form(&c.app).about.text(), "a\nb");
@@ -191,7 +194,8 @@ fn a_paired_chat_app_makes_the_chat_apps_row_a_list_and_its_choice_is_saved() {
     messenger::set_up(&mut c.app, crate::messenger::Via::Telegram, "1:t", "cornercase_bot", Some(paired));
     c.app.open_bot_form(Some(c.app.panels.bots.live[0].key));
     assert!(bot_form(&c.app).chat_ready);
-    assert!(drawn(&mut c.app).contains("Chat apps while away"));
+    let text = drawn(&mut c.app);
+    assert!(text.lines().any(|line| line.contains("Chat apps") && line.contains("while away")), "{text}");
     let Some(Overlay::BotForm(form)) = &mut c.app.overlay else { panic!("form") };
     form.chat_apps.choose(1);
     send_key(&mut c.app, KeyCode::Enter, KeyModifiers::NONE);

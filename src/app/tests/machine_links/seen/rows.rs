@@ -84,12 +84,12 @@ mod rows_there {
     use super::*;
 
     #[test]
-    fn have_no_new_tab_row() {
+    fn have_a_new_tab_row_as_ours() {
         let Seeing { rig, .. } = seeing_two();
 
         let rows = ui::workspace_rows(&rig.app.tab_lines());
 
-        assert!(rows.contains(&WorkspaceRow::Tab(1, 1)) && !rows.contains(&WorkspaceRow::NewTab(1)), "{rows:?}");
+        assert!(rows.contains(&WorkspaceRow::Tab(1, 1)) && rows.contains(&WorkspaceRow::NewTab(1)), "{rows:?}");
         assert!(rows.contains(&WorkspaceRow::NewTab(0)));
     }
 

@@ -70,10 +70,14 @@ impl App {
 
     fn shortcut(&mut self, action: Action, area: Rect) -> Result<()> {
         log::info!("ui", "shortcut", action = format!("{action:?}"));
+        if self.machine_shortcut(action) {
+            return Ok(());
+        }
         if acts_here(action) {
             self.leave_remote();
         }
         let Some(action) = self.go_shortcut(action, area) else { return Ok(()) };
+        let Some(action) = self.bot_shortcut(action, area) else { return Ok(()) };
         let Some(action) = self.panel_shortcut(action) else { return Ok(()) };
         let Some(action) = self.edit_shortcut(action) else { return Ok(()) };
         match action {
@@ -386,7 +390,7 @@ fn acts_here(action: Action) -> bool {
     )
 }
 
-fn cycle(at: usize, len: usize, delta: isize) -> Option<usize> {
+pub(in crate::app) fn cycle(at: usize, len: usize, delta: isize) -> Option<usize> {
     let len = isize::try_from(len).ok().filter(|&l| l > 0)?;
     let at = isize::try_from(at).ok()?;
     usize::try_from((at + delta).rem_euclid(len)).ok()

@@ -134,7 +134,7 @@ impl App {
         let saved = crate::time::now();
         let entries = live.secrets.with(name, value, saved);
         self.secrets_keep(at, entries)?;
-        let name_logged = if name == value { "a value" } else { name };
+        let name_logged = keeping::logged_name(name, &[value]);
         log::info!("bots", "secret set", bot = id, name = name_logged, bytes = value.len(), replaced = replaced);
         self.asks_saved(at, &[name.to_string()]);
         Ok(json!({ "bot": id, "name": name, "saved": saved }))
@@ -207,7 +207,9 @@ impl App {
         let found = live.secrets.find(name);
         let missing = || Refusal::new(Code::NotFound, format!("no secret {} in {id}; {hint}", shown(name)));
         let found = found.ok_or_else(missing)?;
-        log::info!("bots", "secret get", bot = id, name = name);
+        let known: Vec<&str> =
+            live.secrets.entries().iter().chain(&live.retired).map(|entry| entry.value.0.as_str()).collect();
+        log::info!("bots", "secret get", bot = id, name = keeping::logged_name(name, &known));
         Ok(json!({ "bot": id, "name": name, "value": found.value.0 }))
     }
 }

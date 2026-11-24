@@ -701,6 +701,14 @@ pub(crate) struct FocusArgs {
     pub(crate) machine: Option<String>,
     #[arg(
         long,
+        value_name = "BOT",
+        group = "Which",
+        conflicts_with_all = ["view", "reveal", "machine"],
+        help = "Show this bot's chat in the window, on the Bots page, as a click on its row does: its id or its name"
+    )]
+    pub(crate) bot: Option<String>,
+    #[arg(
+        long,
         value_name = "TEXT",
         conflicts_with_all = ["tab", "workspace", "worktree", "project"],
         help = "Also scroll the pane to this text and select it, as Enter on a result of the search does: the text `cornercase search` looked for"

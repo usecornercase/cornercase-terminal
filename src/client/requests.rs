@@ -143,6 +143,14 @@ pub(crate) fn use_bot_asks() -> Result<()> {
     require("bot-asks", "cannot ask for a bot's secrets")
 }
 
+pub(crate) fn use_bot_memory() -> Result<()> {
+    require("bot-memory", "cannot read or change a bot's memory")
+}
+
+pub(crate) fn use_focus_bot() -> Result<()> {
+    require("focus-bot", "cannot show a bot's chat")
+}
+
 pub(crate) fn use_bot_about_read() -> Result<()> {
     require("bot-about-read", "cannot print what a bot is for")
 }

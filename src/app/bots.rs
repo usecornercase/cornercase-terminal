@@ -19,13 +19,16 @@ mod follow;
 mod form;
 mod links;
 mod manage;
+mod memory;
 mod menu;
+mod page;
 mod reports;
 mod routines;
 mod routines_dialog;
 mod secrets;
 mod secrets_dialog;
 mod section;
+mod select;
 mod shown;
 mod talk;
 mod turns;
@@ -79,6 +82,7 @@ pub(super) struct Turn {
     pub(super) dropped: Vec<u64>,
     pub(super) started: Instant,
     pub(super) steps: usize,
+    pub(super) briefed: crate::bots::Briefed,
 }
 
 pub(super) struct Run {
@@ -125,7 +129,8 @@ pub(super) struct Bots {
     pub(super) next_key: u64,
     pub(super) next_ask: u64,
     pub(super) shown: Option<Chat>,
-    pub(super) collapsed: bool,
+    pub(super) page: bool,
+    pub(super) last: Option<String>,
 }
 
 impl Default for Bots {
@@ -142,7 +147,8 @@ impl Default for Bots {
             next_key: 1,
             next_ask: 1,
             shown: None,
-            collapsed: false,
+            page: false,
+            last: None,
         }
     }
 }
@@ -263,6 +269,7 @@ impl super::App {
         self.panels.bots.next_ask = self.panels.bots.next_ask.max(after);
         self.panels.bots.live = loaded.into_iter().map(|(live, _)| live).collect();
         self.panels.bots.shown = None;
+        self.panels.bots.page = false;
         self.restore_bot_posts();
     }
 }

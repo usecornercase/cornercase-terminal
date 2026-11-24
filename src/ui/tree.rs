@@ -12,11 +12,13 @@ use super::rows::{
     Band, GAP, RowButton, Rows, arrow, draw_hidden, draw_landing, draw_rail, marker, row_button, row_rect,
 };
 use super::sidebar::{
-    NEW_BUTTON, SidebarRow, draw_group, draw_new_project, draw_project_band, machine_rows, sidebar_rows,
+    NEW_BUTTON, SidebarRow, draw_group, draw_new_project, draw_project_band, draw_projects_title, machine_rows,
+    sidebar_rows,
 };
-use super::widgets::{button_style, draw_button, draw_title};
+use super::widgets::{button_style, draw_button};
 use super::workspaces::{
-    Badge, Guide, Tag, WorkspaceEntry, WorkspaceLine, draw_guide, draw_tab_band, draw_workspace_band, tag_badge,
+    Badge, Guide, Tag, WorkspaceEntry, WorkspaceLine, dim_row, draw_guide, draw_tab_band, draw_workspace_band,
+    tag_badge,
 };
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -107,7 +109,7 @@ fn push_project(shape: &TreeShape, p: usize, rows: &mut Vec<TreeRow>) {
         rows.push(TreeRow::Workspace(p, w));
         if !workspace.collapsed && !shape.tab_bar {
             rows.extend((0..workspace.tabs.len()).map(|t| TreeRow::Tab(p, w, t)));
-            rows.extend((!workspace.machine).then_some(TreeRow::NewTab(p, w)));
+            rows.push(TreeRow::NewTab(p, w));
         }
     }
     rows.extend((!project.machine).then_some(TreeRow::NewWorkspace(p)));
@@ -305,8 +307,7 @@ impl TreePaint<'_> {
                 let workspace = self.workspace(project, workspace)?;
                 let entry = (workspace.tabs.get(tab)?, workspace.machine.as_ref());
                 draw_tab_band(f, view, band(vec![marker(mark), Span::raw(lead)]), entry, mark);
-                let last = workspace.machine.is_some() && tab + 1 == workspace.tabs.len();
-                draw_guide(f, view.line(), tree_guide(r, shape, row), r, if last { Guide::End } else { Guide::Tee });
+                draw_guide(f, view.line(), tree_guide(r, shape, row), r, Guide::Tee);
             }
             TreeRow::NewTab(..) | TreeRow::NewWorkspace(_) => self.button(f, row, r, &lead),
         }
@@ -316,11 +317,13 @@ impl TreePaint<'_> {
     fn button(&self, f: &mut Frame, row: TreeRow, r: Rect, lead: &str) {
         let (view, shape) = (self.view, &self.tree.shape);
         if let TreeRow::NewTab(project, workspace) = row {
-            if !self.workspace(project, workspace).is_some_and(|entry| entry.removing) {
+            let entry = self.workspace(project, workspace);
+            if !entry.is_some_and(|entry| entry.removing) {
                 let style = button_style(view, r, Style::default().fg(view.muted), Color::Cyan);
                 draw_button(f, r, &format!("{lead} "), "+ Tab", style);
             }
             draw_guide(f, view.line(), tree_guide(r, shape, row), r, Guide::End);
+            dim_row(f, r, entry.and_then(|entry| entry.machine.as_ref()));
         } else {
             let style = button_style(view, r, Style::default().fg(Color::Cyan), Color::Cyan);
             draw_button(f, r, &format!("{lead} "), NEW_BUTTON, style);
@@ -329,7 +332,7 @@ impl TreePaint<'_> {
 }
 
 pub(super) fn draw_tree(f: &mut Frame, view: &View, areas: &Areas) {
-    draw_title(f, view.muted, areas.title, "Projects");
+    draw_projects_title(f, view, areas);
     let Some(tree) = &view.tree else { return };
     let shape = &tree.shape;
     let rows = tree_rows(shape);

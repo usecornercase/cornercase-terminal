@@ -45,8 +45,25 @@ pub(crate) fn name_refusal(name: &str) -> Option<String> {
     if length == 0 || length > NAME_MAX {
         return Some(format!("a secret's name takes 1 to {NAME_MAX} characters, not {length}"));
     }
-    let allowed = |c: char| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_';
-    (!name.chars().all(allowed)).then(|| String::from("a secret's name takes only a-z, 0-9, - and _"))
+    let allowed = |c: char| c.is_ascii_alphanumeric() || c == '-' || c == '_';
+    (!name.chars().all(allowed)).then(|| String::from("a secret's name takes only a-z, A-Z, 0-9, - and _"))
+}
+
+pub(crate) fn same_name(a: &str, b: &str) -> bool {
+    a.eq_ignore_ascii_case(b)
+}
+
+fn holds(name: &str, value: &str) -> bool {
+    name.eq_ignore_ascii_case(value)
+        || (value.len() >= REDACT_MIN && name.to_ascii_lowercase().contains(&value.to_ascii_lowercase()))
+}
+
+pub(crate) fn logged_name<'a>(name: &'a str, values: &[&str]) -> &'a str {
+    if values.iter().any(|value| holds(name, value)) { "a value" } else { name }
+}
+
+pub(crate) fn name_holds_value(name: &str, entries: &[Entry]) -> bool {
+    entries.iter().any(|entry| entry.value.0.len() >= REDACT_MIN && holds(name, &entry.value.0))
 }
 
 pub(crate) fn value_refusal(value: &str) -> Option<String> {
@@ -107,18 +124,18 @@ impl Kept {
     }
 
     pub(crate) fn find(&self, name: &str) -> Option<&Entry> {
-        self.entries().iter().find(|entry| entry.name == name)
+        self.entries().iter().find(|entry| same_name(&entry.name, name))
     }
 
     pub(crate) fn with(&self, name: &str, value: &str, saved: i64) -> Vec<Entry> {
-        let mut entries: Vec<Entry> = self.entries().iter().filter(|entry| entry.name != name).cloned().collect();
+        let mut entries: Vec<Entry> = self.without(name);
         entries.push(Entry { name: name.to_string(), value: Secret(value.to_string()), saved });
         entries.sort_by(|a, b| a.name.cmp(&b.name));
         entries
     }
 
     pub(crate) fn without(&self, name: &str) -> Vec<Entry> {
-        self.entries().iter().filter(|entry| entry.name != name).cloned().collect()
+        self.entries().iter().filter(|entry| !same_name(&entry.name, name)).cloned().collect()
     }
 
     pub(crate) fn redacted(&self, retired: &[Entry], mut line: Line) -> Line {

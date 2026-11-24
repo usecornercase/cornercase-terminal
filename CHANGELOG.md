@@ -2,17 +2,46 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.116
+
+- **Select and copy a bot's answers.** Press, drag and release over a bot's chat to select its text, as in a pane; it is copied when you let go. Dragging above or below the lines scrolls them, and a click drops the selection.
+- **Scroll a chat from the keyboard.** `PageUp` and `PageDown` scroll a bot's chat a page at a time while you type in its field.
+- **Edit a bot's memory.** **memory…** in a bot's menu opens its `memory.md`, what it keeps from one conversation to the next, to read and change. Saving tells the bot at its next message that you changed it. If the bot changed it while you were editing, cornercase says so and keeps the bot's text until you save again.
+- **Bots in the keys menu.** With a prefix key, `b` now opens a Bots group: `b` the Bots page, `n` a new bot (it was `b` alone), `]` and `[` the next and previous bot's chat, and `m` the memory of the bot on screen.
+- **For scripts:** `cornercase focus --bot prs` shows a bot's chat in the window, `cornercase bot memory prs` prints its memory and `cornercase bot edit prs --memory TEXT` replaces it.
+- **Secret names can have capitals**, such as `GITHUB_TOKEN`; before, only lower-case letters were accepted. A name is the same secret however its letters are cased, so `GITHUB_TOKEN` and `github_token` are one, and a bot finds it either way.
+
+## 0.13.115
+
+- **A bot learns when you change its settings.** After you change a bot's access, its name or whether it follows the agents it starts, its next message tells its conversation what holds now. Before, the chat went on with what it was told when the conversation began: a bot given full access still said it could only use cornercase and write in its folder. A bot whose conversation began on an earlier version is told its settings once, at its next message.
+
+## 0.13.114
+
+- **Open, close and rename a machine's tabs from your sidebar.** A machine's workspace now has a `+ Tab` row, and its tabs a `×` and a ` ⋯ ` menu with **rename tab** and **close tab**, as yours. The `×` asks first when the machine reports a recognized agent status for the tab, idle and done included, and in the compact layout; a shell tab closes at once.
+- **The prefix key's menu works on a machine's tab**: **new tab**, **split right**, **split down**, **close pane**, **rename tab**, the arrows between panes, **rename workspace** and **close workspace** act there, and the machine's workspace stays picked.
+- While the machine closes a tab, its row reads `closing…`. A refusal shows the machine's own words (`could not split the pane on vps: pane 3 is too small to split right`), and a machine that is down or restarted says that nothing was sent or changed.
+
+## 0.13.113
+
+- **A roomier bot chat.** The conversation keeps to a centred column in a wide window, your messages are bubbles with room around the text, the bot's name is in bold above its answers, and **routines**, **new conversation**, **retry**, **show** and **stop** look like buttons and light up under the pointer.
+- **The message field** is a band of its own at the bottom, with a row of room above it, and **send** fills in once there is something to send.
+- **The examples** in a new bot's empty chat are buttons, one per row with room between them.
+- **A clearer New bot form.** What the bot is for comes right after its name, every field lines up at the same width with a row between them when the window is tall enough, the label of the field you are in turns cyan, and the note under Access says what the access you chose lets the bot do, in red only for full access. A refusal shows next to **create**, and when you edit a bot its agent says it cannot change.
+
+## 0.13.112
+
+- **Bots have a page of their own.** **Bots ›**, at the right of the Projects title, opens it in every layout, also before you make your first bot. While a bot answers it shows the spinner, and while answers wait for you how many, for every bot together.
+- **On the page** your bots take the place of the projects list and the Agents section, with **+ New** under them, the chat takes the place of the panes and the bot's card the place of the workspaces. It opens on the bot you read last, or the first one, and **‹ Projects** takes you back. The Bots section between the lists and the Agents section is gone, and its fold with it.
+- **With no chat chosen** the page says what a bot is, has **+ New bot** and three ideas, PRs, News and Releases, that open the form with the name and what it is for filled in, so a first bot is two clicks away. With bots, it asks you to pick one. Removing the bot you are reading leaves you on the page.
+- **In compact mode** Bots › is always in the projects menu and opens the list of your bots, or that page while you have none.
+- Nothing changes for scripts: `cornercase bot list --json`, the `bot` events and `shown_bot` in `cornercase status --json` already carry what the page shows.
+
 ## 0.13.111
 
-- **Personas for a flow's roles.** A persona is how an agent works, written in Markdown with a front matter that gives its `name`, such as the ones in [agency-agents](https://github.com/msitarzewski/agency-agents). Import some or write your own, then give one to any role of a flow, on any agent: the same Code Reviewer can run on Claude Code or Codex.
-  - **In the window**: Settings → Flows has a **personas** button. Its page lists your personas with where they came from and which flows follow each one. **import** takes a GitHub repository, an address or a folder and shows its personas grouped by division, to check the ones you want (or a whole division) and import them at once. **new** writes one of your own from a name, a description, an emoji and its instructions; **edit** changes one and keeps its id; **remove** asks first and names the flows that follow it.
-  - In a flow's editor, each role's tab and the orchestrator's have a **persona** row to pick one of yours. The diagram shows each role's persona after its agent where there is room, in the Flows and start dialogs and in the Flow panel.
-  - **From the command line**: `persona import` takes a `.md` file, a folder, `-`, an `https://` address, or a GitHub repository as `OWNER/REPO`, `OWNER/REPO/FOLDER` or `OWNER/REPO/PATH/FILE.md`, with no GitHub token; a folder or a repository imports every persona in it, in one download, limited to the folders its `divisions.json` lists. `persona new`, `persona edit`, `persona show`, `persona list` and `persona remove` manage them, and `flow list` names each role's persona.
-  - Personas are prompt text that agents follow without asking, so an import from the web asks first in the window and at the terminal (`--yes` without one), and `--check` lists what would be imported and saves nothing.
-  - They live in `personas/` next to `config.json`. An imported one keeps a `source:` saying where it came from, so importing it again with `--replace` refreshes it; one you write or edit is yours and has none.
-  - When a run starts, each persona its roles name is copied into the run's folder (`personas/ID.md`), and the role's prompt tells the agent to read and follow it before its first work. The run keeps its copy, so changing a persona later never changes a running team.
-  - A flow that names a persona you don't have cannot run, and cannot be saved: the editor shows it in red, the start dialog and `flow list` say which.
-- **For programs**: the requests `persona-list`, `persona-import` (with `check`), `persona-save`, `persona-show` and `persona-remove`; `persona` on the roles of `flow list --json`, `flow save` and `flow runs`, with `persona_name` and `persona_emoji` in `flow list`; and the feature `flow-personas` in `cornercase contract`. A bot cannot change personas, as it cannot change flows.
+- **Every port in one list.** The Ports dialog has a row at the top that switches between **this workspace** and **every port** (a click, or `Tab`). **every port** lists every program of yours that listens on a port, each with its project and workspace, or `no workspace` for a database, a server started in another terminal outside your worktrees or a port Docker publishes. **copy** works on every row, **open** where your window can open the address (in a window from `cornercase remote`, once the port is tunnelled), **go** on a row whose program a tab started, and **stop** on the programs of a workspace, a program working in its worktree included even when no tab started it: tick them to stop several, since there is no **stop all** there.
+- **More ▴ › ports** (also behind the icon bar's gear) opens the dialog on the workspace on screen, a linked machine's when the window shows one, or on every port when no project is open.
+- **Tunnel any of them.** In a window from `cornercase remote`, **tunnel** is offered under every port for each program that listens on every address, `127.0.0.1` or `::1`, whatever its workspace, so a server's database or a program outside your workspaces reaches your laptop in one click. A linked machine's every port lists all the ports of that machine, and each of its programs that listens on every address, `127.0.0.1` or `::1` can be tunnelled to this computer, as before.
+- Scripts already get the same list with `cornercase ports --all --json`, each port with its `project`, `workspace` and `pane`.
 
 ## 0.13.110
 

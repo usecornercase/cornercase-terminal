@@ -27,6 +27,7 @@ impl App {
                 | Drag::Row(_)
                 | Drag::Pane(_)
                 | Drag::Footer(_)
+                | Drag::Chat
                 | Drag::Remote(RemoteDrag::Divider { .. }),
             ) => {
                 self.screen.drag = None;
@@ -85,7 +86,7 @@ impl App {
     }
 
     pub(super) fn forward_key(&mut self, key: KeyEvent) {
-        if self.machine_key(key) || self.holds_input() || self.bot_shown() {
+        if self.machine_key(key) || self.holds_input() || self.bots_page() {
             return;
         }
         let Some(term) = self.term_mut() else { return };
@@ -213,14 +214,17 @@ impl App {
             }
             return true;
         }
-        let navs = [
-            (areas.back, ui::Nav::Projects),
-            (areas.agents_button, ui::Nav::Agents),
-            (areas.bots_button, ui::Nav::Bots),
-        ];
-        let Some(nav) = navs.into_iter().find_map(|(r, nav)| r.contains(pos).then_some(nav)) else { return false };
+        let press: fn(&mut Self, bool) = if areas.back.contains(pos) {
+            Self::press_back
+        } else if areas.bots_button.contains(pos) {
+            Self::open_bots
+        } else if areas.agents_button.contains(pos) {
+            |app, _| app.screen.nav = Some(ui::Nav::Agents)
+        } else {
+            return false;
+        };
         if left {
-            self.screen.nav = Some(nav);
+            press(self, areas.compact());
         }
         true
     }
@@ -250,7 +254,7 @@ impl App {
         if areas.issues.contains(pos) {
             return ControlFlow::Break(self.issues_column_mouse(left, area));
         }
-        if areas.workspaces.contains(pos) && self.bot_shown() {
+        if areas.workspaces.contains(pos) && self.bots_page() {
             self.bot_card_mouse(ev, pos);
             return ControlFlow::Break(Ok(()));
         }
@@ -303,6 +307,10 @@ impl App {
         }
         if self.bot_shown() && areas.pane.contains(pos) {
             self.chat_mouse(ev, pos, area);
+            return Ok(());
+        }
+        if self.bots_page() && areas.pane.contains(pos) {
+            self.lobby_mouse(ev, pos, areas.pane);
             return Ok(());
         }
         if self.machine_mouse(ev, pos, areas.pane) {
@@ -364,6 +372,7 @@ impl App {
             Some(Drag::Row(drag)) => self.drag_row(drag, ev, areas, area),
             Some(Drag::Text(field)) => self.drag_field(field, ev, area),
             Some(Drag::Remote(drag)) => self.drag_remote(drag, ev, areas.pane),
+            Some(Drag::Chat) => self.drag_chat(ev, area),
             Some(Drag::Link(_)) | None => return false,
         }
         true
@@ -400,7 +409,7 @@ impl App {
         }
         self.screen.nav = match self.screen.nav {
             Some(_) => None,
-            None if self.bot_shown() => Some(ui::Nav::Bots),
+            None if self.bots_page() => Some(ui::Nav::Bots),
             None if self.project().is_some() => Some(ui::Nav::Workspaces),
             None => Some(ui::Nav::Projects),
         };
@@ -476,7 +485,7 @@ impl App {
             self.overlay_paste(text, area);
             return;
         }
-        if self.typing_paste(text, area) || self.machine_paste(text) || self.holds_input() || self.bot_shown() {
+        if self.typing_paste(text, area) || self.machine_paste(text) || self.holds_input() || self.bots_page() {
             return;
         }
         if let Some(term) = self.term_mut() {
@@ -515,6 +524,7 @@ impl App {
             Some(Overlay::Processes(dialog)) => dialog.paste(text),
             Some(Overlay::QueueList(dialog)) => dialog.paste(text),
             Some(Overlay::BotAsk(_)) => self.bot_ask_paste(text, area),
+            Some(Overlay::BotMemory(_)) => self.bot_memory_paste(text, area),
             Some(_) => self.name_paste(text, area),
             None => {}
         }

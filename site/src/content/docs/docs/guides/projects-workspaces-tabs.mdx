@@ -111,7 +111,7 @@ A workspace is called after its custom name, otherwise its branch, otherwise `de
 
 Worktrees of the repository that you create outside cornercase, with `git worktree add`, appear as workspaces by themselves, at the end of the list. A worktree you remove outside cornercase goes away once its tabs are closed, also when git forgot it but its folder is still there (after `git worktree prune`, or a removal that failed half way); that folder stays on disk for you to delete.
 
-A workspace on one of your [machines](../machines/#in-your-sidebar) shows after the project's own when that machine has a clone of the same repository, tagged with the machine's icon and name, such as `☁ vps`; a project there with no clone here is a row of its own at the end of the projects. Clicking one shows its tab, streamed from the machine, where a pane would be. Its `×` and ` ⋯ ` [close, rename or remove it on the machine](../machines/#acting-on-a-machines-workspace).
+A workspace on one of your [machines](../machines/#in-your-sidebar) shows after the project's own when that machine has a clone of the same repository, tagged with the machine's icon and name, such as `☁ vps`; a project there with no clone here is a row of its own at the end of the projects. Clicking one shows its tab, streamed from the machine, where a pane would be. Its `×` and ` ⋯ ` [close, rename or remove it on the machine](../machines/#acting-on-a-machines-workspace), and its tabs' `×`, ` ⋯ ` and `+ Tab` [close, rename and open tabs there](../machines/#acting-on-a-machines-tabs).
 
 When a workspace's branch is behind its upstream, its row ends with the number of commits to pull, such as `↓3`. See [Commits to pull](../worktrees/#commits-to-pull). When the branch has a pull request on GitHub (or a merge request on GitLab), the row shows its number, coloured by its checks, such as `#485✗` when one failed, or `#486!` in orange when it has merge conflicts; click it to see its checks. See [Pull requests and their checks](../worktrees/#pull-requests-and-their-checks).
 
@@ -380,7 +380,7 @@ The menu of a project or a workspace row (` ⋯ ` or right-click, in every layou
 
 ## Ports a workspace listens on
 
-**ports** in a workspace's menu (` ⋯ ` or right-click) lists the TCP ports its programs listen on: the dev servers, Storybooks and debuggers its tabs started, whether you or an agent started them. Each row has the address to open (`http://localhost:5173`), the program, its pid and where it runs: `pane 12 · dev`, `agent claude · pane 9 · claude` when the agent or something it started listens there, or `in the worktree, no tab` for a program started elsewhere (another terminal, say) that works in the workspace's own worktree. A workspace without a worktree of its own counts only what its tabs started, since it shares its folder with others. The list refreshes every two seconds while it is open; with nothing listening it says `Nothing in this workspace is listening on a port.`
+**ports** in a workspace's menu (` ⋯ ` or right-click), or **More ▴ › ports** for the workspace on screen, lists the TCP ports its programs listen on: the dev servers, Storybooks and debuggers its tabs started, whether you or an agent started them. Each row has the address to open (`http://localhost:5173`), the program, its pid and where it runs: `pane 12 · dev`, `agent claude · pane 9 · claude` when the agent or something it started listens there, or `in the worktree, no tab` for a program started elsewhere (another terminal, say) that works in the workspace's own worktree. A workspace without a worktree of its own counts only what its tabs started, since it shares its folder with others. The list refreshes every two seconds while it is open; with nothing listening it says `Nothing in this workspace is listening on a port.`
 
 Hover a row, or pick it with the arrows, for its buttons:
 
@@ -392,7 +392,9 @@ Hover a row, or pick it with the arrows, for its buttons:
 
 Tick rows (click their circle, or `Space`) and **stop 2** stops those; with nothing ticked the button reads **stop all** and stops every port of the workspace, again after a confirmation. Stopping sends `SIGTERM` to the program holding the port, waits up to three seconds for it to let the port go, then sends `SIGKILL`. Only that program gets the signal, not the shell or agent that started it, and a program that no longer holds its port by then is left alone. A toast says what happened. Scripts and agents get the same list and stop with [`cornercase ports`](../scripts-and-agents/#ports).
 
-Ports published by Docker (`docker run -p`, `docker compose up`) are held by Docker, not by the tab that ran the command, so they don't show in a workspace's list.
+The row at the top switches between **this workspace** and **every port** (click it, or press `Tab`). **every port** lists every program of yours that listens on a port, as [`cornercase ports --all`](../scripts-and-agents/#ports) does, each with its project and workspace (`web-shop › feat/checkout · pane 12 · dev`), or `no workspace` for one that no tab started and that runs outside every worktree: a database, a server in another terminal, a port Docker publishes. **More ▴ › ports** opens on every port when no project is open. There only a workspace's programs have **stop** and a circle to tick, and the bottom button stops only the ticked ones (there is no **stop all**), so a click can't end a program that belongs to no workspace. A program working in a workspace's own worktree belongs to that workspace and keeps **stop**, even when no tab started it (a server from another terminal, say); the confirmation warns that no tab started it. **tunnel**, in a window from [`cornercase remote`](../remote/), is offered for each program that listens on every address, `127.0.0.1` or `::1`, whatever its workspace.
+
+Ports published by Docker (`docker run -p`, `docker compose up`) are held by Docker, not by the tab that ran the command, so they don't show in a workspace's list. On macOS they show under **every port**, with no workspace; on Linux, where Docker's `docker-proxy` runs as root, they aren't listed at all.
 
 ## Processes
 
@@ -425,6 +427,7 @@ Hover a group, project, workspace or tab row: it gets a lighter background, so y
 | A tab | Its panes' programs are ended, then the tab goes away. In the compact layout it asks first. |
 | A workspace | All its tabs are closed, then the workspace goes away. In the compact layout it asks first. A workspace with its own worktree asks first, because it also deletes the worktree folder; see [Removing a worktree](../worktrees/#remove-a-worktree). |
 | A machine's workspace | It always asks first, naming the machine, then closes it there, or removes its worktree there; see [Acting on a machine's workspace](../machines/#acting-on-a-machines-workspace). |
+| A machine's tab | It closes there, asking first when it has a recognized agent status, idle and done included, or in the compact layout; its row reads `closing…` until the machine drops it. See [Acting on a machine's tabs](../machines/#acting-on-a-machines-tabs). |
 | A project | It asks first, saying how many tabs it stops. Then everything in it is closed and the project goes away; its folder and its worktrees stay on disk. |
 | A group | It asks first, then the group goes away. With **keep projects** its projects stay open, ungrouped, and nothing in them is ended; with **close projects** they close with it, which stops every shell in them (folders and worktrees stay on disk). |
 
@@ -560,7 +563,7 @@ Turn on **settings → UI → agents section** to list every Claude Code, Codex,
 
 It works in every layout: below the projects in *side_by_side*, below both lists when they are stacked, and below the tree. Below 90 columns it is a [third menu](../small-terminals/#the-menu). Only Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI, Vibe CLI and GitHub Copilot CLI are listed, since other agents don't report what they are doing.
 
-**Your [bots](../bots/) have a section of their own** above it, once you have one: a row per bot with its spinner or unread count, and a click shows its chat in place of the panes. See [In the window](../bots/#in-the-window).
+**Your [bots](../bots/) have a page of their own**: **`Bots ›`** at the right of the Projects title opens it, and while it shows, the bots take the place of the lists and of this section. See [The Bots page](../bots/#the-bots-page).
 
 ### The icon bar
 

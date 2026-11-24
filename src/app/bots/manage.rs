@@ -208,6 +208,8 @@ impl App {
             conversation: None,
             follow: new.follow.unwrap_or(true),
             chat_apps: ChatApps::Away,
+            briefed: None,
+            memory_edits: 0,
         };
         let edit = EditBot {
             model: new.model.clone(),
@@ -254,13 +256,15 @@ impl App {
             bot.access = self.bot_access(kind, edit.access.as_deref())?;
         }
         self.bot_settings(kind, &mut bot, edit)?;
-        if let Some(about) = &edit.about {
-            let written = folder::write_about(&self.panels.bots.live[at].folder, about);
-            written.map_err(|error| Refusal::new(Code::Failed, error.to_string()))?;
-        }
+        let noted = write_notes(&self.panels.bots.live[at].folder, edit)?;
         let followed = self.panels.bots.live[at].bot.follow;
         bot.follow = edit.follow.unwrap_or(followed);
-        save_edited(&self.panels.bots.live[at].folder, &bot, edit.about.is_some())?;
+        let remembered = u64::from(edit.memory.is_some());
+        bot.memory_edits += remembered;
+        if let Err(refusal) = save_edited(&self.panels.bots.live[at].folder, &bot, noted) {
+            self.panels.bots.live[at].bot.memory_edits += remembered;
+            return Err(refusal);
+        }
         self.panels.bots.live[at].bot = bot;
         self.follow_changed(at, followed);
         self.publish_bot_change(at, "edited");
@@ -268,10 +272,26 @@ impl App {
     }
 }
 
-fn save_edited(folder: &Path, bot: &Bot, about_written: bool) -> Done<()> {
+fn write_notes(folder: &Path, edit: &EditBot) -> Done<Option<&'static str>> {
+    let failed = |error: std::io::Error| Refusal::new(Code::Failed, error.to_string());
+    if let Some(about) = &edit.about {
+        folder::write_about(folder, about).map_err(failed)?;
+    }
+    if let Some(memory) = &edit.memory {
+        folder::write_memory(folder, memory).map_err(failed)?;
+    }
+    Ok(match (edit.about.is_some(), edit.memory.is_some()) {
+        (true, true) => Some("the about text and the memory were"),
+        (true, false) => Some("the about text was"),
+        (false, true) => Some("the memory was"),
+        (false, false) => None,
+    })
+}
+
+fn save_edited(folder: &Path, bot: &Bot, noted: Option<&str>) -> Done<()> {
     folder::save(folder, bot).map_err(|error| {
-        let text = if about_written {
-            format!("the about text was saved but the settings were not: {error}")
+        let text = if let Some(noted) = noted {
+            format!("{noted} saved but the settings were not: {error}")
         } else {
             format!("the settings were not saved: {error}")
         };

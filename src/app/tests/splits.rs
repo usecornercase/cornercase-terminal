@@ -554,7 +554,6 @@ fn saved_with(workspace: WorkspaceState, dir: &Path) -> State {
         todo: false,
         files: false,
         flow: false,
-        bots_collapsed: false,
     }
 }
 

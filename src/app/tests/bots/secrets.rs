@@ -41,6 +41,7 @@ pub(in crate::app::tests) fn turn() -> crate::app::bots::Turn {
         dropped: Vec::new(),
         started: Instant::now(),
         steps: 0,
+        briefed: crate::bots::Briefed::of(&crate::bots::sample("prs", "PRs")),
     }
 }
 
@@ -92,7 +93,7 @@ mod who_reads {
     fn a_name_that_is_not_one_is_never_echoed_back() {
         let mut k = keeper();
         k.set("pw", VALUE).expect("set");
-        let wrong = "Hunter2-Mistaken-Value";
+        let wrong = "Hunter2 Mistaken Value!";
         let got = refusal(k.app.bot_secret_get(Some(OWNER), wrong));
         let removed = refusal(k.app.bot_secret_remove(None, "campus", (Some(wrong), false)));
         for (code, message) in [got, removed] {

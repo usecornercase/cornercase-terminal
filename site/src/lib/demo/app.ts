@@ -1,7 +1,7 @@
 import { DAYS, ROUTINE_GRACE, ROUTINE_RUNS, type QueueChoice, type QueueEntry, type QueueForm, type QueueList, UNITS, parseRepeat, queueAt, queueChoice, queueChose, queueForm, queueKey as queueFormKey, queueListRows, queueRefit, queueRepeat, queueRepeats, queueTextRect, queueTime, queueWhen, queueFirstLine, queueName, queuePaste, queueWorktree, repeatFirst, repeatWalk, revealPrompt, routineSlug, whenCombo } from './queue';
-import { botFormKey, botFormPaste, newBotForm } from './botform';
+import { type BotForm, botFormKey, botFormPaste, newBotForm } from './botform';
 import { actOnRoutine, botRoutinesKey, buttonsOf, openBotRoutines, routinesOf } from './botroutines';
-import { Bots } from './bots';
+import { Bots, IDEAS, draftOf } from './bots';
 import { type QueueListDialog, type QueueShown, foldAsked, moveQueueList, openQueueList, queueButtons, queueIndex, queueShown } from './queuelist';
 import { chooseCombo, combo, comboLabel } from './combo';
 import { shareLink } from '../stats/model';
@@ -155,8 +155,10 @@ const HELP_LABELS: Record<HelpItem, string> = {
   keys: 'keys menu',
   bug: 'report a bug',
 };
-const MORE_ITEMS: MoreItem[] = ['settings', 'usage', 'processes', 'new bot…', 'queue', 'quit'];
+const MORE_ITEMS: MoreItem[] = ['settings', 'usage', 'processes', 'ports', 'new bot…', 'queue', 'quit'];
 const CLOSE_AGENT_NEEDS = 'this needs cornercase on your computer: the demo closes no agents';
+const BOT_MEMORY_NEEDS = "this needs cornercase on your computer: the demo's bots keep no memory";
+const NO_BOT_SHOWN = "no bot's chat is on screen";
 const CONTEXT_NEEDS = "this needs cornercase on your computer: the demo's agents are not real Claude Code sessions";
 const AGENT_TITLES: Record<string, string> = { claude: 'Claude Code', codex: 'Codex', gemini: 'Gemini CLI', opencode: 'opencode', grok: 'Grok Build', cursor: 'Cursor CLI', copilot: 'GitHub Copilot CLI', vibe: 'Vibe CLI' };
 const MERGE_NEED = 'this needs cornercase on your computer: the demo has no git repositories to merge';
@@ -663,7 +665,7 @@ export class App {
   }
 
   private visibleTab(): Tab | undefined {
-    return this.nav || this.bots.current() ? undefined : this.tab();
+    return this.nav || this.bots.page ? undefined : this.tab();
   }
 
   private awakeAt: number | null = null;
@@ -1540,6 +1542,7 @@ export class App {
     if (item === 'settings') this.openSettings();
     else if (item === 'usage') this.openUsage();
     else if (item === 'processes') this.bug(PROCESSES_NEED);
+    else if (item === 'ports') this.bug(PORTS_NEED);
     else if (item === 'new bot…') this.openBotForm();
     else if (item === 'queue') this.openQueue();
     else this.quit();
@@ -1564,6 +1567,35 @@ export class App {
   openBotForm(): void {
     this.nav = null;
     this.overlay = newBotForm();
+    this.dirty();
+  }
+
+  openBotIdea(at: number): void {
+    const idea = IDEAS[at];
+    if (!idea) return;
+    this.openBotForm();
+    const form = this.overlay as BotForm;
+    form.name = draftOf(idea[0]);
+    form.about = draftOf(idea[1]);
+  }
+
+  openBots(): void {
+    this.bots.open(this.areas().compact);
+  }
+
+  private stepBot(delta: number): void {
+    const list = this.bots.list;
+    const shown = list.findIndex((b) => b.id === this.bots.shown);
+    const next = shown >= 0 ? this.cycle(shown, list.length, delta) : list.findIndex((b) => b.id === this.bots.last);
+    const bot = next === null ? undefined : (list[next] ?? list[0]);
+    if (bot) this.bots.show(bot.id);
+    else this.openBots();
+  }
+
+  pressBack(): void {
+    const compact = this.areas().compact;
+    if (!compact || this.nav === 'bots') this.bots.hide();
+    if (compact) this.nav = 'projects';
     this.dirty();
   }
 
@@ -1750,7 +1782,7 @@ export class App {
   }
 
   toggleNav(): void {
-    this.nav = this.nav ? null : this.bots.current() ? 'bots' : 'projects';
+    this.nav = this.nav ? null : this.bots.page ? 'bots' : 'projects';
     if (this.nav) {
       this.changesOpen = false;
       this.closeTodo();
@@ -3250,7 +3282,7 @@ export class App {
   private keysKey(group: KeysGroup | null, k: Key): boolean {
     this.overlay = null;
     if (isPrefix(this.config.prefix, k)) {
-      const t = this.tab();
+      const t = this.bots.page ? undefined : this.tab();
       const pane = t ? activePane(t) : undefined;
       pane?.shell.key(k);
     } else if (k.key !== 'Escape') this.keysStep(keysLookup(group, k));
@@ -3365,6 +3397,9 @@ export class App {
       if (opening) this.addTodo();
     } else if (a.kind === 'recap') this.toggleRecap();
     else if (a.kind === 'newBot') this.openBotForm();
+    else if (a.kind === 'botsPage') this.openBots();
+    else if (a.kind === 'nextBot' || a.kind === 'previousBot') this.stepBot(a.kind === 'nextBot' ? 1 : -1);
+    else if (a.kind === 'botMemory') this.bug(this.bots.current() ? BOT_MEMORY_NEEDS : NO_BOT_SHOWN);
     else if (a.kind === 'queue') this.openQueue();
     else if (a.kind === 'settings') this.openSettings();
     else if (a.kind === 'usage') this.openUsage();
@@ -5057,7 +5092,7 @@ export class App {
           border === 'agents'
             ? this.agentsDragged(y)
             : border !== 'changes' && this.sidebar() !== 'side_by_side'
-              ? draggedStacked(this.widths, border, x, y, total, this.rows, this.config.agentsSection)
+              ? draggedStacked(this.widths, border, x, y, total, this.rows, this.config.agentsSection && !this.bots.page)
               : dragged(this.widths, border, x, total);
       }
       else {
@@ -5330,6 +5365,7 @@ export class App {
       return;
     }
     if (this.bots.current() && !this.nav) return this.bots.paste(text);
+    if (this.bots.page) return;
     const t = this.tab();
     if (t) activePane(t)?.shell.paste(text);
   }
@@ -5376,6 +5412,7 @@ export class App {
     }
     if (this.bots.current() && !this.nav) return this.bots.key(k, this.botWidth());
     if (k.key === 'Escape' && this.panelShown()) return this.closePanel();
+    if (this.bots.page) return true;
     const t = this.tab();
     const pane = t ? activePane(t) : undefined;
     if (!pane) return false;

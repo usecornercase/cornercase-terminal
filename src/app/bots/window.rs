@@ -25,6 +25,13 @@ impl App {
     }
 
     pub(in crate::app) fn leave_bot(&mut self) {
+        self.leave_chat();
+        if std::mem::take(&mut self.panels.bots.page) {
+            log::info!("ui", "bots page left");
+        }
+    }
+
+    pub(in crate::app) fn leave_chat(&mut self) {
         if let Some(shown) = self.panels.bots.shown.take() {
             log::info!("ui", "bot hidden", bot = shown.bot);
         }
@@ -39,6 +46,8 @@ impl App {
         lines.drain(..skip);
         log::info!("ui", "bot shown", bot = id, lines = lines.len());
         self.panels.bots.shown = Some(Chat::new(id.clone(), lines));
+        self.panels.bots.page = true;
+        self.panels.bots.last = Some(id.clone());
         let _ = self.bot_seen(&id);
         self.screen.nav = None;
         self.panels.files.set_full_screen(false);
@@ -49,6 +58,12 @@ impl App {
         let Some(shown) = self.panels.bots.shown.as_mut() else { return };
         shown.anchor =
             run.and_then(|run| shown.lines.iter().find(|line| line.routine == Some(run))).map(|line| line.id);
+    }
+
+    pub(in crate::app) fn focus_bot(&mut self, key: &str) -> Result<String, crate::control::contract::Refusal> {
+        let at = self.bot_at(key)?;
+        self.show_bot(at);
+        Ok(self.panels.bots.live[at].bot.id.clone())
     }
 
     pub(in crate::app) fn show_bot_by_key(&mut self, key: u64) {

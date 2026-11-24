@@ -3,27 +3,31 @@ import type { App } from './app';
 import { BOT_AGENTS, MAX_BOTS, NO_ACCESS_WHY, type Access, draftOf, pasted } from './bots';
 import { wrapText } from './botchat';
 import { type Combo, COMBO_ROWS, chooseCombo, combo, comboKey, comboList, comboRows, comboShown, drawComboField, drawComboList, openCombo, scrollCombo } from './combo';
-import { bottom, intersect, isEmpty, right } from './layout';
+import { bottom, buttonWidth, intersect, isEmpty, right } from './layout';
 import type { Key } from './programs';
 import { truncateRight } from './text';
 import { type Editable, drawSelection, editKey, fieldLines, fieldPosition, placeIn } from './todo';
 import type { Painter } from './ui';
 
 const MUTED: Style = { fg: 8 };
-const LABEL = 9;
-const HEIGHT = 19;
+const LABEL = 12;
 const WIDTH = 76;
-const COMBO = 44;
 const ABOUT_ROWS = 4;
-const CONTROLS = ['name', 'agent', 'model', 'access', 'about'] as const;
+const TIGHT_ABOUT_ROWS = 3;
+const CHROME = 4;
+const CONTROLS = ['name', 'about', 'agent', 'model', 'access'] as const;
 const LISTS = ['agent', 'model', 'access'] as const;
-const ROWS: Record<Control, number> = { name: 0, agent: 1, model: 2, access: 3, about: 6 };
+const GROUP: Record<Control, number> = { name: 0, about: 1, agent: 2, model: 2, access: 2 };
 const ACCESS_LABELS: [Access, string][] = [['cornercase', 'through cornercase'], ['full', 'full access']];
-const NOTES = ['through cornercase: reads anything, writes only in its folder', 'full access: can change any file and run anything, unattended'];
-const FOLDER_NOTE = 'through cornercase: reads and writes only in its folder';
+const NOTES: Record<Access, string> = { cornercase: 'reads anything, writes only in its folder', full: 'can change any file and run anything, unattended' };
+const FOLDER_NOTE = 'reads and writes only in its folder';
+const NO_ACCESS_NOTE = 'choose how far it may reach';
+const NEW_ABOUT = 'optional: what it does. It sets itself up from this.';
 
 export type Control = (typeof CONTROLS)[number];
 type List = (typeof LISTS)[number];
+type Slot = Control | 'note' | 'gap';
+type Air = 0 | 1 | 2;
 
 export interface BotForm {
   kind: 'bot';
@@ -60,27 +64,59 @@ export function newBotForm(): BotForm {
   return o;
 }
 
+function plan(air: Air): [Slot, number][] {
+  const slots: [Slot, number][] = [];
+  CONTROLS.forEach((c, i) => {
+    const previous = CONTROLS[i - 1];
+    if (previous && (air === 2 || (air === 1 && GROUP[previous] !== GROUP[c]))) slots.push(['gap', 1]);
+    slots.push([c, c === 'about' ? (air ? ABOUT_ROWS : TIGHT_ABOUT_ROWS) : 1]);
+    if (c === 'access') slots.push(['note', 1]);
+  });
+  return slots;
+}
+
+const heightOf = (air: Air, slots: [Slot, number][]): number => slots.reduce((sum, [, h]) => sum + h, 0) + CHROME + (air ? 2 : 0);
+
+function fitted(rows: number): [Air, [Slot, number][]] {
+  for (const air of [2, 1] as const) {
+    const slots = plan(air);
+    if (heightOf(air, slots) <= rows - 2) return [air, slots];
+  }
+  return [0, plan(0)];
+}
+
 export function botFormArea(cols: number, rows: number): Rect {
+  const [air, slots] = fitted(rows);
   const w = Math.min(WIDTH, Math.max(0, cols - 2));
-  const h = Math.min(HEIGHT, rows);
+  const h = Math.min(heightOf(air, slots), rows);
   return rect(Math.floor((cols - w) / 2), Math.floor((rows - h) / 2), w, h);
 }
 
 const inner = (cols: number, rows: number): Rect => {
   const a = botFormArea(cols, rows);
-  return rect(a.x + 2, a.y + 1, Math.max(0, a.w - 4), Math.max(0, a.h - 2));
+  const r = rect(a.x + 2, a.y + 1, Math.max(0, a.w - 4), Math.max(0, a.h - 2));
+  const m = Math.min(fitted(rows)[0] ? 1 : 0, Math.floor(r.h / 2));
+  return rect(r.x, r.y + m, r.w, r.h - 2 * m);
 };
 
-function controlRect(screen: Rect, c: Control): Rect {
+function slotRow(screen: Rect, wanted: Slot): Rect {
   const r = inner(screen.w, screen.h);
-  const w = Math.max(0, r.w - LABEL);
-  const h = c === 'about' ? ABOUT_ROWS : 1;
-  return intersect(rect(r.x + LABEL, r.y + ROWS[c], isList(c) ? Math.min(w, COMBO) : w, h), r);
+  let y = r.y;
+  for (const [slot, h] of fitted(screen.h)[1]) {
+    if (slot === wanted) return intersect(rect(r.x, y, r.w, h), r);
+    y += h;
+  }
+  return rect(0, 0, 0, 0);
+}
+
+function controlRect(screen: Rect, c: Control): Rect {
+  const row = slotRow(screen, c);
+  return rect(row.x + Math.min(LABEL, row.w), row.y, Math.max(0, row.w - LABEL), row.h);
 }
 
 const textRect = (screen: Rect, c: Control): Rect => {
   const r = controlRect(screen, c);
-  return rect(r.x + 1, r.y, Math.max(1, r.w - 2), r.h);
+  return rect(r.x + 1, r.y, Math.max(1, r.w - (c === 'about' ? 2 : 1)), r.h);
 };
 
 const fieldOf = (o: BotForm, c: Control): Editable | null => (c === 'name' ? o.name : c === 'about' ? o.about : null);
@@ -106,9 +142,7 @@ function chose(o: BotForm, list: List, i: number): void {
 function listArea(screen: Rect, o: BotForm): Rect | null {
   const open = opened(o);
   if (!open) return null;
-  const field = controlRect(screen, open);
-  const wide = open === 'access' ? { ...field, w: Math.max(0, inner(screen.w, screen.h).w - LABEL - 1) } : field;
-  return comboList(wide, o[open], screen);
+  return comboList(controlRect(screen, open), o[open], screen);
 }
 
 export function botFormBounds(cols: number, rows: number, o: BotForm): Rect {
@@ -207,13 +241,14 @@ function drawField(p: Painter, r: Rect, t: Rect, f: Editable, focused: boolean, 
   if (focused && !isEmpty(t)) p.cursor = { shape: 'block', x: t.x + Math.min(col, t.w - 1), y: t.y + Math.min(line - start, t.h - 1) };
 }
 
-function drawNotes(p: Painter, screen: Rect, o: BotForm): void {
-  const notes = BOT_AGENTS[o.agent.chosen ?? 0].reads === 'folder' ? [FOLDER_NOTE, NOTES[1]] : NOTES;
-  const r = inner(screen.w, screen.h);
-  notes.forEach((text, i) => {
-    const y = r.y + ROWS.access + 1 + i;
-    p.span(r.x + LABEL + 1, y, truncateRight(text, Math.max(0, r.w - LABEL - 1)), i ? { fg: 1 } : MUTED, Math.max(0, r.w - LABEL - 1));
-  });
+function drawNote(p: Painter, screen: Rect, o: BotForm): void {
+  const row = slotRow(screen, 'note');
+  const x = row.x + LABEL + 1;
+  const w = Math.max(0, row.w - LABEL - 1);
+  const chosen = o.access.chosen === null ? null : ACCESS_LABELS[o.access.chosen][0];
+  const folder = BOT_AGENTS[o.agent.chosen ?? 0].reads === 'folder';
+  const text = chosen === null ? NO_ACCESS_NOTE : chosen === 'cornercase' && folder ? FOLDER_NOTE : NOTES[chosen];
+  p.span(x, row.y, truncateRight(text, w), chosen === 'full' ? { fg: 1 } : MUTED, w);
 }
 
 function drawControls(p: Painter, o: BotForm, screen: Rect, open: List | null): void {
@@ -221,7 +256,7 @@ function drawControls(p: Painter, o: BotForm, screen: Rect, open: List | null): 
   for (const c of CONTROLS) {
     const r = controlRect(screen, c);
     const field = fieldOf(o, c);
-    if (field) drawField(p, r, textRect(screen, c), field, !open && o.focus === c, c === 'name' ? '' : 'optional: what the bot is for');
+    if (field) drawField(p, r, textRect(screen, c), field, !open && o.focus === c, c === 'name' ? '' : NEW_ABOUT);
     else if (isList(c)) drawComboField(p, r, o[c], c === 'access' ? 'choose its access' : '', o.focus === c);
     p.region({
       r,
@@ -249,13 +284,17 @@ export function drawBotForm(p: Painter, o: BotForm): void {
   p.g.box(area, MUTED, 'New bot', { add: BOLD, fg: -1 });
   p.region({ r: area, click: () => { closeLists(o); app.dirty(); }, wheel: scroll });
   const r = inner(screen.w, screen.h);
-  for (const [c, label] of [['name', 'Name'], ['agent', 'Agent'], ['model', 'Model'], ['access', 'Access'], ['about', 'For']] as const) p.span(r.x, r.y + ROWS[c], label, MUTED, LABEL);
+  for (const [c, label] of [['name', 'Name'], ['about', 'For'], ['agent', 'Agent'], ['model', 'Model'], ['access', 'Access']] as const) {
+    const lit = o.focus === c && (!open || open === c);
+    p.span(r.x, slotRow(screen, c).y, label, lit ? { fg: 6, add: BOLD } : MUTED, LABEL);
+  }
   drawControls(p, o, screen, open);
-  drawNotes(p, screen, o);
+  drawNote(p, screen, o);
   const buttons = bottom(r) - 1;
   if (o.error) {
-    const y = buttons - 2;
-    wrapText(o.error, r.w).slice(0, buttons - y).forEach((t, i) => p.span(r.x, y + i, t, { fg: 1 }, r.w));
+    const w = Math.max(1, right(r) - buttonWidth('cancel') - 1 - buttonWidth('create') - r.x - 2);
+    const lines = wrapText(o.error, w).slice(-2);
+    lines.forEach((t, i) => p.span(r.x, buttons - (lines.length - 1 - i), t, { fg: 1 }, w));
   }
   p.dialogButtons(rect(r.x, buttons, r.w, isEmpty(r) ? 0 : 1), 'create', () => submitBotForm(app, o), () => app.closeOverlay());
   const list = listArea(screen, o);

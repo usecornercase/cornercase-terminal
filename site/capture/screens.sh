@@ -1,5 +1,5 @@
 #!/bin/sh
-CC_SCREENS="first-run tour sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents close-agent close-agents agents-closed agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu open-in group-style rename-menu rename-form remove-workspace worktrees worktrees-confirm worktrees-free pull-requests pull-request-checks pull-request-stack issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-names issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every changes-discard changes-stage files files-file files-full files-find files-search files-names files-link todo todo-add recap settings-worktrees settings-agents settings-flows settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui settings-share settings-import context usage usage-stats usage-accounts settings-accounts account-pills tab-account keys-menu processes remote-reconnecting queue queue-form queue-routine bots bot-routines flow-run flow-messages flow-agents flows-list flows-personas flows-deleted flows-import flows-edit flow-start settings-machines machine-menu machines-sidebar machines-agents machines-run-on machines-clone"
+CC_SCREENS="first-run tour sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents close-agent close-agents agents-closed agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu open-in group-style rename-menu rename-form remove-workspace worktrees worktrees-confirm worktrees-free pull-requests pull-request-checks pull-request-stack issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-names issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every changes-discard changes-stage files files-file files-full files-find files-search files-names files-link todo todo-add recap settings-worktrees settings-agents settings-flows settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui settings-share settings-import context usage usage-stats usage-accounts settings-accounts account-pills tab-account keys-menu processes remote-reconnecting queue queue-form queue-routine bots bots-lobby bot-form bot-routines flow-run flow-messages flow-agents flows-list flows-personas flows-deleted flows-import flows-edit flow-start settings-machines machine-menu machines-sidebar machines-agents machines-run-on machines-clone"
 
 pane_in() {
   cc status --json | node -e '
@@ -946,7 +946,7 @@ screen_machines_sidebar() {
   cc_click 'fix/login'
   cc_wait 'running cargo test' 30
   cc_hover 'Workspaces'
-  cc_wait '▌     Opus 5.5 · 31%           │'
+  cc_wait '▌ │   Opus 5.5 · 31%           │'
   cc_shot machines-sidebar
 }
 
@@ -1475,10 +1475,35 @@ screen_bots() {
   cc_session "$CC_CAPTURE/sessions/s1.json"
   seed_bots
   cc_start 140 38
-  cc_wait 'Bots'
-  cc_click 'prs'
+  cc_wait 'Bots ›'
+  cc_click 'Bots ›'
   cc_wait 'Message prs…'
   cc_shot bots
+}
+
+screen_bots_lobby() {
+  cc_config '{"sidebar":"projects_on_top","agent":"claude"}'
+  cc_session "$CC_CAPTURE/sessions/s1.json"
+  cc_start 140 38
+  cc_wait 'Bots ›'
+  cc_click 'Bots ›'
+  cc_wait 'Meet your bots'
+  cc_hover 'News'
+  cc_shot bots-lobby
+}
+
+screen_bot_form() {
+  cc_config '{"sidebar":"projects_on_top","agent":"claude"}'
+  cc_session "$CC_CAPTURE/sessions/s1.json"
+  seed_bots
+  cc_start 140 38
+  cc_wait 'Bots ›'
+  cc_click 'Bots ›'
+  cc_wait 'Message prs…'
+  cc_click '+ New'
+  cc_wait 'New bot'
+  cc_type 'releases'
+  cc_shot bot-form
 }
 
 screen_bot_routines() {
@@ -1486,8 +1511,8 @@ screen_bot_routines() {
   cc_session "$CC_CAPTURE/sessions/s1.json"
   seed_bots
   cc_start 140 38
-  cc_wait 'Bots'
-  cc_click 'prs'
+  cc_wait 'Bots ›'
+  cc_click 'Bots ›'
   cc_wait 'Message prs…'
   cc_click 'routines'
   cc_wait 'Routines › prs'

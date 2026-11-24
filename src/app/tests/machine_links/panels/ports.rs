@@ -3,11 +3,12 @@ use std::net::{Ipv4Addr, TcpListener};
 use super::*;
 use crate::app::machine_links::acting::Aim;
 use crate::app::menus::MenuAction;
+use crate::app::more_menu::MoreItem;
 use crate::app::overlay::Overlay;
 use crate::app::tunnels::Origin;
 use crate::control::ports::{Listing, PortInfo, PortStopped};
 use crate::control::{HoldEnd, HoldEnded, PaneInfo, TabInfo, TunnelList};
-use crate::ports::dialog::Action;
+use crate::ports::dialog::{Action, Scope};
 use crate::ports::stop::Target;
 use crate::test_util::{TempDir, fake_program};
 
@@ -151,6 +152,43 @@ mod a_machine_s_ports {
 
         assert!(panels.rig.app.overlay.is_none());
         assert_eq!(panels.rig.app.shown_remote().and_then(|shown| shown.tab), Some(TAB));
+    }
+
+    #[test]
+    fn every_port_asks_the_machine_for_all_and_names_each_place() {
+        let mut panels = Panels::with_tabs();
+        panels.ports_open(8765);
+
+        panels.rig.app.ports_act(Action::Scope(Scope::Every));
+        let mut stream = taken(&panels.ends);
+        assert_eq!(
+            asked(&mut stream),
+            json!({ "command": "ports", "boot": BOOT, "args": { "workspace": null, "all": true } })
+        );
+        let mut listing = listening(8765);
+        let outside = PortInfo { port: 5432, workspace: None, pane: None, via: None, ..listing.ports[0].clone() };
+        listing.ports.push(outside);
+        tell(&mut stream, &listing);
+        panels.rig.until("every port is listed", |app| matches!(&app.overlay, Some(Overlay::Ports(d)) if d.loaded));
+
+        let view = panels.ports();
+        assert_eq!(view.title, "Ports › vps");
+        let places: Vec<(&str, bool)> = view.rows.iter().map(|row| (row.place.as_str(), row.tick.is_some())).collect();
+        assert_eq!(places, [("web › web-shop · pane 31 · dev", true), ("no workspace", false)]);
+    }
+
+    #[test]
+    fn more_opens_them_for_the_machine_s_workspace_on_screen() {
+        let mut panels = Panels::with_tabs();
+        panels.pick(SHOP);
+
+        panels.rig.app.more_action(MoreItem::Ports, Position::default());
+
+        let Some(Overlay::Ports(dialog)) = &panels.rig.app.overlay else { panic!("the ports dialog is not open") };
+        assert_eq!(
+            (dialog.there.as_ref().map(|there| there.machine.as_str()), dialog.workspace),
+            (Some("vps"), Some(SHOP))
+        );
     }
 
     #[test]

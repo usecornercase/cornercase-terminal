@@ -178,7 +178,7 @@ impl Form {
     }
 
     pub(crate) fn fields(&self) -> Vec<Field> {
-        let mut fields = vec![Field::Name, Field::Agent, Field::Model];
+        let mut fields = vec![Field::Name, Field::About, Field::Agent, Field::Model];
         if self.takes_effort() {
             fields.push(Field::Effort);
         }
@@ -187,7 +187,6 @@ impl Form {
         }
         fields.extend([Field::Access, Field::Follow, Field::ChatApps]);
         fields.extend(self.editing.is_some().then_some(Field::Secrets));
-        fields.push(Field::About);
         fields
     }
 
@@ -351,6 +350,7 @@ impl Form {
             follow: Some(self.follow),
             chat_apps: self.chosen_chat_apps(),
             about: (about != self.loaded_about).then_some(about),
+            memory: None,
         })
     }
 }

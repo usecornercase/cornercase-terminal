@@ -6,21 +6,35 @@ import { inputKey } from '../src/lib/demo/client';
 import { type BotForm } from '../src/lib/demo/botform';
 import { EXAMPLES, draftOf } from '../src/lib/demo/bots';
 import { plain } from '../src/lib/demo/markdown';
-import { layout } from '../src/lib/demo/layout';
+import { Rows, layout } from '../src/lib/demo/layout';
+import { activePane, projectLabel } from '../src/lib/demo/model';
 import { world } from '../src/lib/demo/world';
 
 const key = (key: string, shift = false) => ({ key, metaKey: false, isComposing: false, ctrlKey: false, altKey: false, shiftKey: shift });
 
-function demo(columns: number): App {
+function panes(columns: number, rows = 38): App {
   const app = new App();
   app.virtual = true;
   app.scripted = true;
-  app.resize(columns, 38);
+  app.resize(columns, rows);
   world(app, { scripted: true });
-  app.bots.folded = false;
   if (columns < 90) app.navTo('projects');
   app.render();
   return app;
+}
+
+function demo(columns: number): App {
+  const app = panes(columns);
+  if (columns >= 90) app.bots.page = true;
+  app.render();
+  return app;
+}
+
+function newOnThePage(app: App): void {
+  const a = app.areas();
+  const add = new Rows(a.botsList, Array<number>(app.bots.list.length).fill(a.pitch), a.pitch, 0).buttonRect();
+  app.pointerDown(add.x + 2, add.y, 0);
+  app.pointerUp();
 }
 
 function press(app: App, label: string, index = 0): void {
@@ -47,9 +61,10 @@ function screen(app: App): string {
   return rows.join('\n');
 }
 
-test('the section lists both seeded bots with their agent and an unread mark', () => {
+test('the page lists both seeded bots with their agent and an unread mark', () => {
   const text = screen(demo(140));
-  assert.match(text, /▾ Bots/);
+  assert.match(text, /‹ Projects +Bots/);
+  assert.doesNotMatch(text, /Workspaces|web-shop/);
   assert.match(text, /prs +next /);
   assert.match(text, /●1 digest +codex/);
 });
@@ -58,7 +73,7 @@ test('a click on a bot shows its chat in place of the panes, with its card', () 
   const app = demo(140);
   press(app, 'digest');
   const text = screen(app);
-  assert.match(text, /digest {2}codex/);
+  assert.match(text, /digest {3}codex/);
   assert.match(text, /what merged yesterday\?/);
   assert.match(text, /Yesterday in web-shop:/);
   assert.match(text, /access +full access/);
@@ -111,9 +126,7 @@ test('a message sent while a turn runs is held, and answered after it', () => {
 
 test('the new bot form creates a bot and shows its empty chat with the four examples', () => {
   const app = demo(140);
-  const title = app.areas().botsTitle;
-  app.pointerDown(title.x + title.w - 2, title.y, 0);
-  app.pointerUp();
+  newOnThePage(app);
   assert.equal(app.overlay?.kind, 'bot');
   assert.match(screen(app), /New bot/);
   type(app, 'nightly');
@@ -122,7 +135,7 @@ test('the new bot form creates a bot and shows its empty chat with the four exam
   const text = screen(app);
   assert.match(text, /Message nightly…/);
   for (const example of EXAMPLES) assert.ok(text.includes(example), example);
-  assert.match(text, /▾ Bots/);
+  assert.match(text, /‹ Projects +Bots/);
 });
 
 test('a bot made with For filled in sets itself up in its chat', () => {
@@ -155,10 +168,26 @@ test('the form refuses a name in use and a missing name', () => {
   assert.equal(app.overlay?.kind, 'bot');
 });
 
+test('a long draft in a low chat stays inside the field', () => {
+  const app = panes(140, 9);
+  app.bots.page = true;
+  app.bots.show('prs');
+  const bot = app.bots.current();
+  assert.ok(bot);
+  bot.draft = draftOf('1\n2\n3\n4\n5\n6');
+  const { cursor } = app.render();
+  const lines = screen(app).split('\n');
+  const edge = lines.findLastIndex((line) => line.includes('▀▀▀▀'));
+  assert.ok(cursor && edge > 0, screen(app));
+  assert.ok(cursor.y < edge, `${cursor.y} ${edge}\n${screen(app)}`);
+});
+
 test('a not-yet agent is greyed and cannot be chosen', () => {
   const app = demo(140);
   app.openBotForm();
   inputKey(app, key('Tab'));
+  inputKey(app, key('Tab'));
+  assert.equal(app.overlay?.kind === 'bot' && app.overlay.focus, 'agent');
   for (const k of ['ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowDown', 'Enter']) inputKey(app, key(k));
   const o = app.overlay;
   assert.equal(o?.kind, 'bot');
@@ -169,6 +198,8 @@ test('opencode offers full access only, with its reason', () => {
   const app = demo(140);
   app.openBotForm();
   inputKey(app, key('Tab'));
+  inputKey(app, key('Tab'));
+  assert.equal(app.overlay?.kind === 'bot' && app.overlay.focus, 'agent');
   for (const k of ['ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowDown', 'Enter']) inputKey(app, key(k));
   const o = app.overlay;
   assert.equal(o?.kind, 'bot');
@@ -182,10 +213,25 @@ test('opencode offers full access only, with its reason', () => {
 test('gemini says it reads and writes only its folder, claude that it reads anything', () => {
   const app = demo(140);
   app.openBotForm();
-  assert.match(screen(app), /through cornercase: reads anything, writes only in its folder/);
+  assert.match(screen(app), /through cornercase +▾[^\n]*\n[^\n]* reads anything, writes only in its folder/);
   inputKey(app, key('Tab'));
+  inputKey(app, key('Tab'));
+  assert.equal(app.overlay?.kind === 'bot' && app.overlay.focus, 'agent');
   for (const k of ['ArrowDown', 'ArrowDown', 'ArrowDown', 'Enter']) inputKey(app, key(k));
-  assert.match(screen(app), /through cornercase: reads and writes only in its folder/);
+  assert.match(screen(app), / reads and writes only in its folder/);
+  assert.doesNotMatch(screen(app), /can change any file/);
+});
+
+test('the form lists what it is for right after the name, and full access warns', () => {
+  const app = demo(140);
+  app.openBotForm();
+  const text = screen(app);
+  assert.ok(text.indexOf('For ') < text.indexOf('Agent '), text);
+  const o = app.overlay;
+  if (o?.kind !== 'bot') return assert.fail('a bot form');
+  o.access.chosen = 1;
+  app.dirty();
+  assert.match(screen(app), /can change any file and run anything, unattended/);
 });
 
 test('an example fills the field and sends nothing', () => {
@@ -199,18 +245,24 @@ test('an example fills the field and sends nothing', () => {
   assert.equal(bot?.lines.length, 0);
 });
 
-test('a click on a project goes back to the panes', () => {
+test('‹ Projects goes back to the panes, and a click on a project then shows it', () => {
   const app = demo(140);
   press(app, 'prs');
-  press(app, 'blog');
+  press(app, '‹ Projects');
   assert.equal(app.bots.current(), null);
+  assert.equal(app.bots.page, false);
   assert.doesNotMatch(screen(app), /Message prs…/);
+  press(app, 'blog');
+  assert.equal(projectLabel(app.projects[app.active]), 'blog');
 });
 
-test('the keys menu opens the form with b, and More lists new bot…', () => {
+test('the keys menu opens the form with b n, and More lists new bot…', () => {
   const app = demo(140);
   app.config.prefix = 'ctrl+]';
-  app.openBotForm();
+  inputKey(app, { ...key(']'), ctrlKey: true });
+  inputKey(app, key('b'));
+  assert.match(screen(app), /bots page/);
+  inputKey(app, key('n'));
   assert.equal(app.overlay?.kind, 'bot');
   app.closeOverlay();
   press(app, 'More');
@@ -232,6 +284,40 @@ test('below 90 columns Bots › opens the list and a tap shows the chat full scr
   assert.match(text, /Bots › prs/);
   assert.match(text, /Message prs…/);
   assert.match(text, /\bsend\b/);
+});
+
+test('b ] and b [ in the keys menu step through the bots, and b m says the demo keeps no memory', () => {
+  const app = demo(140);
+  app.config.prefix = 'ctrl+]';
+  const keys = (last: string) => {
+    inputKey(app, { ...key(']'), ctrlKey: true });
+    inputKey(app, key('b'));
+    inputKey(app, key(last));
+    app.render();
+  };
+  keys('b');
+  const first = app.bots.shown;
+  assert.ok(first);
+  keys(']');
+  assert.notEqual(app.bots.shown, first);
+  keys('[');
+  assert.equal(app.bots.shown, first);
+  keys('m');
+  assert.match(screen(app), /keep no memory/);
+});
+
+test('PageUp and PageDown scroll the chat a page at a time', () => {
+  const app = demo(140);
+  press(app, 'prs');
+  const bot = app.bots.list[0];
+  for (let i = 0; i < 60; i++) app.bots.add(bot, Date.now(), 'notice', `line ${i}`);
+  app.render();
+  inputKey(app, key('PageUp'));
+  app.render();
+  assert.equal(bot.scroll, app.bots.chatRows - 1);
+  inputKey(app, key('PageDown'));
+  app.render();
+  assert.equal(bot.scroll, 0);
 });
 
 test('a run of more than three steps folds under +N steps, and a click unfolds it', () => {
@@ -262,14 +348,41 @@ test('scrolling up shows ↓ new when a line arrives, and a click goes back down
   assert.doesNotMatch(screen(app), /↓ new/);
 });
 
-test('at the landing’s 32 rows the stacked section still shows a bot to click', () => {
-  const app = new App();
-  app.virtual = true;
-  app.resize(120, 32);
-  world(app, { scripted: true });
-  app.bots.folded = false;
+test('the Bots button drops its marks before they cover the Projects title', () => {
+  const app = panes(140);
+  app.widths = { ...app.widths, projects: 22 };
+  app.bots.list[0].unread = 2;
+  app.bots.list[1].turn = { since: 0, steps: 0, stopping: false };
   app.render();
-  assert.ok(app.textAt('prs'), screen(app));
+  const a = app.areas();
+  assert.equal(a.botsButton.w, 8);
+  const row = screen(app).split('\n')[a.title.y].slice(0, a.title.w);
+  assert.equal(row, ' Projects     Bots › ');
+  app.widths = { ...app.widths, projects: 32 };
+  app.render();
+  assert.match(screen(app).split('\n')[app.areas().title.y], / Projects +\S ●3 Bots › /);
+});
+
+test('at the narrowest projects column the Bots button reads Bots beside the whole title', () => {
+  const app = panes(140);
+  app.widths = { ...app.widths, projects: 16 };
+  app.render();
+  const a = app.areas();
+  assert.deepEqual([a.botsButton.x, a.botsButton.w], [a.title.x + 9, 6]);
+  assert.equal(screen(app).split('\n')[a.title.y].slice(0, a.title.w), ' Projects Bots ');
+});
+
+test('in a narrow compact menu the Bots button never shares cells with Agents', () => {
+  for (const cols of [28, 24, 18]) {
+    const a = layout(cols, 30, { projects: 32, workspaces: 26 }, 'projects', false, 'side_by_side', true, false, { offered: true, marks: 5, page: false });
+    assert.ok(a.botsButton.x >= a.title.x && a.botsButton.x + a.botsButton.w <= a.agentsButton.x, String(cols));
+  }
+});
+
+test('at the landing’s 32 rows the Bots button opens a page with a bot to click', () => {
+  const app = panes(120, 32);
+  press(app, 'Bots ›');
+  assert.ok(app.textAt('digest'), screen(app));
 });
 
 test('a bot with a routine shows when it runs next, in its row and on its card', () => {
@@ -545,7 +658,7 @@ test('an answer that arrives while its chat is not shown toasts its first line w
   press(app, 'prs');
   type(app, 'and #501?');
   inputKey(app, key('Enter'));
-  press(app, 'blog');
+  press(app, '‹ Projects');
   app.advance(5000);
   assert.equal(app.toast?.text, 'prs: Two are blocked:');
 });
@@ -556,4 +669,109 @@ test('the plain text of Markdown leaves a code block as it is', () => {
     plain('Two are **blocked**:\n\n- #482 waits\n\n```sh\ngh run rerun\n```').split('\n').filter(Boolean),
     ['Two are blocked:', '#482 waits', 'gh run rerun'],
   );
+});
+
+test('the Bots button sits at the right of the Projects title with the unread count of every bot', () => {
+  const app = panes(140);
+  const a = app.areas();
+  assert.equal(a.botsButton.y, a.title.y);
+  assert.equal(a.botsButton.x + a.botsButton.w, a.title.x + a.title.w);
+  const row = screen(app).split('\n')[a.title.y];
+  assert.match(row, /Projects +●1 Bots › /);
+  app.bots.list[0].unread = 11;
+  assert.match(screen(app).split('\n')[a.title.y], /●9\+ Bots › /);
+});
+
+test('the Bots button opens the page on the first bot, and then on the bot read last', () => {
+  const app = panes(140);
+  press(app, 'Bots ›');
+  assert.equal(app.bots.page, true);
+  assert.equal(app.bots.current()?.id, 'prs');
+  const text = screen(app);
+  assert.match(text, /‹ Projects +Bots/);
+  assert.match(text, /Message prs…/);
+  press(app, 'digest');
+  press(app, '‹ Projects');
+  assert.equal(app.bots.page, false);
+  press(app, 'Bots ›');
+  assert.equal(app.bots.current()?.id, 'digest');
+});
+
+test('the page takes the place of the agents section', () => {
+  const app = panes(140);
+  app.config.agentsSection = true;
+  assert.ok(app.areas().agents.h > 0);
+  press(app, 'Bots ›');
+  assert.equal(app.areas().agents.h, 0);
+  assert.doesNotMatch(screen(app), /no agents running|Agents/);
+});
+
+test('with no bot the page says what a bot is, and an idea opens the form filled in', () => {
+  const app = panes(140, 44);
+  app.bots.list = [];
+  press(app, 'Bots ›');
+  assert.equal(app.bots.lobby(), 'empty');
+  const text = screen(app);
+  assert.match(text, /Meet your bots/);
+  assert.match(text, /\+ New bot/);
+  assert.match(text, /Start from an idea/);
+  press(app, 'Releases');
+  const form = app.overlay as BotForm;
+  assert.equal(form.kind, 'bot');
+  assert.equal(form.name.chars.join(''), 'Releases');
+  assert.match(form.about.chars.join(''), /^Every Monday, check the new releases/);
+  app.closeOverlay();
+  press(app, '+ New bot');
+  assert.equal((app.overlay as BotForm).name.chars.length, 0);
+});
+
+test('with bots and no chat chosen the page asks to pick one, and keys reach no pane', () => {
+  const app = demo(140);
+  assert.equal(app.bots.lobby(), 'pick');
+  const text = screen(app);
+  assert.match(text, /Your bots/);
+  assert.match(text, /Pick a bot in the list/);
+  assert.doesNotMatch(text, /Start from an idea/);
+  app.toggleTodo();
+  inputKey(app, key('Escape'));
+  assert.equal(app.todo.open, false);
+  assert.equal(app.bots.page, true);
+  inputKey(app, key('Escape'));
+  assert.equal(app.bots.page, true);
+  assert.equal(inputKey(app, key('q')), true);
+});
+
+test('the prefix pressed twice on the Bots page reaches no hidden pane', () => {
+  const app = demo(140);
+  app.config.prefix = 'ctrl+]';
+  const tab = app.tab();
+  const shell = tab && activePane(tab)?.shell;
+  assert.ok(shell);
+  const reached: string[] = [];
+  const key = shell.key.bind(shell);
+  shell.key = (k) => {
+    reached.push(k.key);
+    key(k);
+  };
+  for (let i = 0; i < 2; i++) app.key({ key: ']', ctrl: true, alt: false, shift: false });
+  assert.equal(app.overlay, null);
+  assert.deepEqual(reached, []);
+  app.pressBack();
+  for (let i = 0; i < 2; i++) app.key({ key: ']', ctrl: true, alt: false, shift: false });
+  assert.deepEqual(reached, [']']);
+});
+
+test('below 90 columns Bots › with no bot opens the lobby full screen with Bots as the breadcrumb', () => {
+  const app = demo(80);
+  app.bots.list = [];
+  press(app, 'Bots ›');
+  assert.equal(app.nav, null);
+  const text = screen(app);
+  assert.match(text, /Meet your bots/);
+  assert.match(text.split('\n')[1], /Bots/);
+  press(app, '≡');
+  assert.equal(app.nav, 'bots');
+  press(app, '‹ Projects');
+  assert.equal(app.nav, 'projects');
+  assert.equal(app.bots.page, false);
 });

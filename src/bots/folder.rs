@@ -50,8 +50,20 @@ fn load(folder: &Path) -> Option<Bot> {
     (folder.file_name()?.to_str()? == bot.id).then_some(bot)
 }
 
+pub(crate) fn write_memory(folder: &Path, memory: &str) -> io::Result<()> {
+    persist::write_bytes(&folder.join(MEMORY_FILE), memory.as_bytes(), Kind::Private).map(drop)
+}
+
 pub(crate) fn about(folder: &Path) -> io::Result<String> {
-    let opened = std::fs::OpenOptions::new().read(true).custom_flags(NONBLOCK).open(folder.join(ABOUT_FILE));
+    read_note(folder, ABOUT_FILE)
+}
+
+pub(crate) fn memory(folder: &Path) -> io::Result<String> {
+    read_note(folder, MEMORY_FILE)
+}
+
+fn read_note(folder: &Path, name: &str) -> io::Result<String> {
+    let opened = std::fs::OpenOptions::new().read(true).custom_flags(NONBLOCK).open(folder.join(name));
     let mut file = match opened {
         Ok(file) => file,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(String::new()),

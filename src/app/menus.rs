@@ -5,8 +5,8 @@ use super::App;
 use super::account_menu::AccountItem;
 use super::bots::BotItem;
 use super::help_menu::HelpItem;
-use super::machine_links::PaneAim;
 use super::machine_links::acting::Aim;
+use super::machine_links::{PaneAim, TabAim};
 use super::machines::MachineItem;
 use super::more_menu::MoreItem;
 use super::opening::Subject;
@@ -31,6 +31,14 @@ pub(super) const RENAME_WORKSPACE_HINT: &str = "leave it empty to use the branch
 
 pub(super) const RENAME_WORKSPACE_LABEL: &str = "rename workspace";
 
+pub(super) const RENAME_TAB: &str = "Rename tab";
+
+pub(super) const RENAME_TAB_HINT: &str = "leave it empty to use the program name";
+
+pub(super) const RENAME_TAB_LABEL: &str = "rename tab";
+
+pub(super) const CLOSE_TAB_LABEL: &str = "close tab";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Target {
     Group(u64),
@@ -45,7 +53,7 @@ impl Target {
             Self::Group(_) => "rename group",
             Self::Project(_) => "rename project",
             Self::Workspace(..) => RENAME_WORKSPACE_LABEL,
-            Self::Tab(..) => "rename tab",
+            Self::Tab(..) => RENAME_TAB_LABEL,
         }
     }
 
@@ -54,7 +62,7 @@ impl Target {
             Self::Group(_) => "Rename group",
             Self::Project(_) => "Rename project",
             Self::Workspace(..) => RENAME_WORKSPACE,
-            Self::Tab(..) => "Rename tab",
+            Self::Tab(..) => RENAME_TAB,
         }
     }
 
@@ -63,7 +71,7 @@ impl Target {
             Self::Group(_) => "leave it empty to keep the current name",
             Self::Project(_) => "leave it empty to use the folder name",
             Self::Workspace(..) => RENAME_WORKSPACE_HINT,
-            Self::Tab(..) => "leave it empty to use the program name",
+            Self::Tab(..) => RENAME_TAB_HINT,
         }
     }
 }
@@ -138,6 +146,8 @@ pub(super) enum MenuAction {
     Tour(u8),
     More(MoreItem),
     RemoteRename(Aim),
+    RemoteTabRename(TabAim),
+    RemoteTabClose(TabAim),
     RemotePorts(Aim),
     RemoteAgentFold(PaneAim),
     MachineNote(u64),
@@ -368,7 +378,7 @@ impl App {
             MenuAction::StartFlow(project) => self.open_start_flow(self.start_flow_in(project)),
             MenuAction::ProjectSettings(project) => self.open_project_settings(project),
             MenuAction::Worktrees(project) => self.open_worktrees(Some(project)),
-            MenuAction::Ports(workspace) => self.open_ports(workspace),
+            MenuAction::Ports(workspace) => self.open_ports(Some(workspace)),
             MenuAction::RunSetup(workspace) => self.run_setup(workspace, area),
             MenuAction::OpenIn(subject) => self.open_in_menu(subject, at),
             MenuAction::OpenWith(subject, opener) => self.open_with(subject, opener),

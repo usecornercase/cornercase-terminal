@@ -50,10 +50,18 @@ when you ask. An empty or missing bot.md prints nothing; one that cannot be read
 With --json it prints {\"bot\", \"about\"}. A program's edit form shows `about`, and sends it with `bot
 edit` only when the person changed it.";
 
+pub(in crate::cli) const BOT_MEMORY_HELP: &str =
+    "Prints what the bot keeps from one conversation to the next: the text of its memory.md. The bot
+writes it itself, so it is read when you ask; `bot edit --memory` and the window's memory dialog
+replace it, and the bot's conversation is told so at its next message. An empty or missing memory.md
+prints nothing; one that cannot be read is an error.
+
+With --json it prints {\"bot\", \"memory\"}.";
+
 pub(in crate::cli) const BOT_EDIT_HELP: &str =
     "Changes what the bot uses from its next message on; a running answer is not changed. An empty
 --model, --effort or --account goes back to the agent's own; --about writes bot.md (`bot about` prints
-it); --follow on|off sets whether the bot is told when an agent it started finishes; --chat-apps
+it); --memory replaces memory.md (`bot memory` prints it) and tells the bot's conversation; --follow on|off sets whether the bot is told when an agent it started finishes; --chat-apps
 away|always|off sets when its answers reach Telegram and Discord, at once. The agent cannot
 change, because another agent cannot continue the conversation: make another bot instead.";
 
@@ -88,7 +96,8 @@ pub(in crate::cli) const BOT_HELP: &str =
 message you write runs one turn of its agent (one `cornercase bot agents` lists as able to be a bot) in a conversation that continues,
 and the answer lands in the chat. It can see every project and act on them through `cornercase`.
 A bot made with --about sets itself up at once; after that it spends tokens when you write to it and when its
-routines run, and only while the server runs. The window lists bots in its Bots section and draws each one's chat.
+routines run, and only while the server runs. The window lists bots on its Bots page, which Bots › opens
+from the Projects title, and draws each one's chat.
 
 Events: `cornercase events` reports each chat line, the bot starting or finishing a turn, and a
 bot being created, edited or removed. `cornercase status --app` carries the list as `bots`.
@@ -111,8 +120,9 @@ when bot.md is empty. With --json it prints {\"bot\", \"line\"}.";
 pub(in crate::cli) const BOT_SECRET_HELP: &str =
     "A bot's secrets are named values, a password or a token, that cornercase keeps encrypted for that bot
 and that only that bot's own turn reads, with `cornercase bot secret get NAME`. A name takes 1 to 40
-characters of a-z, 0-9, - and _; a value 1 to 8,192 bytes; a bot keeps at most 20. A bot that lacks one
-asks the user for it with `cornercase bot secret ask NAME --about TEXT`.";
+characters of a-z, A-Z, 0-9, - and _, one secret however its letters are cased; a value 1 to 8,192
+bytes; a bot keeps at most 20. A bot that lacks one asks the user for it with `cornercase bot secret
+ask NAME --about TEXT`.";
 
 pub(in crate::cli) const BOT_SECRET_SET_HELP: &str =
     "The bot reads this value: it reaches the bot's agent and stays in that agent's own records on this computer.
