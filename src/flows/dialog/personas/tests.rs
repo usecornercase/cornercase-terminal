@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use super::*;
+use crate::flows::persona::source::Division;
 use crate::flows::{ORCHESTRATOR, Role};
 
 fn persona(id: &str, name: &str) -> Persona {
@@ -26,7 +27,7 @@ fn catalogue() -> Catalogue {
     let fetched = Fetched {
         label: "octo/agents".into(),
         web: true,
-        divisions: vec![Division { key: "eng".into(), label: "Engineering".into() }],
+        divisions: vec![Division { key: "eng".into(), label: "Engineering".into(), icon: None }],
         offered: vec![offered("A", "eng"), offered("B", "eng"), offered("C", "ops")],
         ..Fetched::default()
     };

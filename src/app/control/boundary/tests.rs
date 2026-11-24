@@ -102,6 +102,10 @@ fn typed(text: &str) -> Gated {
 #[case::check_a_flow(flow_save(true), None)]
 #[case::import_personas(persona_import(false), Some(Gated::Flows))]
 #[case::preview_a_persona_import(persona_import(true), None)]
+#[case::a_persona_catalogue(
+    Command::PersonaImport(crate::control::persona::PersonaImport { catalogue: true, ..Default::default() }),
+    None
+)]
 #[case::list_machines(Command::Machines(Machines::List), None)]
 #[case::retry_machines(Command::Machines(Machines::Retry(None)), None)]
 #[case::set_a_machine(Command::Machines(Machines::Set(MachineSet::default())), Some(Gated::Machines))]

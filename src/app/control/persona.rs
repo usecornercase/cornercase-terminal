@@ -8,6 +8,7 @@ use crate::control::persona::{
     BrokenPersona, CHECK, PersonaImport, PersonaInfo, PersonaRemove, PersonaRemoved, PersonaSave, PersonaSaved,
     PersonaShow, PersonaShown, PersonaText, Personas, PersonasImported,
 };
+use crate::flows::persona::catalogue::{Incoming, Offer, offers};
 use crate::flows::persona::{self, Listing, MAX_IMPORT, Persona};
 use crate::flows::share::visible;
 use crate::flows::store::same_name;
@@ -67,7 +68,7 @@ impl App {
         }
         let file = if id.is_empty() { String::new() } else { format!("{id}.{}", persona::EXTENSION) };
         let text = PersonaText { file, text: save.text.clone(), source: None };
-        let import = PersonaImport { personas: vec![text], replace: save.replace, check: false };
+        let import = PersonaImport { personas: vec![text], replace: save.replace, ..PersonaImport::default() };
         let answer = self.import_personas(&import)?;
         answer.personas.into_iter().next().ok_or_else(|| malformed("nothing to save"))
     }
@@ -86,6 +87,14 @@ impl App {
         }
         if import.personas.len() > MAX_IMPORT {
             return Err(malformed(format!("one import takes at most {MAX_IMPORT} personas")));
+        }
+        if import.catalogue {
+            let incoming: Vec<Incoming> = import
+                .personas
+                .iter()
+                .map(|text| Incoming { file: &text.file, text: &text.text, source: text.source.as_deref() })
+                .collect();
+            return Ok(self.persona_catalogue(&incoming));
         }
         let dir = self.personas_dir();
         let incoming = incoming(&import.personas)?;
@@ -111,6 +120,13 @@ impl App {
         Ok(answer)
     }
 
+    pub(in crate::app) fn persona_catalogue(&self, incoming: &[Incoming<'_>]) -> PersonasImported {
+        let dir = self.personas_dir();
+        let offered = offers(incoming, (&persona::list(&dir), &dir));
+        let personas = offered.into_iter().zip(incoming).map(|(offer, one)| catalogued(offer, one)).collect();
+        PersonasImported { personas, check: CHECK.to_string(), saved: false }
+    }
+
     pub(super) fn persona_remove_request(&mut self, remove: &PersonaRemove) -> Handled {
         let dir = self.personas_dir();
         let id = remove.id.trim();
@@ -120,6 +136,12 @@ impl App {
         self.refresh_flows();
         Ok(Some(json(&PersonaRemoved { id: id.to_string(), name, path })))
     }
+}
+
+fn catalogued(offer: Offer, incoming: &Incoming<'_>) -> PersonaInfo {
+    let unread = || PersonaInfo { bytes: incoming.text.len(), ..PersonaInfo::default() };
+    let info = offer.persona.as_ref().map_or_else(unread, PersonaInfo::from);
+    PersonaInfo { replaced: offer.replaced, file: Some(incoming.file.to_string()), problem: offer.problem, ..info }
 }
 
 fn seen(mut e: Refusal) -> Refusal {

@@ -6,6 +6,7 @@ use crate::error::{Error, Result};
 use crate::issues::slug;
 use crate::persist;
 
+pub(crate) mod catalogue;
 pub(crate) mod draft;
 pub(crate) mod source;
 

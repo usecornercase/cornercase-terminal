@@ -377,3 +377,51 @@ mod saving {
         assert_eq!((reviewer.persona_name.as_str(), reviewer.persona_emoji.as_str()), ("Code Reviewer", "👁️"));
     }
 }
+
+mod a_catalogue {
+    use super::*;
+
+    #[test]
+    fn answers_one_problem_per_persona_and_saves_nothing() {
+        let mut library = Library::new();
+        library.imported(vec![text("mine.md", REVIEWER)], |_| {});
+        let tester = "---\nname: Tester\n---\nTest.\n";
+
+        let answer = library.imported(
+            vec![text("reviewer.md", REVIEWER), text("tester.md", tester), text("mine.md", REVIEWER)],
+            |import| import.catalogue = true,
+        );
+
+        assert!(!answer.saved);
+        let rows: Vec<(&str, Option<&str>, Option<&str>, bool)> = answer
+            .personas
+            .iter()
+            .map(|p| (p.id.as_str(), p.file.as_deref(), p.problem.as_deref(), p.replaced))
+            .collect();
+        assert_eq!(
+            rows,
+            [
+                (
+                    "reviewer",
+                    Some("reviewer.md"),
+                    Some("another persona in the source is also named `Code Reviewer`"),
+                    false
+                ),
+                ("tester", Some("tester.md"), None, false),
+                ("mine", Some("mine.md"), Some("another persona in the source is also named `Code Reviewer`"), true),
+            ]
+        );
+        assert!(!library.dir().join("tester.md").exists());
+    }
+
+    #[test]
+    fn names_a_persona_whose_name_another_of_yours_has() {
+        let mut library = Library::new();
+        library.imported(vec![text("mine.md", REVIEWER)], |_| {});
+
+        let answer = library.imported(vec![text("reviewer.md", REVIEWER)], |import| import.catalogue = true);
+
+        assert_eq!(answer.personas[0].problem.as_deref(), Some("your persona `mine` is also named `Code Reviewer`"));
+        assert_eq!(answer.check, crate::control::persona::CHECK);
+    }
+}

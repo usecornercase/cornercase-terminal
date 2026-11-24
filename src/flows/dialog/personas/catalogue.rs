@@ -2,15 +2,10 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use super::PageAction;
 use crate::flows::dialog::{CANCEL, IMPORT, Room, RowText};
+use crate::flows::persona::source::Division;
 
 pub(crate) const IMPORT_SELECTED: &str = "import selected";
 const NO_DIVISION: &str = "personas";
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct Division {
-    pub(crate) key: String,
-    pub(crate) label: String,
-}
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct Offered {

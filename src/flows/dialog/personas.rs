@@ -18,7 +18,7 @@ const EMPTY: &str = "no personas yet: new writes one of yours, import brings the
 pub(crate) mod catalogue;
 mod form;
 
-pub(crate) use catalogue::{Catalogue, Division, Fetched, Offered};
+pub(crate) use catalogue::{Catalogue, Fetched, Offered};
 pub(crate) use form::Form;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
