@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -243,44 +241,27 @@ pub(crate) fn describe(boot: &str, unavailable: &[(&str, &str)]) -> Descriptor {
     }
 }
 
-const ITEM: &str = "#";
-
 pub(crate) fn unknown_fields(raw: &Value, parsed: &impl Serialize) -> Option<String> {
-    let known = serde_json::to_value(parsed).ok()?;
-    stray(&without_skipped_false(raw), &known, ["", ""])
+    let known = every_field::every_field(parsed).ok()?;
+    stray(raw, &known)
 }
 
-fn without_skipped_false(raw: &Value) -> Cow<'_, Value> {
-    let skipped = raw["command"] == "persona-import" && raw["args"]["catalogue"] == Value::Bool(false);
-    if !skipped {
-        return Cow::Borrowed(raw);
-    }
-    let mut kept = raw.clone();
-    if let Some(args) = kept["args"].as_object_mut() {
-        args.remove("catalogue");
-    }
-    Cow::Owned(kept)
-}
-
-fn skipped_when_null(key: &str, up: [&str; 2]) -> bool {
-    matches!((key, up), ("persona", ["orchestrator", _] | [ITEM, "roles"]) | ("source", [ITEM, "personas"]))
-}
-
-fn stray<'a>(raw: &'a Value, known: &Value, up: [&'a str; 2]) -> Option<String> {
+fn stray(raw: &Value, known: &Value) -> Option<String> {
     match (raw, known) {
         (Value::Object(raw), Value::Object(known)) => raw.iter().find_map(|(key, value)| match known.get(key) {
-            None if value.is_null() && skipped_when_null(key, up) => None,
             None => Some(key.clone()),
-            Some(inner) => stray(value, inner, [key, up[0]]).map(|path| format!("{key}.{path}")),
+            Some(inner) => stray(value, inner).map(|path| format!("{key}.{path}")),
         }),
-        (Value::Array(raw), Value::Array(known)) => {
-            raw.iter().zip(known).enumerate().find_map(|(index, (value, inner))| {
-                stray(value, inner, [ITEM, up[0]]).map(|path| format!("{index}.{path}"))
-            })
-        }
+        (Value::Array(raw), Value::Array(known)) => raw
+            .iter()
+            .zip(known)
+            .enumerate()
+            .find_map(|(index, (value, inner))| stray(value, inner).map(|path| format!("{index}.{path}"))),
         _ => None,
     }
 }
+
+mod every_field;
 
 #[cfg(test)]
 mod tests;

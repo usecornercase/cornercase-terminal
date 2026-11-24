@@ -12,8 +12,6 @@ const OPT_IN: [&str; 2] = ["contract", "boot"];
 
 const NULLABLE: [&str; 5] = ["contract", "boot", "view", "bot", "bot_run"];
 
-const ON_A_MACHINE: [&str; 6] = ["start", "start-with", "new-workspace", "flow-run", "stats", "usage"];
-
 pub(super) struct Parsed {
     pub(super) structured: bool,
     pub(super) request: Result<Request, Refusal>,
@@ -36,37 +34,11 @@ pub(super) fn parse(text: &str, unavailable: &[(&str, &str)]) -> Parsed {
 }
 
 fn without_null_opt_in(value: &Value) -> Value {
-    let command = control::command_name(value).unwrap_or_default();
     let mut value = value.clone();
     if let Value::Object(map) = &mut value {
         map.retain(|key, inner| !(inner.is_null() && NULLABLE.contains(&key.as_str())));
-        if let Some(Value::Object(args)) = map.get_mut("args") {
-            args.retain(|key, inner| !left_out(command, key, inner));
-        }
     }
     value
-}
-
-fn left_out(command: &str, key: &str, value: &Value) -> bool {
-    match key {
-        "machine" => value.is_null() && ON_A_MACHINE.contains(&command),
-        "files" => command == "clone" && value.as_array().is_some_and(Vec::is_empty),
-        "placed" => value == &Value::Bool(false) && matches!(command, "start" | "start-with"),
-        "into" => value.is_null() && command == "open",
-        "cached" => value == &Value::Bool(false) && command == "stats",
-        "fresh" => value.is_null() && matches!(command, "start" | "start-with" | "new-workspace" | "flow-run"),
-        "bot" => value.is_null() && matches!(command, "view" | "view-set"),
-        "machine_boot" => {
-            value.is_null()
-                && matches!(command, "start" | "start-with" | "new-workspace" | "flow-run" | "focus-machine")
-        }
-        "close_when_merged" => value == &Value::Bool(false) && command == "flow-run",
-        "free_builds" => value == &Value::Bool(false) && matches!(command, "flow-run" | "flow-close-when-merged"),
-        "direction" => {
-            value.is_null() && matches!(command, "tunnel-open" | "tunnel-close" | "tunnel-forget" | "tunnel-hold")
-        }
-        _ => false,
-    }
 }
 
 pub(super) fn read(value: Value, structured: bool, unavailable: &[(&str, &str)]) -> Result<Request, Refusal> {
