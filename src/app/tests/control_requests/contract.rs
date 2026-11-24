@@ -245,6 +245,12 @@ mod opting_in {
     #[case::not_freeing_builds_when_merged(
         r#"{"contract":1,"command":"flow-close-when-merged","args":{"workspace":9999,"off":false,"free_builds":false}}"#
     )]
+    #[case::no_item_for_a_plugin(
+        r#"{"contract":1,"command":"plugin-run","args":{"plugin":"a","action":"b","revision":1,"item":null}}"#
+    )]
+    #[case::no_flow_it_was_synced_from(
+        r#"{"contract":1,"command":"flow-import","args":{"text":"x","place":"yours","check":true,"synced_from":null}}"#
+    )]
     fn an_argument_left_out_by_its_empty_value_is_not_an_unknown_field(#[case] text: &str) {
         let (mut app, _rx) = app();
 

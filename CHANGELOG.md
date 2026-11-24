@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.13.119
+
+- **For programs**: a structured request (one with `contract` or `boot`) that writes out an optional field as `false` or `null`, such as `flow-run`'s `close_when_merged` or `free_builds` or a `null` `machine` on `start`, is no longer refused with `unknown-field`: every field a request knows is accepted, whatever its value, the same as leaving it out. A key the request does not know is still refused, with its path.
+
 ## 0.13.118
 
 - **Pick the personas to import from the command line.** `persona import SOURCE --catalogue` lists every persona of a repository, a folder or a file by division, each with why it cannot be imported when it cannot (not a persona, an id or a name that appears twice, or a name one of yours already has), and saves nothing; unlike `--check`, one such persona no longer fails the whole list. `--only ID`, repeated, imports just those ids.

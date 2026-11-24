@@ -377,7 +377,7 @@ mod finding_unknown_fields {
     }
 
     #[test]
-    fn an_explicit_false_is_allowed_only_for_a_persona_import_catalogue() {
+    fn an_explicit_false_on_a_key_the_request_does_not_know_is_named() {
         let elsewhere = json!({"command": "persona-list", "args": {"catalogue": false}});
         let on_another_import = json!({"command": "flow-import", "args": {"text": "x", "catalogue": false}});
         let other_false = json!({"command": "persona-import", "args": {"personas": [], "listed": false}});
@@ -441,5 +441,134 @@ mod finding_unknown_fields {
         let parsed: Request = serde_json::from_value(json!({"command": "status", "args": {}})).expect("a request");
 
         assert_eq!(unknown_fields(&json!("status"), &parsed), None);
+    }
+}
+
+mod an_explicit_empty_value {
+    use super::*;
+
+    const EMPTY: [Value; 4] = [Value::Bool(false), Value::Null, Value::String(String::new()), Value::Array(Vec::new())];
+
+    fn args_of(name: &str) -> Value {
+        match name {
+            "close" | "focus" | "collapse" | "expand" => json!({"item": {"pane": 1}}),
+            "move" => json!({"item": {"pane": 1}, "before": 2}),
+            "todo" => json!("list"),
+            "queue" | "machines" | "bot" => json!({"action": "list"}),
+            "config" => json!({"action": "get"}),
+            "held" => json!({"action": "send-now", "pane": 1}),
+            "plugin-run" => json!({"plugin": "a", "action": "b", "revision": 1}),
+            "close-agent" => json!({"pane": 1}),
+            "focus-machine" => json!({"machine": "vps", "item": {"pane": 1}}),
+            "forum-server" => json!({"id": "1"}),
+            "agent-models" => json!({"agent": "claude"}),
+            "flow-save" => json!({"flow": {"roles": [{"name": "dev"}]}}),
+            "persona-import" => json!({"personas": [{"id": "a"}]}),
+            _ => json!({}),
+        }
+    }
+
+    fn request(name: &str) -> Request {
+        let raw = json!({"contract": 1, "command": name, "args": args_of(name)});
+        serde_json::from_value(raw).unwrap_or_else(|e| panic!("`{name}` reads its fixture: {e}"))
+    }
+
+    fn skipped(known: &Value, written: &Value, at: &str, found: &mut Vec<(String, String)>) {
+        match (known, written) {
+            (Value::Object(known), Value::Object(written)) => {
+                known.iter().for_each(|(key, inner)| match written.get(key) {
+                    None => found.push((at.to_string(), key.clone())),
+                    Some(value) => skipped(inner, value, &format!("{at}/{key}"), found),
+                });
+            }
+            (Value::Array(known), Value::Array(written)) => known
+                .iter()
+                .zip(written)
+                .enumerate()
+                .for_each(|(index, (inner, value))| skipped(inner, value, &format!("{at}/{index}"), found)),
+            _ => {}
+        }
+    }
+
+    fn skipped_fields(parsed: &Request) -> (Value, Vec<(String, String)>) {
+        let written = serde_json::to_value(parsed).expect("a request serializes");
+        let known = every_field::every_field(parsed).expect("a request serializes with every field");
+        let mut found = Vec::new();
+        skipped(&known, &written, "", &mut found);
+        (written, found)
+    }
+
+    fn with(mut raw: Value, at: &str, key: &str, value: Value) -> Value {
+        raw.pointer_mut(at).and_then(Value::as_object_mut).expect("an object").insert(key.into(), value);
+        raw
+    }
+
+    fn written_empty(raw: &Value, at: &str, key: &str) -> Option<(Value, Request)> {
+        EMPTY.iter().find_map(|empty| {
+            let sent = with(raw.clone(), at, key, empty.clone());
+            let parsed = serde_json::from_value(sent.clone()).ok()?;
+            Some((sent, parsed))
+        })
+    }
+
+    fn every_skipped_field() -> Vec<(&'static str, String, String)> {
+        Command::NAMES
+            .iter()
+            .flat_map(|name| skipped_fields(&request(name)).1.into_iter().map(|(at, key)| (*name, at, key)))
+            .collect()
+    }
+
+    #[test]
+    fn of_every_skipped_field_of_every_request_is_not_unknown() {
+        for (name, at, key) in every_skipped_field() {
+            let (raw, _) = skipped_fields(&request(name));
+            let (sent, parsed) = written_empty(&raw, &at, &key).unwrap_or_else(|| panic!("`{name}` {at}/{key}"));
+
+            assert_eq!(unknown_fields(&sent, &parsed), None, "{name} {at}/{key}");
+        }
+    }
+
+    #[test]
+    fn of_every_skipped_field_at_once_is_not_unknown() {
+        for name in Command::NAMES {
+            let (raw, found) = skipped_fields(&request(name));
+            let sent =
+                found.iter().fold(raw, |raw, (at, key)| written_empty(&raw, at, key).map_or(raw, |(sent, _)| sent));
+            let parsed: Request = serde_json::from_value(sent.clone()).expect("a request");
+
+            assert_eq!(unknown_fields(&sent, &parsed), None, "{sent}");
+        }
+    }
+
+    #[rstest::rstest]
+    #[case::close_when_merged("flow-run", "/args", "close_when_merged")]
+    #[case::free_builds("flow-close-when-merged", "/args", "free_builds")]
+    #[case::catalogue("persona-import", "/args", "catalogue")]
+    #[case::source("persona-import", "/args/personas/0", "source")]
+    #[case::role_persona("flow-save", "/args/flow/roles/0", "persona")]
+    #[case::orchestrator_persona("flow-save", "/args/flow/orchestrator", "persona")]
+    #[case::machine("start", "/args", "machine")]
+    #[case::cached("stats", "/args", "cached")]
+    #[case::item("plugin-run", "/args", "item")]
+    #[case::machine_boot("focus-machine", "/args", "machine_boot")]
+    fn reaches_the_fields_strict_clients_write(#[case] name: &str, #[case] at: &str, #[case] key: &str) {
+        let found = every_skipped_field();
+
+        assert!(found.iter().any(|field| field == &(name, at.to_string(), key.to_string())), "{found:?}");
+    }
+
+    #[rstest::rstest]
+    #[case::beside_the_command("", "extra")]
+    #[case::in_the_arguments("/args", "args.bogus")]
+    #[case::on_a_role("/args/flow/roles/0", "args.flow.roles.0.bogus")]
+    fn on_a_key_the_request_does_not_know_is_still_named(#[case] at: &str, #[case] path: &str) {
+        let key = path.rsplit('.').next().expect("a key");
+        for empty in EMPTY {
+            let (raw, _) = skipped_fields(&request("flow-save"));
+            let sent = with(raw, at, key, empty);
+            let parsed: Request = serde_json::from_value(sent.clone()).expect("a request");
+
+            assert_eq!(unknown_fields(&sent, &parsed).as_deref(), Some(path));
+        }
     }
 }
