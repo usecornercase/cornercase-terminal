@@ -542,6 +542,7 @@ mod the_row {
 }
 
 mod auto;
+mod bar;
 mod checks;
 mod dialogs;
 mod following;

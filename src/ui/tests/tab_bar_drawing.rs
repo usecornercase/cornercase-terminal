@@ -28,7 +28,7 @@ fn with_bar() -> View<'static> {
             machine: None,
         }],
         active_tab: Some(0),
-        tab_bar: Some(tab_bar::TabBar { tabs, active: Some(0), details, scroll: 0 }),
+        tab_bar: Some(tab_bar::TabBar { tabs, active: Some(0), details, scroll: 0, machine: None }),
         ..view(&["cornercase"])
     }
 }
@@ -87,7 +87,7 @@ fn a_split_tab_shows_how_many_other_panes_it_has() {
 fn a_landing_scrolled_out_of_the_bar_draws_nothing() {
     let tabs: Vec<TabEntry> = (0..12).map(|i| TabEntry::from(format!("tab {i}"))).collect();
     let mut v = with_bar();
-    v.tab_bar = Some(tab_bar::TabBar { tabs, active: Some(11), details: Details::default(), scroll: 6 });
+    v.tab_bar = Some(tab_bar::TabBar { tabs, active: Some(11), details: Details::default(), scroll: 6, machine: None });
     v.drag = Some(Drag::Bar(11, Some(0)));
     let t = render(&v);
     assert_ne!(t.backend().buffer()[(0, 0)].symbol(), "│");
@@ -108,4 +108,54 @@ fn the_details_row_names_the_account() {
     let r = bar();
     assert_eq!(row_text(&t, Rect { y: r.y + 1, height: 1, ..r }).trim(), "Opus 5.5 · work · 15%");
     insta::assert_snapshot!(t.backend());
+}
+
+fn on_a_machine(dim: bool, seen: Option<&str>) -> View<'static> {
+    let mut v = with_bar();
+    let tag = MachineTag { icon: "☁".into(), name: "vps".into(), dim, seen: seen.map(Into::into) };
+    v.tab_bar.as_mut().expect("a bar").machine = Some(tag);
+    v
+}
+
+#[test]
+fn a_closing_tab_reads_closing_and_has_no_buttons() {
+    let mut v = with_bar();
+    let shown = v.tab_bar.as_mut().expect("a bar");
+    shown.tabs[0].closing = true;
+    shown.tabs[0].others = 2;
+    let item = v.tab_bar.as_ref().expect("a bar").strip(bar()).item(0);
+    let hovered = View { hover: Some(item.as_position()), ..v };
+    let t = render(&hovered);
+    let text = row_text(&t, item);
+    assert!(text.trim_end().ends_with("closing…"), "{text:?}");
+    assert!(!text.contains("+2") && !text.contains('×') && !text.contains(ROW_MENU_ICON), "{text:?}");
+    let name = &t.backend().buffer()[(item.x + 3, item.y)];
+    assert_eq!((name.symbol(), name.fg), ("c", Color::DarkGray));
+    assert!(!name.modifier.contains(Modifier::BOLD));
+}
+
+#[rstest]
+#[case::not_linked(true)]
+#[case::linked(false)]
+fn a_machine_that_is_not_linked_dims_the_bar(#[case] dim: bool) {
+    let v = on_a_machine(dim, None);
+    let strip = v.tab_bar.as_ref().expect("a bar").strip(bar());
+    let t = render(&v);
+    let dimmed = |r: Rect| t.backend().buffer()[(r.x + 1, r.y)].modifier.contains(Modifier::DIM);
+    assert_eq!((dimmed(strip.item(1)), dimmed(strip.new_button())), (dim, dim));
+}
+
+#[test]
+fn a_machine_that_is_not_linked_says_when_its_agent_was_seen() {
+    let t = render(&on_a_machine(true, Some("2 min")));
+    let r = bar();
+    assert_eq!(row_text(&t, Rect { y: r.y + 1, height: 1, ..r }).trim(), "working · seen 2 min ago");
+}
+
+#[test]
+fn a_machine_s_project_alone_has_its_bar() {
+    let v = View { has_project: false, remote_project: true, ..on_a_machine(false, None) };
+    let t = render(&v);
+    let text = row_text(&t, bar());
+    assert!(text.contains("claude") && text.contains("zsh"), "{text:?}");
 }

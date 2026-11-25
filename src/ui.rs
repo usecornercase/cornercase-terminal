@@ -419,7 +419,9 @@ impl View<'_> {
 }
 
 fn draw_main(f: &mut Frame, view: &View, areas: &Areas) {
-    if let Some(bar) = view.tab_bar.as_ref().filter(|_| view.has_project && !areas.tab_bar.is_empty()) {
+    if let Some(bar) =
+        view.tab_bar.as_ref().filter(|_| (view.has_project || view.remote_project) && !areas.tab_bar.is_empty())
+    {
         tab_bar::draw(f, view, bar, areas.tab_bar);
     }
     draw_tab_or_empty(f, view, areas);

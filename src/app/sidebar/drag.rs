@@ -101,7 +101,8 @@ impl App {
         if let ui::TreeRow::Tab(p, w, t) = row
             && !areas.tab_bar.is_empty()
         {
-            let shown = p == self.active && self.project().is_some_and(|project| project.active == w);
+            let shown =
+                p == self.active && self.project().is_some_and(|project| project.active == w) && !self.showing_remote();
             return shown.then(|| ui::Drag::Bar(t, self.tab_strip(&areas).drop(t, pos)));
         }
         if areas.tree {

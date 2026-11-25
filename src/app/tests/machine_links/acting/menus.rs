@@ -5,7 +5,7 @@ use crate::state;
 use crate::ui::{SidebarRow, TreeRow, WorkspaceRow};
 
 #[derive(Clone, Copy)]
-enum Place {
+pub(super) enum Place {
     Column,
     Tree,
 }
@@ -28,7 +28,7 @@ fn with_worktree() -> Remote {
     seeing_in(Reply::Found(found), holding(BOOT, WorkspaceInfo { worktree: true, ..workspace() }))
 }
 
-fn opened(app: &App) -> Option<&'static str> {
+pub(super) fn opened(app: &App) -> Option<&'static str> {
     match &app.overlay {
         Some(Overlay::MachineWorkspace(dialog)) => Some(dialog.name()),
         _ => None,
@@ -40,7 +40,7 @@ fn shown(app: &App) -> Option<u64> {
 }
 
 impl Remote {
-    fn shown_in(mut self, place: Place) -> Self {
+    pub(super) fn shown_in(mut self, place: Place) -> Self {
         match place {
             Place::Column => {
                 self.rig.app.config.sidebar = config::Sidebar::SideBySide.id().into();

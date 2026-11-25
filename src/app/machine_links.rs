@@ -25,6 +25,7 @@ use crate::settings::Page;
 
 pub(super) mod acting;
 mod agents;
+mod bar;
 mod card;
 pub(super) mod checks;
 mod clicks;

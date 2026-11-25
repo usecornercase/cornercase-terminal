@@ -16,7 +16,7 @@ fn split_there() -> Streaming {
     split_listing(&[1, 2])
 }
 
-fn split_listing(panes: &[u64]) -> Streaming {
+pub(super) fn split_listing(panes: &[u64]) -> Streaming {
     let mut streaming = streaming();
     listing(&mut streaming, panes);
     say(&mut streaming.surface, &THERE.split(1, 1, "none"));
