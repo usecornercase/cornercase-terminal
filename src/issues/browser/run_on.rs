@@ -3,8 +3,11 @@ use ratatui::text::Span;
 
 use super::{Action, AgentNote, Browser, Choice, Screen, There};
 use crate::issues::Issue;
+use crate::machines::memory::AUTO;
 use crate::machines::run_on::{RunOn, Target};
 use crate::machines::{HERE, HERE_ICON};
+
+const AUTO_META: &str = "this computer or the machine with the project and the most free memory";
 
 impl Browser {
     pub(crate) fn machine(&self) -> Option<&Target> {
@@ -58,23 +61,34 @@ impl Browser {
             meta: run_on.blocked.map(str::to_string).or_else(|| target.why.clone()).unwrap_or_default(),
             who: None,
         });
-        std::iter::once(here).chain(machines).collect()
+        let auto = Choice { key: AUTO.into(), title: "○".into(), meta: AUTO_META.into(), who: None };
+        std::iter::once(here).chain(machines).chain(std::iter::once(auto)).collect()
     }
 
     pub(super) fn choose_machine(&mut self, key: &str) -> Action {
         let Some(run_on) = &mut self.run_on else { return Action::None };
+        if key == AUTO {
+            if run_on.want_auto() {
+                self.picker = None;
+            }
+            return Action::None;
+        }
         let at = run_on.targets.iter().position(|target| target.name == key);
         let moved = !run_on.is_chosen(at);
         if (at.is_none() && key != HERE) || !run_on.choose(at) {
             return Action::None;
         }
+        self.machine_moved(moved);
+        Action::RunOn(at)
+    }
+
+    pub(crate) fn machine_moved(&mut self, moved: bool) {
         if let Some(accounts) = self.accounts.as_mut().filter(|_| moved) {
             accounts.chosen = None;
         }
         self.picker = None;
         self.there = None;
         self.error = None;
-        Action::RunOn(at)
     }
 
     pub(super) fn start_hint_there(&self, issue: &Issue) -> String {

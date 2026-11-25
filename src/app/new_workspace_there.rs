@@ -34,17 +34,26 @@ impl App {
         let Some(at) = ui::form_run_on_hit(area, &run_on_row(run_on), pos) else { return false };
         let Some(Overlay::NewWorkspace { run_on: Some(run_on), error, .. }) = &mut self.overlay else { return false };
         let at = at.checked_sub(1);
-        if !run_on.is_chosen(at) && run_on.choose(at) {
+        if run_on.is_auto(at) {
+            run_on.want_auto();
+        } else if !run_on.is_chosen(at) && run_on.choose(at) {
             *error = None;
         }
+        self.follow_new_workspace_run_on();
         true
     }
 
     pub(super) fn follow_new_workspace_run_on(&mut self) {
         let Some(Overlay::NewWorkspace { project, run_on, .. }) = &self.overlay else { return };
-        let fresh = RunOn::kept(self.run_on_for(*project), run_on.as_ref());
-        if let Some(Overlay::NewWorkspace { run_on, .. }) = &mut self.overlay {
+        let project = *project;
+        let mut fresh = RunOn::kept(self.run_on_for(project), run_on.as_ref());
+        let chose = fresh.as_ref().and_then(|run_on| self.auto_choice(run_on, project));
+        let moved = chose.is_some_and(|chose| fresh.as_mut().is_some_and(|run_on| run_on.settle_auto(chose)));
+        if let Some(Overlay::NewWorkspace { run_on, error, .. }) = &mut self.overlay {
             *run_on = fresh;
+            if moved {
+                *error = None;
+            }
         }
     }
 
@@ -96,5 +105,5 @@ impl App {
 }
 
 pub(super) fn run_on_row(run_on: &RunOn) -> ui::RunOnRow {
-    ui::RunOnRow { spans: run_on.spans(Style::default().fg(Color::DarkGray)), choices: run_on.targets.len() + 1 }
+    ui::RunOnRow { spans: run_on.spans(Style::default().fg(Color::DarkGray)), choices: run_on.choices() }
 }

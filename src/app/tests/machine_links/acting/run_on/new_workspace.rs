@@ -200,3 +200,30 @@ fn takes_no_key_while_it_waits_for_the_machine() {
     reading.deliver(answer);
     assert!(reading.remote.rig.app.overlay.is_none());
 }
+
+fn roomy(command: &str) -> Structured {
+    match command {
+        "machines" => Structured::Ok(json!({
+            "here": { "icon": "▭", "version": version::CURRENT, "memory": { "total": 32u64 << 30, "available": 11u64 << 30 } }
+        })),
+        command => created(command),
+    }
+}
+
+#[test]
+fn auto_chooses_the_machine_with_the_most_free_memory_and_says_why() {
+    let mut reading = asking(roomy, vec![web_shop()]);
+    let row = ui::form_run_on(ui::form_area(AREA));
+
+    click(&mut reading.remote.rig.app, Position::new(row.x + 38, row.y));
+    reading.remote.rig.until(
+        "the memory is read",
+        |app| matches!(&app.overlay, Some(Overlay::NewWorkspace { run_on: Some(run_on), .. }) if !run_on.auto.wanted),
+    );
+
+    assert_eq!(chosen(&reading.remote.rig.app).as_deref(), Some("vps"));
+    let Some(Overlay::NewWorkspace { run_on: Some(run_on), .. }) = &reading.remote.rig.app.overlay else {
+        panic!("New workspace is not open")
+    };
+    assert_eq!(run_on.auto.note, Some(("auto → vps (11 GB free)".into(), false)));
+}

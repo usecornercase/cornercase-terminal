@@ -69,6 +69,63 @@ mod choosing {
     }
 }
 
+mod auto {
+    use super::*;
+
+    #[test]
+    fn is_the_last_choice_after_the_machines() {
+        let run_on = run_on(None);
+
+        assert_eq!((run_on.choices(), run_on.is_auto(Some(2)), run_on.is_auto(Some(1))), (4, true, false));
+    }
+
+    #[test]
+    fn is_wanted_until_it_settles_on_the_machine_with_most_room() {
+        let mut run_on = run_on(None);
+        assert!(run_on.want_auto());
+        assert!(text(&run_on.spans(dim())).ends_with("○ auto · reading each machine's free memory…"));
+
+        let moved = run_on.settle_auto(Ok((Some("BOX".into()), "auto → box (9 GB free)".into())));
+
+        assert_eq!((moved, run_on.chosen, run_on.auto.wanted), (true, Some(1), false));
+        assert!(text(&run_on.spans(dim())).ends_with("● ☁ box   ○ auto · auto → box (9 GB free)"));
+    }
+
+    #[test]
+    fn says_in_red_why_nothing_had_room_and_keeps_the_choice() {
+        let mut run_on = RunOn { chosen: Some(0), ..run_on(None) };
+        run_on.want_auto();
+
+        assert!(!run_on.settle_auto(Err("no machine has 6 GB free (best: vps, 2 GB)".into())));
+
+        assert_eq!(run_on.chosen, Some(0));
+        let last = run_on.spans(dim()).pop().expect("the note");
+        assert_eq!(
+            (last.content.as_ref(), last.style.fg),
+            (" · no machine has 6 GB free (best: vps, 2 GB)", Some(Color::Red))
+        );
+    }
+
+    #[test]
+    fn is_refused_without_a_git_remote() {
+        let mut run_on = RunOn { blocked: Some(NEEDS_REMOTE), ..run_on(None) };
+
+        assert!(!run_on.want_auto());
+        assert!(!run_on.auto.wanted);
+    }
+
+    #[test]
+    fn a_choice_by_hand_forgets_what_auto_said() {
+        let mut run_on = run_on(None);
+        run_on.want_auto();
+        run_on.settle_auto(Ok((None, "auto → this computer (6 GB free)".into())));
+
+        run_on.choose(Some(0));
+
+        assert_eq!(run_on.auto, Auto::default());
+    }
+}
+
 mod spans {
     use super::*;
 
@@ -76,7 +133,7 @@ mod spans {
     fn mark_this_computer_by_default() {
         let spans = run_on(None).spans(dim());
 
-        assert_eq!(text(&spans), "● this computer   ○ ☁ vps   ○ ☁ box");
+        assert_eq!(text(&spans), "● this computer   ○ ☁ vps   ○ ☁ box   ○ auto");
         assert!(drawn(&spans).iter().all(|(_, dimmed)| !dimmed));
     }
 
@@ -84,7 +141,7 @@ mod spans {
     fn mark_the_chosen_machine() {
         let run_on = RunOn { chosen: Some(0), ..run_on(None) };
 
-        assert_eq!(text(&run_on.spans(dim())), "○ this computer   ● ☁ vps   ○ ☁ box");
+        assert_eq!(text(&run_on.spans(dim())), "○ this computer   ● ☁ vps   ○ ☁ box   ○ auto");
     }
 
     #[test]
@@ -97,6 +154,7 @@ mod spans {
                 ("● this computer".to_string(), false),
                 ("   ○ ☁ vps".to_string(), false),
                 ("   ○ ☁ box · unreachable".to_string(), true),
+                ("   ○ auto".to_string(), false),
             ]
         );
     }
@@ -111,6 +169,7 @@ mod spans {
                 ("● this computer".to_string(), false),
                 ("   ○ ☁ vps".to_string(), true),
                 ("   ○ ☁ box".to_string(), true),
+                ("   ○ auto".to_string(), true),
                 (" — needs a git remote".to_string(), true),
             ]
         );

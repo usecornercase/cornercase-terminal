@@ -43,14 +43,22 @@ impl Start {
 
     pub(crate) fn choose_machine(&mut self, at: Option<usize>) -> bool {
         let Some(run_on) = &mut self.run_on else { return false };
+        if run_on.is_auto(at) {
+            run_on.want_auto();
+            return false;
+        }
         if run_on.is_chosen(at) || !run_on.choose(at) {
             return false;
         }
+        self.machine_moved();
+        true
+    }
+
+    pub(crate) fn machine_moved(&mut self) {
         self.there = None;
         self.notice = None;
         self.picked_there.clear();
         self.close_accounts();
-        true
     }
 
     pub(crate) fn pick_there(&mut self, picked: BTreeMap<String, String>) {
@@ -74,7 +82,7 @@ impl Start {
     }
 
     pub(crate) fn run_on_choices(&self) -> usize {
-        self.run_on.as_ref().map_or(0, |run_on| run_on.targets.len() + 1)
+        self.run_on.as_ref().map_or(0, RunOn::choices)
     }
 
     pub(super) fn heading_there(&self, name: &str) -> Option<String> {

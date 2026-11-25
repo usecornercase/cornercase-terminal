@@ -1,10 +1,11 @@
 ---
 source: src/app/tests/machine_links/acting/run_on/start_flow.rs
+assertion_line: 155
 expression: "dialog(app, WIDE)"
 ---
 ╭─ Start a flow ───────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ Quick in its own worktree on vps, in ~/code/web-shop                                                             │
-│ run on  ○ this computer   ● ☁ vps                                                                                │
+│ run on  ○ this computer   ● ☁ vps   ○ auto                                                                       │
 │                                                                                                                  │
 │ Flow templates                                                    ╭─ Diagram ──────────────────────────────────╮ │
 │ ▌ Quick  default                                       3 agents   │           ╭─ orchestrator ───╮             │ │
