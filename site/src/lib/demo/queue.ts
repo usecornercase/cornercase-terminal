@@ -27,12 +27,14 @@ export interface QueueEntry {
   pane?: number;
   error?: string;
   bot?: string;
+  wait?: 'free';
+  first?: number;
 }
 
 export type QueueText = 'prompt' | 'clock' | 'date' | 'amount' | 'branch';
 export type QueueList = 'when' | 'unit' | 'day' | 'place' | 'openIn' | 'agent' | 'mode';
 export type QueueControl = QueueText | QueueList | 'cleanup';
-export type When = 'at' | 'tomorrow' | 'on' | 'in' | 'every' | 'daily' | 'weekdays' | 'weekly' | 'claude' | 'codex';
+export type When = 'at' | 'tomorrow' | 'on' | 'in' | 'every' | 'daily' | 'weekdays' | 'weekly' | 'claude' | 'codex' | 'free';
 
 export const WHEN: [When, string][] = [
   ['at', 'at'],
@@ -45,6 +47,7 @@ export const WHEN: [When, string][] = [
   ['weekly', 'every week on'],
   ['claude', 'Claude reset'],
   ['codex', 'Codex reset'],
+  ['free', 'when there is room'],
 ];
 export const UNITS: [string, string][] = [
   ['minutes', 'm'],
@@ -164,7 +167,7 @@ export function queueAt(o: QueueForm): string {
   if (kind === 'tomorrow') return `tomorrow ${clock}`;
   if (kind === 'on') return `${o.date.trim()} ${clock}`;
   if (kind === 'in') return `in ${o.amount.trim()}${UNITS[o.unit.chosen ?? -1]?.[1] ?? 'h'}`;
-  if (queueRepeats(o)) return '';
+  if (queueRepeats(o) || kind === 'free') return '';
   return `${kind} reset`;
 }
 
@@ -180,7 +183,7 @@ export function queueRepeat(o: QueueForm, now: number): string {
 }
 
 export function queueControls(o: QueueForm): QueueControl[] {
-  const values: Record<When, QueueControl[]> = { at: ['clock'], tomorrow: ['clock'], on: ['date', 'clock'], in: ['amount', 'unit'], every: ['amount', 'unit'], daily: ['clock'], weekdays: ['clock'], weekly: ['day', 'clock'], claude: [], codex: [] };
+  const values: Record<When, QueueControl[]> = { at: ['clock'], tomorrow: ['clock'], on: ['date', 'clock'], in: ['amount', 'unit'], every: ['amount', 'unit'], daily: ['clock'], weekdays: ['clock'], weekly: ['day', 'clock'], claude: [], codex: [], free: [] };
   const routine = queueRepeats(o);
   const controls: QueueControl[] = ['prompt', 'when', ...values[queueKind(o)], 'place'];
   if (queueChoice(o)?.worktree && !routine) controls.push('openIn');
@@ -421,6 +424,7 @@ function hint(o: QueueForm): string {
   const kind = queueKind(o);
   if (kind === 'at') return 'today or tomorrow';
   if (kind === 'every') return 'at least 30 minutes apart';
+  if (kind === 'free') return 'starts on the machine with room, in turn';
   return kind === 'claude' || kind === 'codex' ? 'read from the plan when you save' : '';
 }
 
@@ -621,3 +625,27 @@ export const queueFirstLine = (prompt: string): string => {
 };
 
 export const queueName = (prompt: string): string => firstWords(queueFirstLine(prompt), 40);
+
+export const RESERVED_FOR = 5 * 60000;
+export const FREE_REFRESH = 30000;
+
+const turnOrder = (a: QueueEntry, b: QueueEntry): number =>
+  Number(a.first === undefined) - Number(b.first === undefined) || (b.first ?? 0) - (a.first ?? 0) || a.at - b.at || a.id - b.id;
+
+export const queueLine = (entries: QueueEntry[]): QueueEntry[] => entries.filter((entry) => entry.wait === 'free' && entry.state === 'pending').sort(turnOrder);
+
+export function ordinal(position: number): string {
+  const teen = position % 100 >= 11 && position % 100 <= 13;
+  const suffix = teen ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[position % 10] ?? 'th';
+  return `${position}${suffix}`;
+}
+
+export function waitedFor(ms: number): string {
+  const minutes = Math.floor(Math.max(0, ms) / 60000);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  if (minutes < 60) return `${minutes}m`;
+  if (hours < 24) return `${hours}h`;
+  if (days < 30) return `${days}d`;
+  return days < 365 ? `${Math.floor(days / 30)}mo` : `${Math.floor(days / 365)}y`;
+}

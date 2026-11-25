@@ -1,8 +1,8 @@
-import { DAYS, ROUTINE_GRACE, ROUTINE_RUNS, type QueueChoice, type QueueEntry, type QueueForm, type QueueList, UNITS, parseRepeat, queueAt, queueChoice, queueChose, queueForm, queueKey as queueFormKey, queueListRows, queueRefit, queueRepeat, queueRepeats, queueTextRect, queueTime, queueWhen, queueFirstLine, queueName, queuePaste, queueWorktree, repeatFirst, repeatWalk, revealPrompt, routineSlug, whenCombo } from './queue';
+import { DAYS, FREE_REFRESH, RESERVED_FOR, ROUTINE_GRACE, ROUTINE_RUNS, type QueueChoice, type QueueEntry, type QueueForm, type QueueList, UNITS, ordinal, parseRepeat, queueAt, queueChoice, queueChose, queueForm, queueKey as queueFormKey, queueKind, queueLine, queueListRows, queueRefit, queueRepeat, queueRepeats, queueTextRect, queueTime, queueWhen, queueFirstLine, queueName, queuePaste, queueWorktree, repeatFirst, repeatWalk, revealPrompt, routineSlug, waitedFor, whenCombo } from './queue';
 import { type BotForm, botFormKey, botFormPaste, newBotForm } from './botform';
 import { actOnRoutine, botRoutinesKey, buttonsOf, openBotRoutines, routinesOf } from './botroutines';
 import { Bots, IDEAS, draftOf } from './bots';
-import { type QueueListDialog, type QueueShown, foldAsked, moveQueueList, openQueueList, queueButtons, queueIndex, queueShown } from './queuelist';
+import { type QueueListDialog, type QueueShown, foldAsked, moveQueueList, openQueueList, queueButtons, queueIndex, queueShown, queueTurn } from './queuelist';
 import { chooseCombo, combo, comboLabel } from './combo';
 import { shareLink } from '../stats/model';
 import { STATS } from './data';
@@ -523,6 +523,9 @@ export class App {
   queued: QueueEntry[] = [];
   botQueued: QueueEntry[] = [];
   private queueTimers = new Map<QueueEntry, () => void>();
+  private queueWaits = new Map<number, { position: number; why: string; since: number; needs?: number }>();
+  private reserved: { until: number; bytes: number }[] = [];
+  private freeTimer: (() => void) | null = null;
   private queueBack: IssuesOverlay | QueueListDialog | null = null;
   queueFolded = new Set<number>();
   nextQueueId = 1;
@@ -2127,12 +2130,58 @@ export class App {
       this[store] = [...this[store], ...removed].sort((a, b) => a.at - b.at || a.id - b.id);
       if (store === 'queued') removed.filter((entry) => entry.state === 'pending' && !entry.paused).forEach((entry) => this.armQueued(entry));
       this.toast = null;
+      this.driveFree();
       this.dirty();
     });
+    this.driveFree();
+  }
+
+  queueWaiting(): number {
+    return queueLine(this.queued).length;
+  }
+
+  private driveFree(): void {
+    const line = queueLine(this.queued);
+    for (const id of [...this.queueWaits.keys()]) if (!line.some((entry) => entry.id === id)) this.queueWaits.delete(id);
+    const now = this.now();
+    this.reserved = this.reserved.filter((taken) => taken.until > now);
+    let head: QueueEntry | null = null;
+    for (const [i, entry] of line.entries()) {
+      if (head) {
+        this.noteWait(entry, i + 1, `behind queued agent ${head.id}`);
+        continue;
+      }
+      const needs = parseSize(this.config.defaultMemory) ?? 4 * 1024 ** 3;
+      const free = Math.max(0, HERE_MEMORY.available - this.reserved.reduce((sum, taken) => sum + taken.bytes, 0));
+      if (free < needs) {
+        this.noteWait(entry, i + 1, `needs ${memoryShown(needs)} · best: this computer ${memoryShown(free)}`, needs);
+        head = entry;
+        continue;
+      }
+      this.runQueue(entry);
+      if (entry.state === 'started') this.reserved.push({ until: now + RESERVED_FOR, bytes: needs });
+    }
+    this.freeTimer?.();
+    this.freeTimer = queueLine(this.queued).length ? this.after(FREE_REFRESH, () => { this.freeTimer = null; this.driveFree(); }) : null;
+  }
+
+  private noteWait(entry: QueueEntry, position: number, why: string, needs?: number): void {
+    const known = this.queueWaits.get(entry.id);
+    this.queueWaits.set(entry.id, { position, why, since: known?.since ?? this.now(), needs });
+    if (!known) this.notify(`queued agent ${entry.id} waits for room: ${ordinal(position)} in line, ${why}`);
+    this.dirty();
+  }
+
+  firstQueued(entry: QueueEntry): void {
+    if (!queueTurn(this.queued).has(entry.id)) return;
+    entry.first = Math.max(0, ...this.queued.map((item) => item.first ?? 0)) + 1;
+    this.notify(`queued agent ${entry.id} is first in line`);
+    this.driveFree();
   }
 
   private armQueued(entry: QueueEntry): void {
     this.disarmQueued(entry);
+    if (entry.wait) return;
     this.queueTimers.set(entry, this.after(Math.min(Math.max(0, entry.at - this.now()), MAX_TIMER), () => {
       this.queueTimers.delete(entry);
       if (!this.queued.includes(entry) || entry.state !== 'pending') return;
@@ -2806,7 +2855,7 @@ export class App {
     if (a.kind === 'projectSettings') return 'project settings';
     if (a.kind === 'openIn') return 'open in…';
     if (a.kind === 'help') return HELP_LABELS[a.item];
-    if (a.kind === 'more') return a.item;
+    if (a.kind === 'more') return a.item === 'queue' && this.queueWaiting() ? `queue · ${this.queueWaiting()} waiting` : a.item;
     if (a.kind === 'worktrees') return 'worktrees';
     if (a.kind === 'ports') return 'ports';
     return a.action;
@@ -3940,6 +3989,7 @@ export class App {
         this.config.defaultMemory = typed;
         o.edit = undefined;
         o.notice = `a start that names no memory needs ${memoryShown(bytes)}`;
+        this.driveFree();
       }
     } else if (edit.row.startsWith('token:')) {
       const source = edit.row.slice(6) as Remote;
@@ -4082,6 +4132,10 @@ export class App {
   }
 
   queueStatus(entry: QueueEntry): string {
+    const waits = entry.wait === 'free' && entry.state === 'pending';
+    const wait = waits ? this.queueWaits.get(entry.id) : undefined;
+    if (wait) return `waits ${waitedFor(this.now() - wait.since)} · ${wait.why}`;
+    if (waits) return 'waits for room';
     if (entry.repeat) return `↻ every ${entry.repeat}`;
     const pane = entry.pane === undefined ? null : this.findPane(entry.pane);
     if (entry.state === 'started') return `started · ${pane ? `pane ${entry.pane}` : 'pane closed'}`;
@@ -4094,6 +4148,8 @@ export class App {
   }
 
   private queueWhenText(entry: QueueEntry): string {
+    const turn = queueTurn(this.queued).get(entry.id);
+    if (turn) return `#${turn} in line`;
     return entry.repeat && entry.paused ? 'paused' : queueWhen(entry.at);
   }
 
@@ -4135,7 +4191,7 @@ export class App {
       empty: this.queued.length ? 'nothing matches' : 'nothing queued: new schedules a prompt, and schedule on an issue queues it',
       tail: botRoutines ? (botRoutines === 1 ? "1 bot routine: in its bot's chat" : `${botRoutines} bot routines: in each bot's chat`) : undefined,
       hint: item?.fold !== null && item?.fold !== undefined ? `${hint} · ← → fold its runs` : hint,
-      buttons: queueButtons(sel, this.queued.some(queueClearable), width),
+      buttons: queueButtons(sel, this.queued.some(queueClearable), width, sel && queueTurn(this.queued).get(sel.id)),
     };
   }
 
@@ -4187,8 +4243,12 @@ export class App {
     if (label === 'done') return this.closeOverlay();
     if (label === 'new') this.openQueueForm();
     else if (label === 'start now' && entry?.repeat) this.runQueue(this.addRun(entry, this.now(), 'pending'));
-    else if (label === 'start now' && entry && !entry.routine && entry.state !== 'started') this.runQueue(entry);
+    else if (label === 'start now' && entry && !entry.routine && entry.state !== 'started') {
+      this.runQueue(entry);
+      this.driveFree();
+    }
     else if ((label === 'pause' || label === 'resume') && entry?.repeat) this.pauseQueued(entry, label === 'pause');
+    else if (label === 'first' && entry) this.firstQueued(entry);
     else if (label === 'remove' && entry) this.removeQueued(...this.removal(entry));
     else if (label === 'clear started') this.removeQueued(queueClearable, 'cleared {n} started');
     this.dirty();
@@ -4791,6 +4851,7 @@ export class App {
       o.when = whenCombo('on');
       o.clock = clock;
       if (entry.repeat) this.fillRoutine(o, entry);
+      if (entry.wait) o.when = whenCombo('free');
       chooseCombo(o.openIn, entry.branch ? 1 : 0);
       o.branch = entry.branch;
     }
@@ -4876,12 +4937,18 @@ export class App {
     const parsed = routine ? parseRepeat(repeat) : null;
     const kept = unchanged ? old?.at ?? null : null;
     const at = kept ?? (parsed && typeof parsed !== 'string' ? repeatFirst(parsed, this.now()) : routine ? null : queueTime(queueAt(o), this.now()));
+    const free = queueKind(o) === 'free';
+    const since = free ? (old?.wait ? old.at : this.now()) : null;
+    const when = since ?? at;
     const worktree = queueWorktree(o);
     const error = !place
       ? o.places.length ? 'choose an open place before scheduling' : 'open a project before scheduling an agent'
+      : old?.wait && routine ? "a routine has its own times: it cannot wait for room, and --cleanup is a routine's"
+      : old?.wait && !free ? 'an entry that waits for room has no time: it starts as soon as a machine has room'
+      : old && !old.wait && free ? 'an entry with a time cannot start waiting for room; add a new entry'
       : old && !!old.repeat !== routine ? 'a routine and a one-off entry cannot turn into each other: add a new entry'
-      : !o.prompt.trim() ? 'the prompt is empty' : typeof parsed === 'string' ? parsed : !at ? 'choose a time in the future' : worktree && !o.branch.trim() ? 'the worktree branch needs a name' : null;
-    if (error || !place || !at) {
+      : !o.prompt.trim() ? 'the prompt is empty' : typeof parsed === 'string' ? parsed : when === null ? 'choose a time in the future' : worktree && !o.branch.trim() ? 'the worktree branch needs a name' : null;
+    if (error || !place || when === null) {
       o.error = error ?? undefined;
       this.dirty();
       return;
@@ -4891,7 +4958,7 @@ export class App {
     const project = this.projects.find((p) => p.id === place.project);
     const ws = project?.workspaces.find((w) => w.id === place.workspace);
     const workspaceName = ws && (ws.name || (ws.root !== project?.root ? ws.root.split('/').pop() : undefined));
-    const entry: QueueEntry = { id: o.id ?? this.nextQueueId++, at, prompt: o.prompt, label: o.label ?? queueName(o.prompt), project: place.project, folder: project?.folder ?? '', workspace: place.workspace, workspaceName, branch: worktree ? o.branch.trim() : '', agent: picked === 'auto' ? (this.config.agent === 'auto' ? 'claude' : this.config.agent) : picked, mode: chosenMode === 'default' ? '' : chosenMode, command: '', state: 'pending', ...(routine ? { repeat: parsed && typeof parsed !== 'string' ? repeat : '', cleanup: o.cleanup && !o.cleanupOff } : {}) };
+    const entry: QueueEntry = { id: o.id ?? this.nextQueueId++, at: when, prompt: o.prompt, label: o.label ?? queueName(o.prompt), project: place.project, folder: project?.folder ?? '', workspace: place.workspace, workspaceName, branch: worktree ? o.branch.trim() : '', agent: picked === 'auto' ? (this.config.agent === 'auto' ? 'claude' : this.config.agent) : picked, mode: chosenMode === 'default' ? '' : chosenMode, command: '', state: 'pending', ...(routine ? { repeat: parsed && typeof parsed !== 'string' ? repeat : '', cleanup: o.cleanup && !o.cleanupOff } : {}), ...(free ? { wait: 'free' as const, first: old?.first } : {}) };
     const mode = (MODES[entry.agent] ?? []).find(([name]) => name === entry.mode)?.[1];
     entry.command = old && old.agent === entry.agent && old.mode === entry.mode ? old.command : mode ? `${entry.agent} ${mode}` : entry.mode ? this.agentCommand(entry.agent) : this.agentCommandWithoutMode(entry.agent);
     this.queued = [...this.queued.filter((item) => item.id !== entry.id), entry].sort((a, b) => a.at - b.at || a.id - b.id);
@@ -4899,7 +4966,8 @@ export class App {
     if (old?.paused) entry.paused = true;
     if (!entry.paused) this.armQueued(entry);
     this.closeQueueForm(entry.id);
-    this.notify(routine ? `scheduled routine ${entry.id}, next at ${queueWhen(at)}` : `scheduled queue entry ${entry.id}`);
+    this.notify(routine ? `scheduled routine ${entry.id}, next at ${queueWhen(when)}` : `scheduled queue entry ${entry.id}`);
+    this.driveFree();
     this.dirty();
   }
 
@@ -4919,7 +4987,8 @@ export class App {
     entry.error = undefined;
     entry.pane = pane.id;
     this.launch(pane, entry.agent, entry.prompt, true, entry.command, true);
-    this.notify(entry.routine ? `started routine ${entry.label}` : `started queued agent ${entry.id}`);
+    this.queueWaits.delete(entry.id);
+    this.notify(entry.routine ? `started routine ${entry.label}` : `started queued agent ${entry.id}${entry.wait ? ' on this computer' : ''}`);
     this.dirty();
   }
 

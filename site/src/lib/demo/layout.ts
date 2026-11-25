@@ -1147,3 +1147,12 @@ export function moreButton(more: Rect): Rect {
   const help = helpButton(more);
   return isEmpty(help) ? more : { ...more, w: help.x - more.x };
 }
+
+export const queueLabel = (waiting: number): string => `queue ${waiting}`;
+
+export function queueButton(more: Rect, waiting: number): Rect {
+  const room = moreButton(more);
+  const w = buttonWidth(queueLabel(waiting));
+  if (waiting === 0 || room.w < buttonWidth(MORE_LABEL) + w + 2) return EMPTY;
+  return { ...room, x: room.x + room.w - w, w };
+}

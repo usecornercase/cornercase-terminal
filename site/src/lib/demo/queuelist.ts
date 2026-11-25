@@ -1,4 +1,4 @@
-import type { QueueEntry } from './queue';
+import { type QueueEntry, queueLine } from './queue';
 
 export interface QueueListDialog {
   kind: 'queuelist';
@@ -16,11 +16,16 @@ export interface QueueShown {
 
 export const openQueueList = (selected: number | null = null): QueueListDialog => ({ kind: 'queuelist', filter: '', selected, scroll: 0 });
 
-const band = (entry: QueueEntry): number => (entry.repeat ? (entry.paused ? 1 : 0) : entry.state === 'pending' ? 0 : 2);
 const newest = (a: QueueEntry, b: QueueEntry): number => b.at - a.at || b.id - a.id;
-const inOrder = (a: QueueEntry, b: QueueEntry): number => band(a) - band(b) || (band(a) === 2 ? newest(a, b) : a.at - b.at || a.id - b.id);
+
+export const queueTurn = (entries: QueueEntry[]): Map<number, number> => new Map(queueLine(entries).map((entry, i) => [entry.id, i + 1]));
 
 export function arranged(entries: QueueEntry[]): QueueEntry[][] {
+  const turns = queueTurn(entries);
+  const band = (entry: QueueEntry): number =>
+    turns.has(entry.id) ? 0 : entry.repeat ? (entry.paused ? 2 : 1) : entry.state === 'pending' ? 1 : 3;
+  const inOrder = (a: QueueEntry, b: QueueEntry): number =>
+    band(a) - band(b) || (band(a) === 0 ? (turns.get(a.id) ?? 0) - (turns.get(b.id) ?? 0) : band(a) === 3 ? newest(a, b) : a.at - b.at || a.id - b.id);
   const routines = new Set(entries.filter((entry) => entry.repeat).map((entry) => entry.id));
   const under = (entry: QueueEntry) => entry.routine !== undefined && routines.has(entry.routine);
   const top = entries.filter((entry) => !under(entry)).sort(inOrder);
@@ -66,12 +71,13 @@ export function foldAsked(o: QueueListDialog, shown: QueueShown[], fold: boolean
   return routine;
 }
 
-export function queueButtons(selected: QueueEntry | undefined, clearable: boolean, width: number): string[] {
+export function queueButtons(selected: QueueEntry | undefined, clearable: boolean, width: number, turn?: number): string[] {
   const runnable = !!selected && (selected.repeat ? true : !selected.routine && selected.state !== 'started' && selected.state !== 'answered');
   const buttons = [
     'new',
     ...(runnable ? ['start now'] : []),
     ...(selected?.repeat ? [selected.paused ? 'resume' : 'pause'] : []),
+    ...(turn !== undefined && turn > 1 ? ['first'] : []),
     ...(selected ? ['remove'] : []),
     ...(clearable ? ['clear started'] : []),
     'done',

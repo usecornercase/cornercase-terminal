@@ -40,6 +40,8 @@ import {
   changesButton,
   helpButton,
   moreButton,
+  queueButton,
+  queueLabel,
   closeButton,
   formArea,
   INPUT_PROMPT,
@@ -1030,7 +1032,14 @@ export class Painter {
       this.button(help, '', 'Help', this.buttonStyle(help, DARK, 6));
       this.region({ r: help, click: (x, y) => app.openHelp({ x, y }), cursor: 'pointer' });
     }
-    const more = moreButton(areas.more);
+    const waiting = app.queueWaiting();
+    const queue = queueButton(areas.more, waiting);
+    if (!isEmpty(queue)) {
+      this.button(queue, '', queueLabel(waiting), this.buttonStyle(queue, { fg: 3 }, 6));
+      this.region({ r: queue, click: () => app.openQueue(), cursor: 'pointer' });
+    }
+    const whole = moreButton(areas.more);
+    const more = isEmpty(queue) ? whole : { ...whole, w: queue.x - whole.x };
     this.button(more, ' ', MORE_LABEL, this.buttonStyle(more, DARK, 6));
     this.region({ r: more, click: (x, y) => app.openMore({ x, y }), cursor: 'pointer' });
     if (!isEmpty(areas.worktrees)) {
