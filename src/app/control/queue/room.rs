@@ -6,7 +6,9 @@ use crate::app::App;
 use crate::app::machine_memory::REFRESH;
 use crate::app::notifications::{Message, MessageKind};
 use crate::control::{FlowRun, Start};
-use crate::machines::memory::{self, Candidate, Picked, is_auto};
+use crate::log;
+use crate::machines::HERE;
+use crate::machines::memory::{self, Candidate, Left, Picked, is_auto};
 use crate::machines::send::Send;
 use crate::project::Hierarchy;
 use crate::queue::outcome::closing;
@@ -116,16 +118,22 @@ impl App {
 
     fn free_candidates(&self, entry: &Entry, project: u64, now: Instant) -> Vec<Candidate> {
         let candidates = self.memory_candidates(project, now);
-        match entry.task.machine.as_deref().filter(|machine| !is_auto(machine)) {
-            Some(name) => candidates
-                .into_iter()
-                .filter(|candidate| candidate.name.as_deref().is_some_and(|there| there.eq_ignore_ascii_case(name)))
-                .collect(),
-            None => candidates,
+        let Some(name) = entry.task.machine.as_deref().filter(|machine| !is_auto(machine)) else { return candidates };
+        let named =
+            |candidate: &Candidate| candidate.name.as_deref().is_some_and(|there| there.eq_ignore_ascii_case(name));
+        let mut only: Vec<Candidate> = candidates.into_iter().filter(named).collect();
+        if only.is_empty() {
+            only.push(Candidate {
+                name: Some(name.to_string()),
+                left: Some(Left::Unreachable),
+                ..Candidate::here(None, 0)
+            });
         }
+        only
     }
 
     fn start_waiting(&mut self, entry: &Entry, there: Option<&str>, project: u64, now: Instant) -> Result<(), String> {
+        log::info!("queue", "starts after waiting for room", entry = entry.id, machine = there.unwrap_or(HERE));
         let Some(name) = there else { return self.start_free_here(entry, now) };
         let link = self.machine_link(name)?;
         let there = self.project_there(link, project).map(|there| there.id);
@@ -156,6 +164,7 @@ impl App {
         let first = known.is_none();
         self.panels.queued.waits.insert(id, waiting.clone());
         if first {
+            log::info!("queue", "waits for room", entry = id, position = position, needs = needs.unwrap_or_default());
             let text =
                 format!("{} waits for room: {} in line, {}", self.queued_name(id), ordinal(position), waiting.why);
             let said = Message {
