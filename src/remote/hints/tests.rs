@@ -212,10 +212,13 @@ mod a_relayed_message {
         );
     }
 
+    const NAMES_A_MACHINE_TO_WAIT_FOR: [&str; 2] = ["queue add", "queue edit"];
+
     fn walk(command: &clap::Command, prefix: &str, checked: &mut Vec<String>) {
         for sub in command.get_subcommands() {
             let path = format!("{prefix}{}", sub.get_name());
-            let takes = sub.get_arguments().any(|arg| arg.get_long() == Some("machine"));
+            let takes = sub.get_arguments().any(|arg| arg.get_long() == Some("machine"))
+                && !NAMES_A_MACHINE_TO_WAIT_FOR.contains(&path.as_str());
             let named = on_vps(&format!("`cornercase {path}`")).contains("--machine vps");
             assert_eq!(named, takes, "`cornercase {path}`");
             checked.push(path.clone());
