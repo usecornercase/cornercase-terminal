@@ -1,6 +1,7 @@
 mod account_restart;
 pub(in crate::app) mod accounts;
 mod arrange;
+pub(in crate::app) mod auto;
 mod bots;
 pub(in crate::app) mod boundary;
 mod changes;
@@ -147,6 +148,7 @@ pub(super) struct Requests {
     todo_sends: HashMap<u64, Sending>,
     queued: HashMap<u64, u64>,
     restarting: HashMap<u64, account_restart::Batch>,
+    pub(in crate::app) picked: HashMap<u64, String>,
     next: u64,
 }
 
@@ -334,6 +336,16 @@ pub(in crate::app) fn no_popup() -> Refusal {
 
 pub(in crate::app) fn none(kind: &str, id: u64) -> Refusal {
     Refusal::new(Code::NotFound, format!("there is no {kind} {id}; `cornercase status` lists them"))
+}
+
+fn picked(picked: Option<String>, reply: Result<Value, Refusal>) -> Result<Value, Refusal> {
+    match (picked, reply) {
+        (Some(text), Ok(Value::Object(mut answer))) => {
+            answer.insert("auto".into(), Value::String(text));
+            Ok(Value::Object(answer))
+        }
+        (_, reply) => reply,
+    }
 }
 
 fn duration(seconds: f64, what: &str) -> Result<Duration, String> {
@@ -536,6 +548,7 @@ impl App {
             (Some(sending), Ok(value)) => Ok(self.todo_sent(&sending, value)),
             (_, reply) => reply,
         };
+        let reply = picked(self.clients.requests.picked.remove(&client), reply);
         let (code, reply) = match reply {
             Ok(value) => (Code::Failed, Ok(value)),
             Err(refusal) => (refusal.code, Err(refusal.message)),

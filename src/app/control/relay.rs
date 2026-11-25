@@ -6,6 +6,7 @@ use crate::app::machine_links::RemoteItem;
 use crate::app::machine_links::relay::{Sent, Then};
 use crate::control::contract::Refusal;
 use crate::control::{Command, Done, Start, Until};
+use crate::machines::memory::is_auto;
 use crate::machines::send::{Send, UNWAITED};
 use crate::remote::hints;
 
@@ -28,6 +29,7 @@ impl App {
 
     pub(super) fn start_with_request(&mut self, asked: Asked, start: Start) -> Handled {
         match start.machine.clone() {
+            Some(machine) if is_auto(&machine) => self.auto_start(asked, start, true),
             Some(machine) => self.relay_request(asked.client, &machine, Send::StartWith(start)),
             None => self.start_request(asked, start),
         }

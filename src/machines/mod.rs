@@ -163,6 +163,9 @@ pub(crate) fn valid_name(name: &str) -> Result<(), &'static str> {
     if name.eq_ignore_ascii_case(EVERY) {
         return Err("`all` is kept for every machine at once");
     }
+    if memory::is_auto(name) {
+        return Err("`auto` is kept for the machine with the most free memory");
+    }
     Ok(())
 }
 

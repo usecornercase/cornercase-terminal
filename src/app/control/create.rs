@@ -17,6 +17,7 @@ use crate::control::contract::Refusal;
 use crate::control::{self, Done, Ids, Item};
 use crate::error;
 use crate::git;
+use crate::machines::memory;
 use crate::machines::send::Send;
 use crate::os::fs::{canonical, canonicalize};
 use crate::project::split::Dir;
@@ -209,6 +210,9 @@ impl App {
 
     pub(super) fn start_request(&mut self, asked: Asked, start: control::Start) -> Handled {
         if let Some(machine) = start.machine.clone() {
+            if memory::is_auto(&machine) {
+                return self.auto_start(asked, start, false);
+            }
             return self.relay_request(asked.client, &machine, Send::Start(start));
         }
         if start.placed && (start.wait || start.timeout.is_some()) {

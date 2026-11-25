@@ -23,6 +23,10 @@ fn main() -> Result<ExitCode> {
             eprintln!("error: {message}");
             Ok(ExitCode::from(4))
         }
+        Err(Error::NoRoom(message)) => {
+            eprintln!("error: {message}");
+            Ok(ExitCode::from(8))
+        }
         Err(error) if cli::older(&error) => {
             cli::print_older(&error, json);
             Ok(ExitCode::from(5))

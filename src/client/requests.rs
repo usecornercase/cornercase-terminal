@@ -27,6 +27,7 @@ pub(crate) use shared::{line_done, share, unshare};
 pub(crate) use watch::{input_ended, reader_gone_within, watched};
 
 const STALE_BOOT: &str = "stale-boot";
+const NO_ROOM: &str = "no-room";
 
 static VIEW: OnceLock<u64> = OnceLock::new();
 static STRUCTURED: OnceLock<u32> = OnceLock::new();
@@ -277,6 +278,16 @@ pub(crate) fn use_stats_cached() -> Result<()> {
 
 pub(crate) fn use_machine_start() -> Result<()> {
     require("machine-start", "cannot start agents, workspaces or flows on another machine")
+}
+
+pub(crate) fn use_machine_auto() -> Result<()> {
+    require("machine-auto", "cannot pick a machine by its free memory")?;
+    if shared::active() {
+        shared::set_contract();
+    } else {
+        let _ = STRUCTURED.set(control::contract::CONTRACT);
+    }
+    Ok(())
 }
 
 pub(crate) fn use_open_into() -> Result<()> {
@@ -540,6 +551,7 @@ pub(crate) fn answered(text: &str) -> Result<Value> {
     match serde_json::from_str(text) {
         Ok(Heard::Ok(value)) => Ok(value),
         Ok(Heard::Error(Failure::Structured { code, message })) if code == STALE_BOOT => Err(Error::StaleBoot(message)),
+        Ok(Heard::Error(Failure::Structured { code, message })) if code == NO_ROOM => Err(Error::NoRoom(message)),
         Ok(Heard::Error(Failure::Legacy(message) | Failure::Structured { message, .. })) => {
             Err(Error::Control(message))
         }

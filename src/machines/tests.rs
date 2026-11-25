@@ -34,6 +34,13 @@ mod a_name {
     }
 
     #[rstest]
+    #[case::lower("auto")]
+    #[case::upper("AUTO")]
+    fn auto_is_kept_for_picking_by_memory(#[case] name: &str) {
+        assert_eq!(valid_name(name), Err("`auto` is kept for the machine with the most free memory"));
+    }
+
+    #[rstest]
     #[case::same("vps")]
     #[case::other_case("VPS")]
     fn already_used_ignoring_case_is_a_conflict(#[case] name: &str) {

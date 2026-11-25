@@ -438,6 +438,7 @@ impl App {
             self.clients.events.bell_wake(now),
             self.surface_wake(now),
             self.panels.queued.wake(clock),
+            self.auto_wake(now),
             self.popup_wake(now),
             self.card_wake(now),
             self.typed_wake(now),

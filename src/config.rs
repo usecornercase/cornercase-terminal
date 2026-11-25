@@ -611,6 +611,12 @@ impl Config {
         (!self.profile.is_empty() && !self.profiles.contains_key(&self.profile)).then_some(self.profile.as_str())
     }
 
+    pub(crate) fn default_memory(&self) -> u64 {
+        crate::text::parse_size(&self.default_memory)
+            .or_else(|| crate::text::parse_size(DEFAULT_MEMORY))
+            .unwrap_or(crate::text::GB)
+    }
+
     pub(crate) fn fetch_every(&self) -> Option<Duration> {
         (self.fetch_minutes > 0).then(|| Duration::from_secs(self.fetch_minutes.saturating_mul(60)))
     }
