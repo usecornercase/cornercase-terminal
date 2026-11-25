@@ -40,6 +40,9 @@ impl App {
     pub(super) fn memory_answered(&mut self, link: u64, result: Result<MemoryInfo, String>) {
         self.machine_answered::<MemoryInfo>(link, result);
         self.auto_waiting(Instant::now());
+        if self.panels.queued.area().is_some() {
+            self.drive_free(Instant::now());
+        }
     }
 
     fn memory_stale(held: &Held, older_than: Duration) -> bool {

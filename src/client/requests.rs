@@ -280,6 +280,10 @@ pub(crate) fn use_machine_start() -> Result<()> {
     require("machine-start", "cannot start agents, workspaces or flows on another machine")
 }
 
+pub(crate) fn use_queue_when_free() -> Result<()> {
+    require("queue-when-free", "cannot queue work until a machine has room")
+}
+
 pub(crate) fn use_machine_auto() -> Result<()> {
     require("machine-auto", "cannot pick a machine by its free memory")?;
     if shared::active() {

@@ -157,6 +157,7 @@ mod queue_list_dialog;
 mod queue_panel;
 mod queue_result_dialog;
 mod queue_results;
+mod queue_there;
 mod recap_panel;
 mod refresh;
 mod remote_access;

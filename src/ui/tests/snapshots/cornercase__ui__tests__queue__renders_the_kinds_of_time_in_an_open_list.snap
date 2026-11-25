@@ -1,5 +1,6 @@
 ---
 source: src/ui/tests/queue.rs
+assertion_line: 171
 expression: "shown(f, 100, 24).backend()"
 ---
 "  ⌕ search pro╭─ Schedule an agent ──────────────────────────────────────────────────╮              "
@@ -18,7 +19,7 @@ expression: "shown(f, 100, 24).backend()"
 "              │ Agent   │ every day at     │                                         │              "
 "              │         │ every weekday at │                                         │              "
 "              │ Mode    │ every week on    │                                         │              "
-"              │         ╰─ ↓ 2 more ───────╯                                         │              "
+"              │         ╰─ ↓ 3 more ───────╯                                         │              "
 "              │ Times use Europe/Madrid. Queued agents always accept their folder    │              "
 "              │ trust question.                                                      │              "
 "              │                                                                      │              "

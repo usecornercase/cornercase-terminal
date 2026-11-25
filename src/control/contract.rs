@@ -114,6 +114,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "persona-catalogue",
     "memory",
     "machine-auto",
+    "queue-when-free",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

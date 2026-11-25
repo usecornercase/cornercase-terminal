@@ -32,6 +32,23 @@ struct Listed {
     started: Option<i64>,
     unsent: bool,
     place: ListedPlace,
+    wait: Option<String>,
+    machine: Option<String>,
+    waiting: Option<ListedWaiting>,
+    there: Option<ListedThere>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct ListedWaiting {
+    position: usize,
+    why: String,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct ListedThere {
+    machine: String,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -44,6 +61,15 @@ impl Listed {
     fn status(&self) -> String {
         if self.paused {
             return "paused".into();
+        }
+        if let (Some(waiting), "pending") = (&self.waiting, self.state.as_str()) {
+            return format!("waits #{} · {}", waiting.position, waiting.why);
+        }
+        if self.wait.is_some() && self.state == "pending" {
+            return "waits for room".into();
+        }
+        if let (Some(there), "started") = (&self.there, self.state.as_str()) {
+            return format!("started on {}", there.machine);
         }
         match (self.state.as_str(), self.pane, &self.reason) {
             ("kept", _, Some(reason)) => format!("kept: {reason}"),
@@ -62,7 +88,11 @@ fn lines(value: &Value, zone: &str) -> String {
     let mut out = String::new();
     for entry in value["entries"].as_array().into_iter().flatten() {
         let entry = Listed::deserialize(entry).unwrap_or_default();
-        let at = clock::display(entry.at, zone);
+        let at = if entry.wait.is_some() {
+            format!("since {}", clock::display(entry.at, zone))
+        } else {
+            clock::display(entry.at, zone)
+        };
         let agent = match (&entry.place.bot, &entry.flow) {
             (Some(bot), _) => format!("bot {bot}"),
             (None, Some(flow)) => format!("flow {flow}"),
@@ -74,6 +104,9 @@ fn lines(value: &Value, zone: &str) -> String {
         }
         if let Some(routine) = entry.routine {
             let _ = write!(out, " · routine {routine}");
+        }
+        if let Some(machine) = entry.machine.as_ref().filter(|_| entry.state == "pending") {
+            let _ = write!(out, " · on {machine}");
         }
         for (agent, account) in &entry.accounts {
             let _ = write!(out, " · {agent}: {}", if account.is_empty() { "System" } else { account });
@@ -147,6 +180,9 @@ fn run_queue(command: control::Queue, json: bool) -> Result<()> {
     if needs_mode_default(&command) {
         crate::client::use_mode_default()?;
     }
+    if needs_when_free(&command) {
+        crate::client::use_queue_when_free()?;
+    }
     let value = ask("queue", control::Command::Queue(command))?;
     if json {
         return print_json(&value);
@@ -165,8 +201,16 @@ fn needs_routines(command: &control::Queue) -> bool {
     match command {
         control::Queue::Pause(_) | control::Queue::Resume(_) => true,
         control::Queue::Add(add) | control::Queue::Edit { add, .. } => {
-            add.repeat.is_some() || add.flow.is_some() || add.cleanup.is_some()
+            add.repeat.is_some() || (add.flow.is_some() && add.when.is_none()) || add.cleanup.is_some()
         }
+        _ => false,
+    }
+}
+
+fn needs_when_free(command: &control::Queue) -> bool {
+    match command {
+        control::Queue::First(_) => true,
+        control::Queue::Add(add) | control::Queue::Edit { add, .. } => add.when.is_some() || add.machine.is_some(),
         _ => false,
     }
 }
@@ -192,11 +236,11 @@ fn request_of(action: QueueAction, own: Option<&str>) -> Result<Asked> {
     match action {
         QueueAction::Add(add) => {
             let json = add.print.json;
-            queue(control::Queue::Add(queue_add(add, true, own)?), json)
+            queue(control::Queue::Add(queue_add(*add, true, own)?), json)
         }
         QueueAction::Edit { add, id } => {
             let json = add.print.json;
-            queue(control::Queue::Edit { id, add: queue_add(add, false, None)? }, json)
+            queue(control::Queue::Edit { id, add: queue_add(*add, false, None)? }, json)
         }
         QueueAction::List(list) => queue(control::Queue::List, list.print.json),
         QueueAction::Remove { id, print } => queue(control::Queue::Remove(id), print.json),
@@ -205,6 +249,7 @@ fn request_of(action: QueueAction, own: Option<&str>) -> Result<Asked> {
         QueueAction::Restore { undo } => queue(control::Queue::Restore(undo), false),
         QueueAction::Pause { id } => queue(control::Queue::Pause(id), false),
         QueueAction::Resume { id } => queue(control::Queue::Resume(id), false),
+        QueueAction::First { id } => queue(control::Queue::First(id), false),
         QueueAction::Show { id, conversation, print } => {
             Ok(Asked::Show(control::QueueShow { id, conversation }, print.json))
         }
@@ -234,9 +279,25 @@ fn own_default(add: &QueueAdd, new: bool, own: Option<&str>) -> Result<Option<St
     Ok(Some(own.to_string()))
 }
 
+fn refuse_one_off(add: &QueueAdd, bot: bool) -> Result<()> {
+    let once = !bot && add.every.is_none();
+    let refused = [
+        (once && (add.cleanup || add.no_cleanup), "--cleanup belongs to a routine: add --every"),
+        (add.machine.is_some() && add.when.is_none(), "--machine goes with --when free"),
+        (
+            once && add.when.is_none() && add.flow.is_some(),
+            "--flow runs in a routine or once with --when free: add --every or --when free",
+        ),
+    ];
+    match refused.iter().find(|(wrong, _)| *wrong) {
+        Some((_, why)) => Err(Error::WrongUsage((*why).into())),
+        None => Ok(()),
+    }
+}
+
 fn queue_add(add: QueueAdd, new: bool, own: Option<&str>) -> Result<control::QueueAdd> {
-    if new && add.at.is_none() && add.every.is_none() {
-        return Err(Error::WrongUsage("queue add needs --at or --every".into()));
+    if new && add.at.is_none() && add.every.is_none() && add.when.is_none() {
+        return Err(Error::WrongUsage("queue add needs --at, --every or --when free".into()));
     }
     let bot = match add.bot.clone() {
         Some(bot) => Some(bot),
@@ -249,8 +310,8 @@ fn queue_add(add: QueueAdd, new: bool, own: Option<&str>) -> Result<control::Que
     } else if new && add.prompt.is_none() && add.issue.is_none() {
         return Err(Error::WrongUsage("queue add needs --prompt or --issue".into()));
     }
-    if new && bot.is_none() && add.every.is_none() && (add.flow.is_some() || add.cleanup || add.no_cleanup) {
-        return Err(Error::WrongUsage("--flow and --cleanup belong to a routine: add --every".into()));
+    if new {
+        refuse_one_off(&add, bot.is_some())?;
     }
     let cleanup = if add.cleanup { Some(true) } else { add.no_cleanup.then_some(false) };
     Ok(control::QueueAdd {
@@ -272,6 +333,8 @@ fn queue_add(add: QueueAdd, new: bool, own: Option<&str>) -> Result<control::Que
         cleanup,
         fresh: super::fresh(&add.fresh)?,
         bot,
+        when: add.when,
+        machine: add.machine,
     })
 }
 

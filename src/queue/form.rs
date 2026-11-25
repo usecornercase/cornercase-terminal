@@ -35,10 +35,11 @@ pub(crate) enum When {
     Weekly,
     ClaudeReset,
     CodexReset,
+    Free,
 }
 
 impl When {
-    pub(crate) const ALL: [Self; 10] = [
+    pub(crate) const ALL: [Self; 11] = [
         Self::At,
         Self::Tomorrow,
         Self::On,
@@ -49,10 +50,15 @@ impl When {
         Self::Weekly,
         Self::ClaudeReset,
         Self::CodexReset,
+        Self::Free,
     ];
 
     pub(crate) fn repeats(self) -> bool {
         matches!(self, Self::Every | Self::Daily | Self::Weekdays | Self::Weekly)
+    }
+
+    pub(crate) fn takes_flows(self) -> bool {
+        self.repeats() || self == Self::Free
     }
 
     pub(crate) fn label(self) -> &'static str {
@@ -67,6 +73,7 @@ impl When {
             Self::Weekly => "every week on",
             Self::ClaudeReset => "Claude reset",
             Self::CodexReset => "Codex reset",
+            Self::Free => "when there is room",
         }
     }
 
@@ -198,7 +205,7 @@ impl Form {
         }
         let chosen = self.agent.chosen()?;
         let at = chosen.checked_sub(self.kinds.len())?;
-        self.kind().repeats().then(|| self.flows.get(at)).flatten().map(String::as_str)
+        self.kind().takes_flows().then(|| self.flows.get(at)).flatten().map(String::as_str)
     }
 
     pub(crate) fn refit(&mut self) {
@@ -227,7 +234,7 @@ impl Form {
         self.place = Combo::new(labels, at);
         let agent = self.agent.label().map(str::to_string);
         let mut options = self.kinds.clone();
-        if routine {
+        if self.kind().takes_flows() {
             options.extend(self.flows.iter().map(|flow| format!("{flow} (flow)")));
         }
         let at = agent.and_then(|agent| options.iter().position(|option| *option == agent)).unwrap_or_default();
@@ -267,7 +274,7 @@ impl Form {
             When::Tomorrow => format!("tomorrow {clock}"),
             When::On => format!("{} {clock}", self.date.text().trim()),
             When::In => format!("in {}{}", self.amount.text().trim(), self.unit_letter()),
-            When::Every | When::Daily | When::Weekdays | When::Weekly => String::new(),
+            When::Every | When::Daily | When::Weekdays | When::Weekly | When::Free => String::new(),
             When::ClaudeReset => "claude reset".into(),
             When::CodexReset => "codex reset".into(),
         }
@@ -279,7 +286,7 @@ impl Form {
             When::On => &[Control::Date, Control::Clock],
             When::In | When::Every => &[Control::Amount, Control::Unit],
             When::Weekly => &[Control::Day, Control::Clock],
-            When::ClaudeReset | When::CodexReset => &[],
+            When::ClaudeReset | When::CodexReset | When::Free => &[],
         }
     }
 

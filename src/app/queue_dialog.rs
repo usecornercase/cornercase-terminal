@@ -403,21 +403,27 @@ impl App {
         if form.kind().repeats() {
             return self.routine_add(form, project);
         }
+        if form.kind() == When::Free {
+            let flow = form.flow().map(str::to_string);
+            let agent = flow.is_none().then(|| form.agent.label().map(str::to_string)).flatten();
+            let mode = flow.is_none().then(|| self.chosen_mode(form, agent.as_ref())).flatten();
+            return QueueAdd {
+                when: Some("free".into()),
+                agent,
+                mode,
+                flow,
+                accounts: self.queue_chosen_accounts(form),
+                ..place_add(form, project, workspace)
+            };
+        }
         let agent = form.agent.label().map(str::to_string);
         let mode = self.chosen_mode(form, agent.as_ref());
         QueueAdd {
             at: form.at(),
-            zone: form.zone.clone(),
             agent,
             mode,
-            project: Some(project),
-            workspace,
-            worktree: form.worktree().then(|| form.branch.text()),
-            prompt: Some(form.prompt.text()),
-            label: form.label.clone(),
-            submit: form.id.is_none().then_some(true),
             accounts: self.queue_chosen_accounts(form),
-            ..QueueAdd::default()
+            ..place_add(form, project, workspace)
         }
     }
 
@@ -574,6 +580,19 @@ fn matching_places(places: &[Choice], entry: Option<&queue::Entry>) -> Vec<usize
     places.iter().enumerate().filter(|(_, choice)| matches_place(choice, entry)).map(|(i, _)| i).collect()
 }
 
+fn place_add(form: &Form, project: u64, workspace: Option<u64>) -> QueueAdd {
+    QueueAdd {
+        zone: form.zone.clone(),
+        project: Some(project),
+        workspace,
+        worktree: form.worktree().then(|| form.branch.text()),
+        prompt: Some(form.prompt.text()),
+        label: form.label.clone(),
+        submit: form.id.is_none().then_some(true),
+        ..QueueAdd::default()
+    }
+}
+
 fn fill_routine(form: &mut Form, entry: &queue::Entry) {
     let Some(repeat) = entry.task.repeat else { return };
     let text = repeat.to_string();
@@ -601,6 +620,10 @@ fn fill_routine(form: &mut Form, entry: &queue::Entry) {
         }
     }
     form.cleanup = entry.task.cleanup;
+    fill_flow(form, entry);
+}
+
+fn fill_flow(form: &mut Form, entry: &queue::Entry) {
     if let Some(flow) = &entry.task.flow
         && !form.flows.contains(flow)
     {
@@ -620,6 +643,10 @@ fn fill_from_entry(form: &mut Form, entry: &queue::Entry, id: Option<u64>, clock
     form.when = When::On.combo();
     form.clock = Editor::new(clock);
     fill_routine(form, entry);
+    if entry.is_free() {
+        form.when = When::Free.combo();
+        fill_flow(form, entry);
+    }
     form.open_in.choose(usize::from(entry.task.place.branch.is_some()));
     form.branch = Editor::new(entry.task.place.branch.as_deref().unwrap_or_default());
 }

@@ -97,7 +97,7 @@ mod routines {
         else {
             panic!("not add")
         };
-        let request = queue_add(add, true, None).expect("request");
+        let request = queue_add(*add, true, None).expect("request");
         assert_eq!(request.repeat.as_deref(), Some("day 09:00"));
         assert_eq!((request.flow.as_deref(), request.cleanup), (Some("Quick"), Some(true)));
         assert_eq!(request.at, "");
@@ -252,7 +252,7 @@ mod bots {
         else {
             panic!("not add")
         };
-        add
+        *add
     }
 
     #[test]
@@ -346,4 +346,67 @@ fn lists_an_entry_whose_prompt_was_not_taken() {
         lines(&value, "UTC"),
         "1 1970-01-01 00:00 started · pane 7 · server 1-2 · prompt not taken fix · claude\n"
     );
+}
+
+mod waiting_for_room {
+    use super::*;
+
+    fn added(args: &[&str]) -> control::QueueAdd {
+        let QueueAction::Add(add) = action(args) else { panic!("not add") };
+        queue_add(*add, true, None).expect("request")
+    }
+
+    #[test]
+    fn when_free_needs_no_time_and_takes_a_flow_once() {
+        let request = added(&["add", "--when", "free", "--machine", "auto", "--flow", "Quick", "--prompt", "go"]);
+
+        assert_eq!((request.when.as_deref(), request.machine.as_deref()), (Some("free"), Some("auto")));
+        assert_eq!(
+            (request.flow.as_deref(), request.at.as_str(), request.repeat.as_deref()),
+            (Some("Quick"), "", None)
+        );
+        assert!(needs_when_free(&control::Queue::Add(request.clone())));
+        assert!(!needs_routines(&control::Queue::Add(request)));
+    }
+
+    #[rstest::rstest]
+    #[case::with_a_time(&["add", "--when", "free", "--at", "in 2h", "--prompt", "go"])]
+    #[case::with_a_repeat(&["add", "--when", "free", "--every", "2h", "--prompt", "go"])]
+    #[case::another_kind(&["add", "--when", "later", "--prompt", "go"])]
+    fn refuses_what_does_not_go_with_it(#[case] args: &[&str]) {
+        let cli = Cli::try_parse_from(["cornercase", "queue"].into_iter().chain(args.iter().copied()));
+
+        assert!(cli.is_err(), "{args:?}");
+    }
+
+    #[test]
+    fn a_machine_without_when_free_is_wrong_usage_before_asking_the_server() {
+        let args = ["add", "--at", "in 2h", "--machine", "torre", "--prompt", "go"];
+
+        assert!(matches!(run(action(&args)), Err(Error::WrongUsage(_))));
+    }
+
+    #[test]
+    fn first_puts_an_entry_at_the_head_and_needs_the_feature() {
+        let (first, _) = queue_command(action(&["first", "7"])).expect("first");
+
+        assert_eq!(first, control::Queue::First(7));
+        assert!(needs_when_free(&first));
+    }
+
+    #[test]
+    fn a_waiting_entry_lists_its_turn_and_why() {
+        let value = json!({"entries": [
+            {"id": 3, "at": 0, "label": "fix", "agent": "claude", "state": "pending", "wait": "free", "machine": "auto",
+             "waiting": {"position": 1, "why": "needs 6 GB · best: torre 4.1 GB", "since": 0}},
+            {"id": 4, "at": 0, "label": "docs", "agent": "codex", "state": "started", "pane": 2, "server": "x",
+             "wait": "free", "there": {"machine": "torre"}},
+        ]});
+
+        assert_eq!(
+            lines(&value, "UTC"),
+            "3 since 1970-01-01 00:00 waits #1 · needs 6 GB · best: torre 4.1 GB fix · claude · on auto\n\
+             4 since 1970-01-01 00:00 started on torre docs · codex\n"
+        );
+    }
 }

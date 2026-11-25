@@ -12,12 +12,12 @@ pub(crate) struct QueueArgs {
 #[derive(Debug, Subcommand)]
 pub(crate) enum QueueAction {
     #[command(about = "Schedule a prompt or issue and print the entry's persistent id")]
-    Add(QueueAdd),
+    Add(Box<QueueAdd>),
     #[command(about = "Edit an entry that has not started")]
     Edit {
         id: u64,
         #[command(flatten)]
-        add: QueueAdd,
+        add: Box<QueueAdd>,
     },
     #[command(about = "List scheduled, started, failed and missed entries")]
     List(ListArgs),
@@ -44,6 +44,8 @@ pub(crate) enum QueueAction {
     Pause { id: u64 },
     #[command(about = "Let a paused routine fire again, from the next occurrence after now")]
     Resume { id: u64 },
+    #[command(about = "Put an entry that waits for room at the head of the line")]
+    First { id: u64 },
     #[command(about = "Remove every started entry and print the number that restore takes to put them back")]
     ClearStarted(Print),
     #[command(about = "Put back what remove or clear-started removed")]
@@ -69,9 +71,25 @@ pub(crate) struct ListArgs {
 pub(crate) struct QueueAdd {
     #[arg(
         long,
+        conflicts_with = "when",
         help = "Local time: 14:30, tomorrow 9:00, 2026-10-08 09:00, in 2h, in 1w, claude reset or codex reset"
     )]
     pub(crate) at: Option<String>,
+    #[arg(
+        long,
+        value_parser = ["free"],
+        conflicts_with_all = ["every", "bot"],
+        help = "free: wait in line until a machine has the memory it needs (its flow's, else the default in \
+                Settings › Machines), then start there; entries start in the order they were added"
+    )]
+    pub(crate) when: Option<String>,
+    #[arg(
+        long,
+        value_name = "NAME",
+        help = "With --when free: auto for this computer or any linked machine with the project, or one machine's \
+                name [default: auto]"
+    )]
+    pub(crate) machine: Option<String>,
     #[arg(
         long,
         conflicts_with_all = ["at", "issue", "workspace", "worktree"],
@@ -80,7 +98,11 @@ pub(crate) struct QueueAdd {
                 conversation)"
     )]
     pub(crate) every: Option<String>,
-    #[arg(long, conflicts_with_all = ["agent", "mode"], help = "Run this flow in each run of a routine; the prompt is its task")]
+    #[arg(
+        long,
+        conflicts_with_all = ["agent", "mode"],
+        help = "Run this flow, in each run of a routine or once with --when free; the prompt is its task"
+    )]
     pub(crate) flow: Option<String>,
     #[arg(long, help = "Remove a routine run's workspace when it finishes, if nothing would be lost")]
     pub(crate) cleanup: bool,

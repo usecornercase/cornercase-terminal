@@ -35,6 +35,8 @@ pub(super) struct QueueRuntime {
     removals: VecDeque<(u64, Vec<queue::Entry>)>,
     next_undo: u64,
     pub(super) results: super::queue_results::Watching,
+    pub(super) waits: HashMap<u64, queue::Waiting>,
+    pub(super) there: super::queue_there::Following,
 }
 
 impl QueueRuntime {
@@ -43,7 +45,11 @@ impl QueueRuntime {
     }
 
     pub(crate) fn listed(&self) -> Vec<queue::Listed> {
-        self.queue.entries.iter().map(queue::Listed::from).collect()
+        let listed = |entry: &queue::Entry| queue::Listed {
+            waiting: self.waits.get(&entry.id).cloned().filter(|_| entry.waits_for_room()),
+            ..queue::Listed::from(entry)
+        };
+        self.queue.entries.iter().map(listed).collect()
     }
 
     pub(super) fn zone(&self) -> &str {
@@ -59,7 +65,14 @@ impl QueueRuntime {
     }
 
     pub(super) fn wake(&self, clock: i64) -> Option<Duration> {
-        self.area.and_then(|_| self.queue.next(clock))
+        self.area?;
+        let free = self
+            .queue
+            .entries
+            .iter()
+            .any(|entry| entry.waits_for_room() || super::queue_there::Following::follows(entry));
+        let free = free.then_some(super::machine_memory::REFRESH);
+        [self.queue.next(clock), free].into_iter().flatten().min()
     }
 
     pub(super) fn starting(&self, id: u64) -> bool {
@@ -82,6 +95,10 @@ impl QueueRuntime {
             return Err("this entry is already starting".into());
         }
         self.queue.remove(id)
+    }
+
+    pub(super) fn put_first(&mut self, id: u64) -> Result<(), String> {
+        self.queue.put_first(id)
     }
 
     pub(super) fn pause(&mut self, id: u64, paused: bool, now: i64) -> Result<(), String> {
@@ -166,6 +183,16 @@ impl QueueRuntime {
         if let Some(entry) = self.queue.entry_mut(id).filter(|entry| entry.unsent != unsent) {
             entry.unsent = unsent;
         }
+    }
+
+    pub(super) fn started_there(&mut self, id: u64, (pane, server): (u64, String), there: queue::There) {
+        if let Some(entry) = self.queue.entry_mut(id) {
+            entry.state = State::Started { pane, server };
+            entry.started = Some(crate::time::now());
+            entry.unsent = false;
+            entry.there = Some(there);
+        }
+        self.waits.remove(&id);
     }
 
     pub(super) fn started_at(&mut self, id: u64, pane: u64, at: i64) {
@@ -296,6 +323,8 @@ impl App {
                 self.fail_queued(id, &reason);
             }
         }
+        self.drive_free(now);
+        self.follow_there(now);
     }
 
     pub(super) fn queued_spec(&self, client: u64) -> Option<launch::Spec> {
@@ -318,6 +347,9 @@ impl App {
     }
 
     fn queue_started(&mut self, id: u64, value: &Value) {
+        if let Some(machine) = value.get("machine").and_then(Value::as_str) {
+            return self.queue_started_there(id, machine, value);
+        }
         let pane = value.get("pane").or_else(|| value.pointer("/members/0/pane")).and_then(Value::as_u64);
         self.panels.queued.started(id, pane.unwrap_or_default());
         self.record_run_workspace(id, value);
@@ -328,12 +360,14 @@ impl App {
             self.panels.queued.set_unsent(id, true);
             return self.queue_unsent_notice(id, workspace, panes);
         }
-        let text = format!("started {}", self.queued_name(id));
+        let here = self.panels.queued.queue.entry(id).filter(|entry| entry.is_free()).map(|_| " on this computer");
+        let text = format!("started {}{}", self.queued_name(id), here.unwrap_or_default());
+        self.panels.queued.waits.remove(&id);
         let said = Message { kind: MessageKind::QueueStarted, text, workspace, panes, run: None, role: None };
         self.queue_notice(said, ui::ToastIcon::Check);
     }
 
-    fn queue_unsent_notice(&mut self, id: u64, workspace: Option<u64>, panes: Vec<u64>) {
+    pub(super) fn queue_unsent_notice(&mut self, id: u64, workspace: Option<u64>, panes: Vec<u64>) {
         let text = format!("{} started, but its agent did not take the prompt", self.queued_name(id));
         let said = Message { kind: MessageKind::QueueUnsent, text, workspace, panes, run: None, role: None };
         self.queue_notice(said, ui::ToastIcon::Bug);
@@ -368,7 +402,7 @@ impl App {
         self.queue_notice(said, ui::ToastIcon::Bug);
     }
 
-    fn queued_name(&self, id: u64) -> String {
+    pub(super) fn queued_name(&self, id: u64) -> String {
         match self.panels.queued.queue.entry(id).filter(|entry| entry.is_run()) {
             Some(entry) => format!("routine {}", entry.task.label),
             None => format!("queued agent {id}"),
@@ -415,7 +449,7 @@ impl App {
 
     pub(super) fn queue_prepared(&mut self, event: QueueEvent) {
         let reply = event.result.and_then(|task| {
-            if task.at <= crate::time::now() {
+            if task.wait.is_none() && task.at <= crate::time::now() {
                 return Err("the scheduled time passed while preparing this entry".into());
             }
             self.panels.queued.schedule(event.edit, task)
@@ -472,7 +506,14 @@ impl App {
     }
 
     fn queued_status(&self, entry: &queue::Entry) -> String {
-        let status = self.queued_state_text(&entry.state);
+        if let Some(waiting) = self.panels.queued.waits.get(&entry.id).filter(|_| entry.waits_for_room()) {
+            let waited = crate::time::age(crate::time::now().saturating_sub(waiting.since));
+            return format!("#{} waits · {} · {waited}", waiting.position, waiting.why);
+        }
+        if entry.waits_for_room() {
+            return "waits for room".into();
+        }
+        let status = self.there_status(entry).unwrap_or_else(|| self.queued_state_text(&entry.state));
         if entry.unsent && matches!(entry.state, State::Started { .. }) {
             return format!("{status} · prompt not taken");
         }
@@ -531,6 +572,10 @@ impl App {
     }
 
     pub(super) fn open_queued(&mut self, id: u64, area: Rect) {
+        let Some(entry) = self.panels.queued.queue.entry(id) else { return };
+        if matches!(entry.state, State::Started { .. }) && self.open_there(&entry.clone()) {
+            return;
+        }
         let Some(entry) = self.panels.queued.queue.entry(id) else { return };
         match &entry.state {
             State::Started { pane, server } | State::Kept { pane, server, .. }

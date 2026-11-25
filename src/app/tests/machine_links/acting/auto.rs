@@ -202,3 +202,145 @@ mod the_memory {
         assert!(listed["machines"][0]["memory"]["read_at"].is_string(), "{listed}");
     }
 }
+
+mod the_queue {
+    use super::*;
+    use crate::queue::State;
+
+    impl Auto {
+        fn asks(&mut self, command: &str, args: &Value) -> std::result::Result<Value, (String, String)> {
+            let text = json!({"contract": 1, "command": command, "args": args}).to_string();
+            self.remote.rig.app.request(CLIENT, &text, Some(AREA), Instant::now());
+            let answers = self.remote.rig.app.take_answers();
+            replied(&answers.last().expect("an answer at once").1)
+        }
+
+        fn waits(&mut self, needs: &str) -> u64 {
+            self.remote.rig.app.config.default_memory = needs.into();
+            self.remote.rig.app.set_queue_area(AREA);
+            let project = self.project();
+            let entry = json!({ "when": "free", "project": project, "prompt": "fix it", "agent": "claude" });
+            let added = self.asks("queue", &json!({ "action": "add", "entry": entry })).expect("added");
+            added["id"].as_u64().expect("an id")
+        }
+
+        fn drive(&mut self) {
+            self.remote.rig.app.refresh_at(Instant::now(), crate::time::now());
+            self.remote.rig.until("the memory is read", |app| !app.memory_asking());
+        }
+
+        fn listed(&mut self, id: u64) -> Value {
+            let listed = self.asks("queue", &json!({ "action": "list" })).expect("the list");
+            let entries = listed["entries"].as_array().cloned().unwrap_or_default();
+            entries.into_iter().find(|entry| entry["id"] == id).expect("the entry")
+        }
+    }
+
+    #[test]
+    fn an_entry_that_waits_for_room_starts_on_the_machine_that_has_it() {
+        let mut auto = auto(roomy, vec![web_shop()]);
+        let id = auto.waits("8GB");
+
+        auto.drive();
+        auto.remote.rig.until("it starts there", |app| {
+            app.panels.queued.queue().entry(id).is_some_and(|entry| matches!(entry.state, State::Started { .. }))
+        });
+
+        let entry = auto.remote.rig.app.panels.queued.queue().entry(id).expect("the entry").clone();
+        assert_eq!(entry.there.map(|there| there.machine).as_deref(), Some("vps"));
+        let sent = auto.sent_start();
+        assert_eq!((&sent["args"]["project"], &sent["args"]["agent"]), (&json!(1), &json!("claude")));
+        assert!(sent["args"]["prompt"].as_str().is_some_and(|prompt| prompt.starts_with("fix it")), "{sent}");
+        assert_eq!(toast(&auto.remote.rig.app), Some(format!("started queued agent {id} on vps").as_str()));
+    }
+
+    #[test]
+    fn an_entry_waits_with_why_while_nothing_has_room_and_the_next_waits_behind_it() {
+        let mut auto = auto(roomy, vec![web_shop()]);
+        let first = auto.waits("16GB");
+        let second = auto.waits("16GB");
+
+        auto.drive();
+
+        let listed = auto.listed(first);
+        assert_eq!(listed["state"], json!("pending"));
+        assert_eq!(
+            (&listed["waiting"]["position"], &listed["waiting"]["why"], &listed["waiting"]["needs"]),
+            (&json!(1), &json!("needs 16 GB · best: vps 11 GB"), &json!(16u64 << 30))
+        );
+        assert_eq!(auto.listed(second)["waiting"]["why"], json!(format!("in line behind queued agent {first}")));
+        assert_eq!(auto.commands(), ["machines"]);
+        let told = toast(&auto.remote.rig.app).unwrap_or_default().to_string();
+        assert!(told.contains("waits for room: 2nd in line"), "{told}");
+    }
+
+    #[test]
+    fn first_puts_an_entry_at_the_head_of_the_line() {
+        let mut auto = auto(roomy, vec![web_shop()]);
+        let one = auto.waits("16GB");
+        let two = auto.waits("16GB");
+
+        auto.asks("queue", &json!({ "action": "first", "entry": two })).expect("first");
+        auto.drive();
+
+        assert_eq!(auto.listed(two)["waiting"]["position"], json!(1));
+        assert_eq!(auto.listed(one)["waiting"]["why"], json!(format!("in line behind queued agent {two}")));
+    }
+
+    fn started_there(auto: &mut Auto) -> u64 {
+        let id = auto.waits("8GB");
+        auto.drive();
+        auto.remote.rig.until("it starts there", |app| {
+            app.panels.queued.queue().entry(id).is_some_and(|entry| matches!(entry.state, State::Started { .. }))
+        });
+        id
+    }
+
+    fn row_status(auto: &Auto, id: u64) -> String {
+        let rows = auto.remote.rig.app.queued_rows();
+        rows.into_iter().find(|row| row.id == id).map(|row| row.status).expect("the row")
+    }
+
+    #[test]
+    fn a_run_there_is_followed_through_the_machine_s_snapshot_and_paused_while_it_is_down() {
+        let mut auto = auto(roomy, vec![web_shop()]);
+        let id = started_there(&mut auto);
+        let pane = PaneInfo { id: TAB + 1, status: Some("working".into()), ..PaneInfo::default() };
+        let tab = TabInfo { id: TAB, panes: vec![pane], ..TabInfo::default() };
+        let held = &mut auto.remote.rig.app.machines.held_mut()[0];
+        let seen = held.seen.as_mut().expect("the machine's snapshot");
+        seen.projects[0].workspaces[0].tabs = vec![tab];
+
+        assert_eq!(row_status(&auto, id), "started on vps · working");
+
+        let down = crate::machines::Status { state: crate::machines::State::Unreachable, ..Default::default() };
+        auto.remote.rig.app.machines.set_status(0, down);
+
+        assert_eq!(row_status(&auto, id), "started on vps · paused while vps is unreachable");
+    }
+
+    #[rstest]
+    #[case::a_time(json!({ "when": "free", "at": "14:30", "prompt": "x" }), "an entry that waits for room has no time")]
+    #[case::a_repeat(json!({ "when": "free", "repeat": "2h", "prompt": "x" }), "a routine has its own times")]
+    #[case::a_machine_alone(json!({ "machine": "vps", "prompt": "x" }), "--machine goes with --when free")]
+    #[case::another_kind(json!({ "when": "later", "prompt": "x" }), "`when` takes free")]
+    fn refuses_what_does_not_go_with_waiting(#[case] entry: Value, #[case] why: &str) {
+        let mut auto = auto(roomy, vec![web_shop()]);
+
+        let (_, message) = auto.asks("queue", &json!({ "action": "add", "entry": entry })).expect_err("refused");
+
+        assert!(message.starts_with(why), "{message}");
+    }
+
+    #[test]
+    fn refuses_a_machine_it_does_not_know() {
+        let mut auto = auto(roomy, vec![web_shop()]);
+        let project = auto.project();
+        let entry =
+            json!({ "when": "free", "machine": "nowhere", "project": project, "prompt": "x", "agent": "claude" });
+
+        let (code, _) = auto.asks("queue", &json!({ "action": "add", "entry": entry })).expect_err("refused");
+
+        assert_eq!(code, "not-found");
+    }
+}

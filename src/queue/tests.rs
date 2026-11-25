@@ -140,6 +140,16 @@ mod persistence {
     }
 
     #[test]
+    fn a_file_of_every_version_it_knows_is_read() {
+        let dir = TempDir::new();
+        let path = dir.path().join("queue.json");
+        for version in 1..=VERSION {
+            std::fs::write(&path, format!(r#"{{"version":{version},"next_id":1,"entries":[]}}"#)).expect("write");
+            assert!(read_saved(&path).is_some(), "version {version}");
+        }
+    }
+
+    #[test]
     fn missing_corrupt_and_other_version_files_are_empty() {
         let dir = TempDir::new();
         let path = dir.path().join("queue.json");
@@ -710,5 +720,106 @@ mod unsent {
         assert!(text.contains("\"unsent\":true"), "{text}");
         let read: Entry = serde_json::from_str(&text).expect("entry");
         assert!(read.unsent && Listed::from(&read).entry.unsent);
+    }
+}
+
+mod waiting_for_room {
+    use super::*;
+
+    fn free(at: i64) -> Task {
+        Task { wait: Some(Wait::Free), machine: Some("auto".into()), ..task(at) }
+    }
+
+    #[test]
+    fn is_never_started_by_the_clock() {
+        let mut queue = Queue::default();
+        let id = queue.add(free(100)).expect("add");
+
+        assert_eq!((queue.due(100 + GRACE + 10), queue.next(0)), (Vec::new(), None));
+        assert_eq!(queue.entry(id).expect("entry").state, State::Pending);
+        assert_eq!(queue.waiting(), [id]);
+    }
+
+    #[test]
+    fn takes_turns_in_the_order_they_joined_and_first_puts_one_at_the_head() {
+        let mut queue = Queue::default();
+        let one = queue.add(free(100)).expect("one");
+        let two = queue.add(free(200)).expect("two");
+        let three = queue.add(free(300)).expect("three");
+        queue.add(task(50)).expect("a timed entry");
+        assert_eq!(queue.waiting(), [one, two, three]);
+
+        queue.put_first(three).expect("three first");
+        queue.put_first(two).expect("two first");
+
+        assert_eq!(queue.waiting(), [two, three, one]);
+    }
+
+    #[test]
+    fn first_refuses_an_entry_that_does_not_wait() {
+        let mut queue = Queue::default();
+        let timed = queue.add(task(100)).expect("timed");
+        let started = queue.add(free(100)).expect("started");
+        queue.entry_mut(started).expect("entry").state = State::Started { pane: 1, server: "s".into() };
+
+        assert!(queue.put_first(timed).is_err());
+        assert!(queue.put_first(started).is_err());
+        assert!(queue.put_first(99).is_err());
+    }
+
+    #[test]
+    fn moves_the_file_to_the_next_version_only_while_it_holds_one() {
+        let mut queue = Queue::default();
+        queue.add(task(100)).expect("timed");
+        assert_eq!(queue.saved().version, 1);
+
+        let id = queue.add(free(100)).expect("free");
+        assert_eq!(queue.saved().version, VERSION);
+
+        queue.remove(id).expect("remove");
+        assert_eq!(queue.saved().version, 1);
+    }
+
+    #[test]
+    fn a_flow_without_a_repeat_needs_the_new_version_too() {
+        let mut queue = Queue::default();
+        queue.add(Task { flow: Some("review".into()), ..task(100) }).expect("one-off flow");
+
+        assert_eq!(queue.saved().version, VERSION);
+    }
+
+    #[test]
+    fn a_run_started_on_a_machine_keeps_where_across_a_restart() {
+        let dir = TempDir::new();
+        let path = dir.path().join("queue.json");
+        let mut queue = Queue::default();
+        let id = queue.add(free(100)).expect("add");
+        let entry = queue.entry_mut(id).expect("entry");
+        entry.state = State::Started { pane: 4, server: "torre-1".into() };
+        entry.there = Some(There { machine: "torre".into(), workspace: Some(2), tab: Some(3) });
+        let waiting = queue.add(free(200)).expect("waiting");
+        persist::save(&path, &queue.saved()).expect("save");
+
+        let restored = load(&path, 100 + GRACE * 10);
+
+        assert_eq!(restored.saved(), queue.saved());
+        assert_eq!(restored.waiting(), [waiting]);
+        assert_eq!(
+            restored.entry(id).and_then(|entry| entry.there.clone()).map(|there| there.machine).as_deref(),
+            Some("torre")
+        );
+    }
+
+    #[test]
+    fn a_list_carries_what_it_waits_for_only_when_told() {
+        let mut queue = Queue::default();
+        let id = queue.add(free(100)).expect("add");
+
+        let listed = serde_json::to_value(Listed::from(queue.entry(id).expect("entry"))).expect("json");
+
+        assert_eq!(
+            (&listed["wait"], &listed["machine"], listed.get("waiting")),
+            (&serde_json::json!("free"), &serde_json::json!("auto"), None)
+        );
     }
 }

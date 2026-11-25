@@ -53,7 +53,7 @@ pub(crate) use requests::{
     use_search_settings, use_settings_search, use_surface_patches, use_todo_panel, use_tunnel_hold, use_tunnel_machine,
     use_tunnel_orders, use_tunnel_reverse, use_view, use_view_bot,
 };
-pub(crate) use requests::{check_boot, use_boot, use_machine_auto, use_machine_boot};
+pub(crate) use requests::{check_boot, use_boot, use_machine_auto, use_machine_boot, use_queue_when_free};
 pub(crate) use requests::{hinted, input_ended, reader_gone_within, use_remote, used_remote, watched};
 pub(crate) use requests::{line_done, share, unshare};
 pub(crate) use server_process::{Found, find, find_or_start, running, wait_for_exit};
