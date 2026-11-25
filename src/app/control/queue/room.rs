@@ -69,7 +69,7 @@ impl App {
         let mut head = None;
         for (at, id) in waiting.into_iter().enumerate() {
             if let Some(head) = head {
-                self.note_wait(id, at + 1, format!("in line behind queued agent {head}"), None);
+                self.note_wait(id, at + 1, format!("behind queued agent {head}"), None);
                 continue;
             }
             match self.free_turn(id, now) {
@@ -156,14 +156,8 @@ impl App {
         let first = known.is_none();
         self.panels.queued.waits.insert(id, waiting.clone());
         if first {
-            let needs = needs.map(|needs| format!(", needs {}", crate::host::memory::shown(needs)));
-            let text = format!(
-                "{} waits for room: {} in line{} · {}",
-                self.queued_name(id),
-                ordinal(position),
-                needs.unwrap_or_default(),
-                waiting.why
-            );
+            let text =
+                format!("{} waits for room: {} in line, {}", self.queued_name(id), ordinal(position), waiting.why);
             let said = Message {
                 kind: MessageKind::QueueWaiting,
                 text,

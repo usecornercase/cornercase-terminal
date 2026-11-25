@@ -449,6 +449,7 @@ impl App {
             ui::ActivityItem::Help => self.open_help(pos),
             ui::ActivityItem::More => self.open_more(pos),
             ui::ActivityItem::Machine => self.open_machines(pos),
+            ui::ActivityItem::Queue => self.open_queue(None),
         }
         Ok(())
     }
@@ -462,8 +463,10 @@ impl App {
     fn footer_hit(&self, areas: &ui::Areas, pos: Position) -> Option<ui::ActivityItem> {
         let machine =
             self.machine_label().map(|label| ui::machine_button(areas.machine, &label, self.machine_tunnels()).0);
+        let waiting = self.panels.queued.queue().waiting().len();
         [
             (ui::help_button(areas.more), ui::ActivityItem::Help),
+            (ui::queue_button(areas.more, waiting), ui::ActivityItem::Queue),
             (ui::more_button(areas.more), ui::ActivityItem::More),
             (ui::recap_button(areas.worktrees), ui::ActivityItem::Recap),
             (machine.unwrap_or_default(), ui::ActivityItem::Machine),

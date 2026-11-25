@@ -268,7 +268,7 @@ mod the_queue {
             (&listed["waiting"]["position"], &listed["waiting"]["why"], &listed["waiting"]["needs"]),
             (&json!(1), &json!("needs 16 GB · best: vps 11 GB"), &json!(16u64 << 30))
         );
-        assert_eq!(auto.listed(second)["waiting"]["why"], json!(format!("in line behind queued agent {first}")));
+        assert_eq!(auto.listed(second)["waiting"]["why"], json!(format!("behind queued agent {first}")));
         assert_eq!(auto.commands(), ["machines"]);
         let told = toast(&auto.remote.rig.app).unwrap_or_default().to_string();
         assert!(told.contains("waits for room: 2nd in line"), "{told}");
@@ -284,7 +284,7 @@ mod the_queue {
         auto.drive();
 
         assert_eq!(auto.listed(two)["waiting"]["position"], json!(1));
-        assert_eq!(auto.listed(one)["waiting"]["why"], json!(format!("in line behind queued agent {two}")));
+        assert_eq!(auto.listed(one)["waiting"]["why"], json!(format!("behind queued agent {two}")));
     }
 
     fn started_there(auto: &mut Auto) -> u64 {
@@ -342,5 +342,31 @@ mod the_queue {
         let (code, _) = auto.asks("queue", &json!({ "action": "add", "entry": entry })).expect_err("refused");
 
         assert_eq!(code, "not-found");
+    }
+}
+
+mod the_footer {
+    use super::*;
+
+    #[test]
+    fn counts_the_entries_waiting_for_room_and_opens_the_queue_on_a_click() {
+        let mut auto = auto(roomy, vec![web_shop()]);
+        auto.remote.rig.app.config.default_memory = "16GB".into();
+        auto.remote.rig.app.set_queue_area(AREA);
+        let project = auto.project();
+        for _ in 0..2 {
+            let entry = json!({ "when": "free", "project": project, "prompt": "fix it", "agent": "claude" });
+            let text =
+                json!({"contract": 1, "command": "queue", "args": {"action": "add", "entry": entry}}).to_string();
+            auto.remote.rig.app.request(CLIENT, &text, Some(AREA), Instant::now());
+        }
+        let areas = app_areas(&auto.remote.rig.app);
+        let button = ui::queue_button(areas.more, 2);
+
+        let drawn = render(&mut auto.remote.rig.app, AREA).backend().to_string();
+        assert!(drawn.contains("queue 2"), "{drawn}");
+
+        click(&mut auto.remote.rig.app, button.as_position());
+        assert!(matches!(auto.remote.rig.app.overlay, Some(Overlay::QueueList(_))));
     }
 }

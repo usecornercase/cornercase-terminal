@@ -263,6 +263,7 @@ impl App {
             todo_dot: self.config.todo_dot,
             todo_pending: self.panels.todos.pending() > 0,
             plugin_buttons: self.plugin_faces(),
+            queue_waiting: self.panels.queued.queue().waiting().len(),
             ..ui::View::default()
         }
     }

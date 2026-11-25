@@ -74,7 +74,9 @@ pub(crate) use bots::run::RunBlock;
 pub(crate) use bots::{BotEntry, BotsView, bot_menu, bot_rows, marks_width};
 pub(crate) use chrome::ChangesButton;
 pub use chrome::MORE_LABEL;
-pub(crate) use chrome::{help_button, machine_button, more_button, plugin_buttons, recap_button, worktrees_button};
+pub(crate) use chrome::{
+    help_button, machine_button, more_button, plugin_buttons, queue_button, recap_button, worktrees_button,
+};
 pub(crate) use dialog::context::{ContextView, Fill, Row, Section, Slice, context_notes};
 pub(crate) use dialog::flows::{
     FlowPreview, Flows, FlowsHit, flows_hit, flows_pick_rows, flows_preview, flows_row_at, flows_text, flows_wide,
@@ -299,6 +301,7 @@ pub(crate) struct View<'a> {
     pub(crate) no_tab: NoTab,
     pub(crate) tab_bar: Option<tab_bar::TabBar>,
     pub(crate) plugin_buttons: Vec<Face>,
+    pub(crate) queue_waiting: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

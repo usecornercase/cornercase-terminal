@@ -43,7 +43,10 @@ impl App {
         Some(match item {
             MoreItem::Update => self.update_entry().unwrap_or_default(),
             MoreItem::NewBot => "new bot…".into(),
-            MoreItem::Queue => "queue".into(),
+            MoreItem::Queue => match self.panels.queued.queue().waiting().len() {
+                0 => "queue".into(),
+                waiting => format!("queue · {waiting} waiting"),
+            },
             MoreItem::Settings => "settings".into(),
             MoreItem::Usage => "usage".into(),
             MoreItem::Processes => "processes".into(),

@@ -463,8 +463,17 @@ impl App {
 
     pub(super) fn queued_rows(&self) -> Vec<Row> {
         let zone = self.panels.queued.display_zone();
+        let turns = self.panels.queued.queue.waiting();
+        let turn = |entry: &queue::Entry| turns.iter().position(|id| *id == entry.id).map(|at| at + 1);
         let entries = self.panels.queued.queue.entries.iter().filter(|entry| !entry.is_bot());
-        entries.map(|entry| self.queued_row(entry, zone)).collect()
+        let row = |entry: &queue::Entry| {
+            let row = self.queued_row(entry, zone);
+            match turn(entry) {
+                Some(at) => Row { turn: Some(at), when: format!("#{at} in line"), ..row },
+                None => row,
+            }
+        };
+        entries.map(row).collect()
     }
 
     pub(super) fn bot_routine_count(&self) -> usize {
@@ -502,13 +511,14 @@ impl App {
             routine: task.routine,
             at: task.at,
             ran: entry.started.unwrap_or(task.at),
+            turn: None,
         }
     }
 
     fn queued_status(&self, entry: &queue::Entry) -> String {
         if let Some(waiting) = self.panels.queued.waits.get(&entry.id).filter(|_| entry.waits_for_room()) {
             let waited = crate::time::age(crate::time::now().saturating_sub(waiting.since));
-            return format!("#{} waits · {} · {waited}", waiting.position, waiting.why);
+            return format!("waits {waited} · {}", waiting.why);
         }
         if entry.waits_for_room() {
             return "waits for room".into();
@@ -633,6 +643,15 @@ impl App {
                     .map_or_else(String::new, |entry| queue::clock::display(entry.task.at, &entry.task.zone));
                 format!("resumed routine {id}, next at {next}")
             }
+            Err(reason) => reason,
+        };
+        self.messages.toast = Some(Toast::new(text, ui::ToastIcon::Check));
+        self.sync_queued();
+    }
+
+    pub(super) fn first_queued(&mut self, id: u64) {
+        let text = match self.panels.queued.put_first(id) {
+            Ok(()) => format!("queued agent {id} is first in line"),
             Err(reason) => reason,
         };
         self.messages.toast = Some(Toast::new(text, ui::ToastIcon::Check));

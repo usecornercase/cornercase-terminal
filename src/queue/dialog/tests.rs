@@ -22,7 +22,12 @@ fn row(id: u64, label: &str, state: State) -> Row {
         routine: None,
         at: i64::try_from(id).expect("small") * 100,
         ran: 0,
+        turn: None,
     }
+}
+
+fn waiting(id: u64, turn: usize) -> Row {
+    Row { turn: Some(turn), when: format!("#{turn} in line"), ..row(id, "wait", State::Pending) }
 }
 
 fn routine(id: u64, label: &str, at: i64) -> Row {
@@ -331,5 +336,36 @@ mod clicks {
         assert_eq!(press(&mut dialog, KeyCode::Enter), Asked::Open(2));
         assert_eq!(press(&mut dialog, KeyCode::Esc), Asked::Close);
         assert_eq!(press(&mut Dialog::new(None), KeyCode::Enter), Asked::None);
+    }
+}
+
+mod waiting_for_room {
+    use super::*;
+
+    #[test]
+    fn comes_first_in_its_turn_before_what_starts_next_by_time() {
+        let rows = vec![row(1, "soon", State::Pending), waiting(5, 2), routine(2, "daily", 50), waiting(9, 1)];
+
+        let ids: Vec<u64> = arranged(rows).iter().map(|row| row.id).collect();
+
+        assert_eq!(ids, [9, 5, 2, 1]);
+    }
+
+    #[test]
+    fn offers_first_to_an_entry_behind_the_head_only() {
+        let mut dialog = Dialog::new(Some(5));
+        dialog.set(vec![waiting(9, 1), waiting(5, 2)], &BTreeSet::new(), 0);
+        assert!(dialog.buttons(WIDE).contains(&Button::First));
+        assert_eq!(
+            dialog.click(
+                Hit::Button(dialog.buttons(WIDE).iter().position(|b| *b == Button::First).expect("first")),
+                WIDE
+            ),
+            Asked::First(5)
+        );
+
+        dialog.select(9);
+
+        assert!(!dialog.buttons(WIDE).contains(&Button::First));
     }
 }

@@ -153,6 +153,19 @@ fn a_short_terminal_still_shows_the_footer(#[case] sidebar: Sidebar, #[case] hei
 }
 
 #[test]
+fn the_footer_counts_what_waits_for_room_between_more_and_help() {
+    let a = layout_with(TALL, Widths::default(), false, Sidebar::ProjectsOnTop);
+    let t = render_sized(&View { queue_waiting: 3, ..with_lists(Sidebar::ProjectsOnTop) }, W, TALL.height);
+    let text = |r: Rect| row_text(&t, r).trim().to_string();
+    let queue = queue_button(a.more, 3);
+
+    assert_eq!(text(queue), "queue 3");
+    assert_eq!(t.backend().buffer()[(queue.x + 2, queue.y)].fg, Color::Yellow);
+    assert_eq!(text(Rect { width: queue.x - a.more.x, ..more_button(a.more) }), "More ▴");
+    assert!(queue_button(a.more, 0).is_empty());
+}
+
+#[test]
 fn short_terminals_do_not_panic() {
     for height in 1..=TALL.height {
         render_sized(&with_lists(Sidebar::WorkspacesOnTop), W, height);
