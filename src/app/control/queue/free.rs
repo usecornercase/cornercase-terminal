@@ -1,13 +1,12 @@
 use serde_json::json;
 
-use super::super::flow::pick;
 use super::super::machines::unknown;
 use crate::app::App;
 use crate::app::control::Handled;
 use crate::control::QueueAdd;
 use crate::control::contract::Refusal;
 use crate::machines::memory::{AUTO, is_auto};
-use crate::queue::{Entry, Place, Task, Wait};
+use crate::queue::{Entry, Task, Wait};
 
 const FREE: &str = "free";
 
@@ -27,13 +26,16 @@ pub(super) fn refuse_free_mix(add: &QueueAdd, old: Option<&Entry>) -> Result<(),
     if old.is_some_and(|entry| !entry.is_free()) {
         return Err("an entry with a time cannot start waiting for room; add a new entry".into());
     }
-    let refused = [
-        (!add.at.is_empty(), "an entry that waits for room has no time: it starts as soon as a machine has room"),
-        (add.repeat.is_some(), "a routine has its own times: it cannot wait for room"),
-        (add.cleanup.is_some(), "--cleanup belongs to a routine"),
-        (add.flow.is_some() && (add.agent.is_some() || add.mode.is_some()), "a flow chooses its own agents and modes"),
-    ];
-    refused.iter().find(|(wrong, _)| *wrong).map_or(Ok(()), |(_, why)| Err((*why).into()))
+    if !add.at.is_empty() {
+        return Err("an entry that waits for room has no time: it starts as soon as a machine has room".into());
+    }
+    if add.repeat.is_some() || add.cleanup.is_some() {
+        return Err("a routine has its own times: it cannot wait for room, and --cleanup is a routine's".into());
+    }
+    if add.flow.is_some() && (add.agent.is_some() || add.mode.is_some()) {
+        return Err("a flow chooses its own agents and modes".into());
+    }
+    Ok(())
 }
 
 impl App {
@@ -47,29 +49,11 @@ impl App {
         machine.map(|machine| machine.name.clone()).ok_or_else(|| unknown(&asked))
     }
 
-    pub(super) fn free_flow(
-        &self,
-        add: &QueueAdd,
-        old: Option<&Entry>,
-        place: &Place,
-    ) -> Result<Option<String>, String> {
-        let name = match (&add.flow, old) {
-            (Some(name), _) => name.clone(),
-            (None, Some(old)) if add.agent.is_none() => match &old.task.flow {
-                Some(name) => name.clone(),
-                None => return Ok(None),
-            },
-            _ => return Ok(None),
-        };
-        let (flow, _) = pick(&self.flow_listing(Some(&place.project)), &name)?;
-        Ok(Some(flow.name))
-    }
-
     pub(super) fn make_free(&self, task: &mut Task, add: &QueueAdd, old: Option<&Entry>) -> Result<(), Refusal> {
         task.wait = Some(Wait::Free);
         task.machine = Some(self.free_machine(add, old)?);
         task.first = old.and_then(|entry| entry.task.first);
-        task.flow = self.free_flow(add, old, &task.place)?;
+        task.flow = self.routine_flow(add, old, &task.place)?;
         if task.flow.is_some() {
             task.agent.clear();
             task.command.clear();

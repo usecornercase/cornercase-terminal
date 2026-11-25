@@ -112,7 +112,7 @@ impl QueueResultEvent {
     }
 }
 
-fn pull_of(pull: &PullRequest) -> Pull {
+pub(super) fn pull_of(pull: &PullRequest) -> Pull {
     Pull {
         number: pull.number,
         title: pull.title.clone(),

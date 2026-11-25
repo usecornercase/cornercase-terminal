@@ -8,7 +8,6 @@ use crate::control::TabInfo;
 use crate::issues::browser::{Accounts, AgentNote, Browser, Screen};
 use crate::issues::{Issue, Source};
 
-const SHOP: &str = "github.com/acme/web-shop";
 const WIDE: Rect = Rect { x: 0, y: 0, width: 120, height: 30 };
 const TAB: u64 = 9;
 
@@ -109,17 +108,6 @@ fn shop(projects: Vec<ProjectInfo>) -> control::Report {
     control::Report { boot: BOOT.into(), home: Some("/home/ana".into()), projects, ..control::Report::default() }
 }
 
-fn web_shop() -> ProjectInfo {
-    ProjectInfo {
-        id: 1,
-        name: "web-shop".into(),
-        path: PathBuf::from("/home/ana/code/web-shop"),
-        repo: Some(SHOP.into()),
-        workspaces: vec![workspace()],
-        ..ProjectInfo::default()
-    }
-}
-
 fn issue() -> Issue {
     Issue {
         source: Source::Github,
@@ -146,13 +134,8 @@ fn reading(projects: Vec<ProjectInfo>) -> Reading {
 }
 
 fn reading_with(reply: Reply, projects: Vec<ProjectInfo>) -> Reading {
-    let mut remote = seeing_in(reply, shop(projects));
-    let dir = TempDir::new();
-    let path = dir.path().join("web-shop");
-    std::fs::create_dir(&path).expect("the project's folder");
+    let (mut remote, dir) = with_shop_here(reply, shop(projects));
     let app = &mut remote.rig.app;
-    app.open_project(path, AREA).expect("open the project");
-    app.projects[0].repo.identity = Some(SHOP.into());
     app.config.agent = "claude".into();
     app.config.account_picker = true;
     app.open_issues(AREA).expect("open the issues");

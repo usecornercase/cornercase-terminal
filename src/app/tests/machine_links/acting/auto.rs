@@ -1,7 +1,6 @@
 use super::*;
 use crate::text::GB;
 
-const SHOP: &str = "github.com/acme/web-shop";
 const CLIENT: u64 = 7;
 const TAB: u64 = 9;
 
@@ -32,17 +31,6 @@ fn older(command: &str) -> Value {
     }
 }
 
-fn web_shop() -> ProjectInfo {
-    ProjectInfo {
-        id: 1,
-        name: "web-shop".into(),
-        path: PathBuf::from("/home/ana/code/web-shop"),
-        repo: Some(SHOP.into()),
-        workspaces: vec![workspace()],
-        ..ProjectInfo::default()
-    }
-}
-
 struct Auto {
     remote: Remote,
     _dir: TempDir,
@@ -50,13 +38,7 @@ struct Auto {
 
 fn auto(answer: fn(&str) -> Value, projects: Vec<ProjectInfo>) -> Auto {
     let report = control::Report { boot: BOOT.into(), projects, ..control::Report::default() };
-    let mut remote = seeing_in(Reply::Each(answer), report);
-    let dir = TempDir::new();
-    let path = dir.path().join("web-shop");
-    std::fs::create_dir(&path).expect("the project's folder");
-    let app = &mut remote.rig.app;
-    app.open_project(path, AREA).expect("open the project");
-    app.projects[0].repo.identity = Some(SHOP.into());
+    let (remote, dir) = with_shop_here(Reply::Each(answer), report);
     Auto { remote, _dir: dir }
 }
 
@@ -343,10 +325,6 @@ mod the_queue {
 
         assert_eq!(code, "not-found");
     }
-}
-
-mod the_footer {
-    use super::*;
 
     #[test]
     fn counts_the_entries_waiting_for_room_and_opens_the_queue_on_a_click() {

@@ -8,7 +8,7 @@ use super::App;
 use super::event::AppEvent;
 use super::machine_links::{Held, RemoteItem};
 use super::notifications::{Message, MessageKind};
-use super::queue_results::QueueResultEvent;
+use super::queue_results::{QueueResultEvent, pull_of};
 use crate::agents::activity::Status;
 use crate::control::PaneInfo;
 use crate::log::{Job, Level};
@@ -47,16 +47,6 @@ fn pane_there(held: &Held, pane: u64) -> Option<&PaneInfo> {
     let workspaces = seen.projects.iter().flat_map(|project| &project.workspaces);
     let tabs = workspaces.flat_map(|workspace| &workspace.tabs);
     tabs.flat_map(|tab| &tab.panes).find(|info| info.id == pane)
-}
-
-fn pull_of(pull: &pull_request::PullRequest) -> Pull {
-    Pull {
-        number: pull.number,
-        title: pull.title.clone(),
-        url: pull.url.clone(),
-        state: pull.state.name().to_string(),
-        checks: pull.ci().map(|ci| ci.name().to_string()),
-    }
 }
 
 impl App {

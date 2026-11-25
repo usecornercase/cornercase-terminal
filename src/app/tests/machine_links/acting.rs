@@ -139,6 +139,30 @@ fn seeing(reply: Reply) -> Remote {
     seeing_in(reply, snapshot(BOOT))
 }
 
+const SHOP: &str = "github.com/acme/web-shop";
+
+fn web_shop() -> ProjectInfo {
+    ProjectInfo {
+        id: 1,
+        name: "web-shop".into(),
+        path: PathBuf::from("/home/ana/code/web-shop"),
+        repo: Some(SHOP.into()),
+        workspaces: vec![workspace()],
+        ..ProjectInfo::default()
+    }
+}
+
+fn with_shop_here(reply: Reply, report: control::Report) -> (Remote, TempDir) {
+    let mut remote = seeing_in(reply, report);
+    let dir = TempDir::new();
+    let path = dir.path().join("web-shop");
+    std::fs::create_dir(&path).expect("the project's folder");
+    let app = &mut remote.rig.app;
+    app.open_project(path, AREA).expect("open the project");
+    app.projects[0].repo.identity = Some(SHOP.into());
+    (remote, dir)
+}
+
 fn seeing_in(reply: Reply, report: control::Report) -> Remote {
     let mut remote = unseen(reply);
     serve(&mut remote.theirs, 1, report);
