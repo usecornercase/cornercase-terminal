@@ -163,6 +163,7 @@ fn hint(form: &Form) -> &'static str {
         When::Every => "at least 30 minutes apart",
         When::Tomorrow | When::On | When::In | When::Daily | When::Weekdays | When::Weekly => "",
         When::ClaudeReset | When::CodexReset => "read from the plan when you save",
+        When::Free => "starts on the machine with room, in turn",
     }
 }
 

@@ -50,7 +50,7 @@ impl App {
         let branch = self.routine_branch(p, entry)?;
         self.panels.queued.set_branch(entry.id, &branch);
         match &entry.task.flow {
-            Some(name) => self.run_routine_flow(entry, p, name, branch),
+            Some(name) => self.run_queued_flow(entry, p, name, (branch, Some(true))),
             None => self.run_routine_agent(entry, p, branch, now),
         }
     }
@@ -66,14 +66,20 @@ impl App {
         self.launch_start(entry.id, now, start)
     }
 
-    fn run_routine_flow(&mut self, entry: &Entry, p: usize, name: &str, branch: String) -> Result<(), String> {
+    pub(super) fn run_queued_flow(
+        &mut self,
+        entry: &Entry,
+        p: usize,
+        name: &str,
+        (branch, fresh): (String, Option<bool>),
+    ) -> Result<(), String> {
         let project = self.projects[p].id;
         let (flow, note) = pick(&self.flow_listing(Some(&self.projects[p].path)), name)?;
         let accounts = self.requested_accounts(None, &entry.task.accounts)?;
         let area = super::super::sized(self.panels.queued.area())?;
         let mut starting = Starting::new(flow, entry.task.prompt.clone(), branch, accounts);
         starting.focus = false;
-        starting.fresh = Some(true);
+        starting.fresh = fresh;
         starting.summary = true;
         starting.note = note;
         let client = self.mark_starting(entry.id, Instant::now())?;

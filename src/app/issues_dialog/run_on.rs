@@ -33,7 +33,18 @@ impl App {
 
     pub(in crate::app) fn follow_issues_run_on(&mut self) {
         let Some(Overlay::Issues(b)) = &self.overlay else { return };
-        let run_on = RunOn::kept(self.run_on_for(b.project), b.run_on.as_ref());
+        let project = issue_project(b);
+        let mut run_on = RunOn::kept(self.run_on_for(b.project), b.run_on.as_ref());
+        let needs = self.config.default_memory();
+        let chose = run_on.as_ref().and_then(|run_on| self.auto_choice(run_on, project, needs));
+        if chose.is_some_and(|chose| run_on.as_mut().is_some_and(|run_on| run_on.settle_auto(chose))) {
+            if let Some(Overlay::Issues(b)) = &mut self.overlay {
+                b.run_on = run_on;
+                b.machine_moved(true);
+            }
+            return self.run_on_chosen();
+        }
+        let Some(Overlay::Issues(b)) = &self.overlay else { return };
         let target = run_on.as_ref().and_then(RunOn::machine);
         let accounts = target.map(|target| self.machine_accounts(&target.name, b.accounts.as_ref()));
         let there = target.and_then(|target| self.there_for(b, target, accounts.as_ref().and_then(Option::as_ref)));
@@ -237,6 +248,11 @@ impl App {
     pub(super) fn on_the_chosen_machine(&self, mut start: Start, issue: &Issue) -> Start {
         start.asked = Some((issue.key.clone(), issue.source.id().to_string()));
         let Some(Overlay::Issues(b)) = &self.overlay else { return start };
+        if b.run_on.as_ref().is_some_and(|run_on| run_on.auto.note.is_some())
+            && let Some(run_on) = &mut start.run_on
+        {
+            run_on.want_auto();
+        }
         let Some(link) = b.machine().map(|target| target.link) else { return start };
         start.pick_there(self.chosen_accounts());
         if let Some(run_on) = &mut start.run_on {

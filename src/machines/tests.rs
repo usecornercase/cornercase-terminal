@@ -34,6 +34,13 @@ mod a_name {
     }
 
     #[rstest]
+    #[case::lower("auto")]
+    #[case::upper("AUTO")]
+    fn auto_is_kept_for_picking_by_memory(#[case] name: &str) {
+        assert_eq!(valid_name(name), Err("`auto` is kept for the machine with the most free memory"));
+    }
+
+    #[rstest]
     #[case::same("vps")]
     #[case::other_case("VPS")]
     fn already_used_ignoring_case_is_a_conflict(#[case] name: &str) {
@@ -270,6 +277,18 @@ mod a_status {
     #[test]
     fn linked_shows_the_cornercase_there() {
         assert_eq!(note(&linked("0.12.225", "0.12.225")), "linked · 0.12.225");
+    }
+
+    #[test]
+    fn linked_says_its_free_memory_once_read() {
+        let gb = text::GB;
+        let memory = memory::MemoryInfo { total: 32 * gb, available: gb * 92 / 10, read_at: None };
+        let info = Info {
+            memory: Some(memory),
+            ..Info::of(&machine("vps", "vps.lan"), Some(&linked("0.13.0", "0.13.0")), None, None)
+        };
+
+        assert_eq!(info.note(at(NOW)), "linked · 0.13.0 · 9.2 GB free of 32 GB");
     }
 
     #[test]

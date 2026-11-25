@@ -104,6 +104,7 @@ fn flow_run(run: args::FlowRunArgs) -> Result<()> {
     if run.create.print.json {
         return print_json(&value);
     }
+    super::picked(&value);
     let run: RunInfo = answer(value)?;
     if let Some(text) = &run.note {
         note(&format!("{text}\n"));

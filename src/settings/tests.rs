@@ -58,7 +58,7 @@ mod pages {
     #[case::issues(Page::Issues, &["Accounts", "Sources shown"])]
     #[case::ui(Page::Ui, &[""])]
     #[case::remote(Page::Remote, &["Browser", "Phone app", "Telegram", "Discord"])]
-    #[case::machines(Page::Machines, &[""])]
+    #[case::machines(Page::Machines, &["", "Free memory"])]
     fn hold_their_sections(#[case] page: Page, #[case] expected: &[&str]) {
         assert_eq!(sections(page), expected);
     }

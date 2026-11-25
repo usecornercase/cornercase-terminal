@@ -16,6 +16,7 @@ pub(crate) enum Queue {
     Restore(u64),
     Pause(u64),
     Resume(u64),
+    First(u64),
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -39,6 +40,10 @@ pub(crate) struct QueueAdd {
     pub(crate) cleanup: Option<bool>,
     pub(crate) fresh: Option<bool>,
     pub(crate) bot: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) when: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) machine: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

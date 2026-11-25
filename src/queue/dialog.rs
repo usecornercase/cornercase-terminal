@@ -28,6 +28,7 @@ pub(crate) struct Row {
     pub(crate) routine: Option<u64>,
     pub(crate) at: i64,
     pub(crate) ran: i64,
+    pub(crate) turn: Option<usize>,
 }
 
 impl Row {
@@ -72,10 +73,11 @@ impl Row {
 
     fn band(&self) -> u8 {
         match self.kind {
-            Kind::Routine { paused: false } => 0,
-            Kind::Routine { paused: true } => 1,
-            _ if matches!(self.state, State::Pending | State::Starting) => 0,
-            _ => 2,
+            _ if self.turn.is_some() => 0,
+            Kind::Routine { paused: false } => 1,
+            Kind::Routine { paused: true } => 2,
+            _ if matches!(self.state, State::Pending | State::Starting) => 1,
+            _ => 3,
         }
     }
 }
@@ -86,7 +88,8 @@ fn newest_first(a: &Row, b: &Row) -> Ordering {
 
 fn in_order(a: &Row, b: &Row) -> Ordering {
     a.band().cmp(&b.band()).then_with(|| match a.band() {
-        2 => newest_first(a, b),
+        0 => (a.turn, a.id).cmp(&(b.turn, b.id)),
+        3 => newest_first(a, b),
         _ => (a.at, a.id).cmp(&(b.at, b.id)),
     })
 }
@@ -116,6 +119,7 @@ pub(crate) enum Button {
     RunNow,
     Pause,
     Resume,
+    First,
     Remove,
     ClearStarted,
     Done,
@@ -128,6 +132,7 @@ impl Button {
             Self::RunNow => "start now",
             Self::Pause => "pause",
             Self::Resume => "resume",
+            Self::First => "first",
             Self::Remove => "remove",
             Self::ClearStarted => "clear started",
             Self::Done => "done",
@@ -151,6 +156,7 @@ pub(crate) enum Asked {
     Run(u64),
     Pause(u64),
     Resume(u64),
+    First(u64),
     Remove(u64),
     Clear,
     Fold(u64),
@@ -283,6 +289,7 @@ impl Dialog {
                 Kind::Routine { paused: true } => buttons.push(Button::Resume),
                 Kind::Entry | Kind::Run => {}
             }
+            buttons.extend(row.turn.is_some_and(|turn| turn > 1).then_some(Button::First));
             buttons.extend((row.state != State::Starting).then_some(Button::Remove));
         }
         buttons.extend(self.rows.iter().any(Row::clearable).then_some(Button::ClearStarted));
@@ -371,6 +378,7 @@ impl Dialog {
             Button::RunNow => on(Asked::Run),
             Button::Pause => on(Asked::Pause),
             Button::Resume => on(Asked::Resume),
+            Button::First => on(Asked::First),
             Button::Remove => on(Asked::Remove),
             Button::ClearStarted => Asked::Clear,
             Button::Done => Asked::Close,

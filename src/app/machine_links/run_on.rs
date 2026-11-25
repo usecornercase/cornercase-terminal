@@ -1,13 +1,19 @@
+use std::time::Instant;
+
 use super::Held;
 use crate::app::App;
+use crate::app::machine_memory::REFRESH;
 use crate::control::ProjectInfo;
 use crate::machines::link::Down;
+use crate::machines::memory::Picked;
 use crate::machines::run_on::{NEEDS_REMOTE, RunOn, Target};
 use crate::machines::{self, CONNECTING, NOT_SEEN, State};
 use crate::project::Hierarchy;
 use crate::text;
 
 const UNREACHABLE: &str = "unreachable";
+
+pub(in crate::app) type Chose = Result<(Option<String>, String), String>;
 
 impl App {
     pub(in crate::app) fn run_on_for(&self, project: u64) -> Option<RunOn> {
@@ -45,6 +51,22 @@ impl App {
         let Some(there) = self.project_there(link, project) else { return format!("not on {name} · clone…") };
         let home = held.seen.as_ref().and_then(|seen| seen.home.as_deref());
         format!("{how} on {name}, in {}", text::display_path(&there.path, home))
+    }
+
+    pub(in crate::app) fn auto_choice(&mut self, run_on: &RunOn, project: u64, needs: u64) -> Option<Chose> {
+        if !run_on.auto.wanted {
+            return None;
+        }
+        self.refresh_memory(REFRESH);
+        if self.memory_asking() {
+            return None;
+        }
+        let picked = self.pick_machine(project, needs, Instant::now());
+        let label = self.project_name(project);
+        Some(match &picked {
+            Picked::Fits(best) => Ok((best.name.clone(), best.chose(needs))),
+            Picked::Nowhere { .. } => Err(picked.refusal(&label)),
+        })
     }
 
     fn identity(&self, project: u64) -> Option<&str> {

@@ -262,6 +262,18 @@ fn messages() -> Vec<Sample> {
             event(what("flow-merged", failed, vec![4, 5], true), workspace)
         ),
         sample!("control/events/v1/message-flow-exited.json", event(exited(), workspace)),
+        sample!(
+            "control/events/v1/message-queue-waiting.json",
+            event(
+                what(
+                    "queue-waiting",
+                    "queued agent 7 waits for room: 1st in line, needs 6 GB · best: torre 4.1 GB",
+                    vec![],
+                    false
+                ),
+                Ids::default()
+            )
+        ),
     ]
 }
 

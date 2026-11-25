@@ -40,6 +40,8 @@ pub(crate) struct Flow {
     pub(crate) description: String,
     #[serde(skip_serializing_if = "String::is_empty")]
     pub(crate) notes: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) memory: Option<String>,
     pub(crate) end: End,
     pub(crate) orchestrator: Role,
     #[serde(rename = "role", skip_serializing_if = "Vec::is_empty")]
@@ -56,6 +58,7 @@ impl Default for Flow {
             changed: None,
             description: String::new(),
             notes: String::new(),
+            memory: None,
             end: End::default(),
             orchestrator: Role { name: ORCHESTRATOR.into(), ..Role::default() },
             roles: Vec::new(),
@@ -216,10 +219,17 @@ impl Flow {
 }
 
 impl Flow {
+    pub(crate) fn memory_needed(&self) -> Option<u64> {
+        crate::text::parse_size(self.memory.as_deref()?)
+    }
+
     fn leading_problems(&self) -> Vec<String> {
         let mut out = Vec::new();
         if self.name.trim().is_empty() {
             out.push("the flow has no name".to_string());
+        }
+        if let Some(memory) = self.memory.as_deref().filter(|_| self.memory_needed().is_none()) {
+            out.push(format!("memory `{memory}` is not an amount: write it like 3GB or 512MB"));
         }
         if self.version > VERSION {
             out.push("the flow was made by a newer cornercase".to_string());

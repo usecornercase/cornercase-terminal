@@ -128,6 +128,7 @@ mod layout;
 mod links;
 mod machine_form;
 mod machine_links;
+mod machine_memory;
 mod machine_usage;
 mod machines;
 mod menus;
@@ -156,6 +157,7 @@ mod queue_list_dialog;
 mod queue_panel;
 mod queue_result_dialog;
 mod queue_results;
+mod queue_there;
 mod recap_panel;
 mod refresh;
 mod remote_access;
@@ -437,6 +439,7 @@ impl App {
             self.clients.events.bell_wake(now),
             self.surface_wake(now),
             self.panels.queued.wake(clock),
+            self.auto_wake(now),
             self.popup_wake(now),
             self.card_wake(now),
             self.typed_wake(now),

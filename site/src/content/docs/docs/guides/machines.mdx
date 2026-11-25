@@ -22,7 +22,7 @@ Click **`+ add machine`** at the end of the list. The form asks for:
 
 | Field | What it is |
 | --- | --- |
-| **name** | What the window calls it: letters, digits, `.`, `_` and `-`, at most 20 characters, different from every other machine's, and not `all`, which means every machine. |
+| **name** | What the window calls it: letters, digits, `.`, `_` and `-`, at most 20 characters, different from every other machine's, and neither `all`, which means every machine, nor `auto`, which [picks one by its free memory](#let-cornercase-choose-with-auto). |
 | **icon** | One of ☁ server, ▭ laptop, ▣ desktop, ◫ mini, ⌂ home server or ◆ other. |
 | **destination** | Anything `ssh` takes: a `Host` of your `~/.ssh/config`, or `user@host`. Your config, keys and agent apply, and cornercase never sees a password or a key. |
 | **folder** | Where clones go on that machine, `~/code` unless you change it: an absolute path, `~`, or one starting with `~/`. Nothing is made there yet. |
@@ -57,7 +57,7 @@ The link is one `ssh` connection from your cornercase server to the cornercase s
 | Row | Means |
 | --- | --- |
 | `◌ connecting…` | The link's first try hasn't answered yet. |
-| `● linked · 0.12.225` | Linked, with the version of cornercase installed there. When its server still runs an older one, the row adds `· its server runs 0.12.224 until it restarts there`. |
+| `● linked · 0.12.225` | Linked, with the version of cornercase installed there. Once its [free memory](#free-memory) was read, the row adds it, `· 9.2 GB free of 32 GB`. When its server still runs an older one, the row adds `· its server runs 0.12.224 until it restarts there`. |
 | `○ unreachable · 8 s` | Down since that long, or `not seen yet` when it has never been up since your server started. Select the row and the line at the bottom shows why: what `ssh` said, `cornercase was not found on vps: install it there`, `that is this computer`, or `the same server as vps` when two destinations reach one machine. |
 | `◐ older · 0.0.1` | Its cornercase is older than yours, so it is not linked. |
 | `◌ hidden` | **show its work here** is off: no link, and nothing of it in your sidebar. Click its `show here ·` toggle to link it again ([Hide a machine](#hide-a-machine)). |
@@ -67,6 +67,14 @@ A link that drops is tried again after 1, 2, 4 and 8 seconds, then every 15 seco
 ### Update an older machine
 
 An `older` machine has an **`update…`** row under it. It runs `cornercase update` on the machine, without a terminal, so it installs the new release and restarts nothing: the server there keeps running its version until it restarts, and the row says so. Once the update ends, the link tries again. When it fails, the line at the bottom shows what the update printed last, such as the Homebrew command to run there.
+
+### Free memory
+
+**this computer**'s row says how much memory it has free after its version, `0.13.0 · 6 GB free of 16 GB`, and a linked machine's row adds its own once it was read: `linked · 0.13.0 · 9.2 GB free of 32 GB`. Free means available: what the system can give a new program, the file cache included (`MemAvailable` on Linux, the free, inactive and purgeable pages on macOS, the available physical memory on Windows). It is what [`auto`](#let-cornercase-choose-with-auto) compares to pick a machine.
+
+A machine is asked for it only when something needs it: when `auto` picks a machine, and every 30 seconds while this tab shows or a queue entry [waits for room](../queue/#wait-for-room). A machine on an older cornercase shows no memory, and `auto` never picks it.
+
+The last section of the tab, **Free memory**, has one row, **a start needs**: the free memory `auto` and the [queue](../queue/#wait-for-room) count on for a start whose [flow doesn't say its own](../flows/#the-memory-a-run-needs). It is `4GB` unless you change it: click it and type an amount such as `4GB`, `512MB` or `1.5GB` (units are powers of 1024, as memory is sold). It is kept in [`default_memory`](../../reference/configuration/#default_memory), and it isn't part of the settings you share, since it depends on your machines.
 
 ## What you need
 
@@ -244,6 +252,15 @@ With at least one machine listed, the **Issues** dialog, **start a flow…** and
 - **The project there** is the machine's clone of the same repository, the one its sidebar row pairs with. The `start` row says where the work goes: `in its own worktree on vps, in ~/code/web-shop`, or `in a tab on vps, in …`, from the same choice as here.
 - **While it starts**, the dialog says `starting on vps…`, and it closes once the tab or the workspace is there, even while the agent asks whether to trust the folder: answer it in the agent's tab. If the machine refuses, its reason stays in red and nothing changed. If it restarted since you picked it, the dialog says `vps restarted; nothing was started there`.
 
+### Let cornercase choose with `auto`
+
+The row ends with **`○ auto`** (on an issue's page, the last choice of **run on…**). Choosing it reads the free memory of the machines it hasn't read in the last 30 seconds (the row says `reading each machine's free memory…` meanwhile), then chooses **this computer** or the linked machine that has the project and the most memory [free](#free-memory), as if you had clicked it, and says why after the row, with what the start needs: `auto → vps (11 GB free, needs 4 GB)`. The dialog then checks that machine as for any other pick.
+
+- **It counts what the start needs**: in **start a flow**, the selected flow's [`memory`](../flows/#the-memory-a-run-needs), as `flow run --machine auto` does; elsewhere, and for a flow that doesn't say, **a start needs** (`4GB` unless you change it in [Settings › Machines](#free-memory)). A machine is chosen only with that much free, once the memory of what [`--machine auto`](#from-a-terminal) started there in the last 5 minutes is taken off, since a run takes a few minutes to grow. On a tie, this computer wins. Selecting another flow after `auto` chose picks again, and **start a flow** on an issue picks again with its flow's memory.
+- **Who is left out**: a machine that is down or still connecting, one with no clone of the project, one on an older cornercase, and one whose memory couldn't be read in the last minute.
+- **When none has room**, the row says why in red, such as `no machine has 4 GB free (best: this computer, 3.1 GB)`, and the choice stays where it was.
+- **It is one choice, not a setting**: what it chose stays chosen, picking a machine by hand clears what it said, and the next dialog opens on **this computer** again.
+
 ### What is checked there first
 
 Picking a machine asks it, before anything starts:
@@ -253,7 +270,7 @@ Picking a machine asks it, before anything starts:
 - **The tracker** (an issue, or a flow started from one). When the machine has no access to it, the row says what is missing, such as `vps has no GitHub token for web-shop`, and **start** sends nothing. Connect the tracker on the machine, with its own window or `cornercase --remote vps config secret github`.
 - **Its flows** (**start a flow**). The list is the flows of the machine, so the one you see is the one that runs; **edit** is hidden, since they are the machine's to change.
 
-An issue is started there with its key: the machine reads it with its own tracker, and the prompt is built with its own [prompt template](../../reference/prompt/), which the **prompt** row says instead of showing this computer's. **start a flow** from the issue shows the prompt made here from your template, and you can edit it as on this computer: the team on the machine gets it as its task, and the issue still gives the branch and the workspace's name. The branch and the workspace names you see before starting are the ones used there. **schedule** is hidden while a machine is picked: the [queue](../queue/) starts agents on this computer only.
+An issue is started there with its key: the machine reads it with its own tracker, and the prompt is built with its own [prompt template](../../reference/prompt/), which the **prompt** row says instead of showing this computer's. **start a flow** from the issue shows the prompt made here from your template, and you can edit it as on this computer: the team on the machine gets it as its task, and the issue still gives the branch and the workspace's name. The branch and the workspace names you see before starting are the ones used there. **schedule** is hidden while a machine is picked: to queue work for whichever computer has room, schedule it with **when there is room** ([Wait for room](../queue/#wait-for-room)), which starts it on this computer or a machine with the project, in turn.
 
 The answers are kept until that machine restarts, and asked again each time you pick it; the account you picked on that machine stays picked meanwhile. One picked on this computer is let go when you pick a machine, since the machine has its own accounts.
 
@@ -294,6 +311,16 @@ cornercase --remote vps clone git@github.com:acme/web-shop.git '~/code' --file .
 ```
 
 The ids, of `--project` and `--workspace` and the ones printed, are the machine's, as `status` lists them under the machine. `--focus` shows what started here once the machine lists it. `start --placed` answers as soon as the tab is open there, with the same ids, even while the agent asks whether to trust the folder, as the dialogs do: for a program that shows the new tab itself. `wait` and `send` there only work once that launch is over: `status --json` here lists the pane under the machine, and its status turns `working` when the agent has taken its prompt (see [Start an agent](../scripts-and-agents/#start-an-agent)). `--wait`, `--until` and `--timeout` can't be used with `--machine`: follow the agent with [`cornercase --remote vps wait`](../remote/#commands-for-scripts-and-agents). Give `--boot` the `boot` of the machine's entry in `status --json` to be sure its ids are still the ones you read: `cornercase new-workspace notes --project 2 --machine vps --boot "$boot"` starts nothing, and exits with 4, when the machine restarted since. When the machine refuses, the command its message says to run names the machine: `--machine vps` in `start`, `new-workspace`, `focus`, `flow run`, `stats` and `usage` (``…such as `cornercase start --machine vps claude` ``), ` there` after any other (``(`cornercase flow list` there)``: run it on vps), and `cornercase status` as it is, since yours lists vps's ids under it. See [Start work on a machine](../scripts-and-agents/#start-work-on-a-machine) for scripts and other apps.
+
+`start` and `flow run` also take **`--machine auto`**, which picks this computer or a machine as the [`auto` choice](#let-cornercase-choose-with-auto) does, and then starts there. Its ids are this computer's, as for a start here: the project is found on the machine by its repository. It says what it picked on standard error, and with `--json` in `auto` beside `machine`:
+
+```sh
+cornercase start claude --issue '#482' --project 2 --machine auto
+# auto → torre (11.3 GB free)
+cornercase flow run Review --prompt 'Review the login form' --project 2 --machine auto --json
+```
+
+`start` counts **a start needs**, and `flow run` the flow's [`memory`](../flows/#the-memory-a-run-needs), else **a start needs**. Each start it sends somewhere counts as taken there for the next 5 minutes, so three starts in a row don't all land on the machine that had room for one; a start whose machine you chose, in a dialog or by its name, counts nothing. When no machine has room it starts nothing and exits with status 8, so a script can tell it from a failure and try again later: `error: no machine has 6 GB free (best: mac, 4.1 GB)`. It takes no `--boot`, since its ids are this computer's.
 
 A start gives up after 10 minutes with `it did not answer in time` (git and the project's setup run there first), a plain workspace, the tracker and the flows checks after 15 seconds, the accounts check after a minute and a clone after 30 minutes; what was still running goes on on the machine, and your sidebar shows it when it's done.
 

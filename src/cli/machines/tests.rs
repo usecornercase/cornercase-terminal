@@ -141,7 +141,7 @@ mod the_text {
     #[test]
     fn lists_this_computer_then_each_machine_with_its_state_and_why() {
         let list = MachineList {
-            here: ThisComputer { icon: "▭".into(), version: "0.12.225".into() },
+            here: ThisComputer { icon: "▭".into(), version: "0.12.225".into(), memory: None },
             machines: vec![
                 Info {
                     name: "vps".into(),

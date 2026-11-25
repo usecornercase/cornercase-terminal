@@ -291,6 +291,11 @@ pub(crate) fn find(gh: &Path, dir: &Path) -> Result<Option<PullRequest>> {
     }
 }
 
+pub(crate) fn find_branch(gh: &Path, dir: &Path, branch: &str) -> Result<Option<PullRequest>> {
+    let found = gh::run::<Vec<Raw>>(gh, dir, &["pr", "list", "--head", branch, "--state", "all", "--json", FIELDS])?;
+    Ok(found.into_iter().next().map(Into::into))
+}
+
 pub(crate) fn explain(error: &Error) -> String {
     match error {
         Error::RunGh(e) if e.kind() == io::ErrorKind::NotFound => "install gh, GitHub's CLI, to see them".into(),

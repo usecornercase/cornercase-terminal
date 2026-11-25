@@ -55,6 +55,7 @@ fn text(row: &Row) -> Option<&'static str> {
     Some(match row {
         Row::Folder => "worktrees_dir",
         Row::IssueBranch => "issue_branch",
+        Row::DefaultMemory => "default_memory",
         Row::GitlabUrl => "gitlab_url",
         Row::JiraSite => "jira_site",
         Row::JiraEmail => "jira_email",

@@ -42,6 +42,20 @@ impl App {
         self.follow_start_flow_run_on();
     }
 
+    fn start_flow_needs(&self, start: &Start, project: u64) -> u64 {
+        let Some(saved) = start.selected() else { return self.config.default_memory() };
+        self.flow_needs(project, &saved.flow.name)
+            .unwrap_or_else(|_| saved.flow.memory_needed().unwrap_or_else(|| self.config.default_memory()))
+    }
+
+    fn start_flow_auto_moved(&mut self, run_on: Option<RunOn>) {
+        if let Some(Overlay::StartFlow { start, .. }) = &mut self.overlay {
+            start.run_on = run_on;
+            start.machine_moved();
+        }
+        self.start_flow_run_on_chosen();
+    }
+
     fn start_flow_back_here(&mut self, project: u64) {
         let Some(at) = self.projects.project_index(project) else { return };
         let listing = self.flow_listing(Some(&self.projects[at].path));
@@ -53,7 +67,14 @@ impl App {
 
     pub(in crate::app) fn follow_start_flow_run_on(&mut self) {
         let Some(Overlay::StartFlow { start, .. }) = &self.overlay else { return };
-        let run_on = RunOn::kept(self.run_on_for(start.project), start.run_on.as_ref());
+        let project = start.project;
+        let mut run_on = RunOn::kept(self.run_on_for(project), start.run_on.as_ref());
+        let needs = self.start_flow_needs(start, project);
+        let chose = run_on.as_ref().and_then(|run_on| self.auto_choice(run_on, project, needs));
+        if chose.is_some_and(|chose| run_on.as_mut().is_some_and(|run_on| run_on.settle_auto(chose))) {
+            return self.start_flow_auto_moved(run_on);
+        }
+        let Some(Overlay::StartFlow { start, .. }) = &self.overlay else { return };
         let target = run_on.as_ref().and_then(RunOn::machine).cloned();
         let read = target.map(|target| self.read_there(start, &target));
         let Some(Overlay::StartFlow { start, .. }) = &mut self.overlay else { return };

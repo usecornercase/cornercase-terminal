@@ -1,5 +1,7 @@
 mod bot;
+mod free;
 mod prepare;
+mod room;
 mod routine;
 mod run;
 mod show;
@@ -40,6 +42,7 @@ impl App {
             control::Queue::Restore(undo) => self.restore_queue_request(undo),
             control::Queue::Pause(id) => self.pause_queue_request(id, true),
             control::Queue::Resume(id) => self.pause_queue_request(id, false),
+            control::Queue::First(id) => self.first_queue_request(id),
         }
     }
 
@@ -103,9 +106,14 @@ impl App {
             .map(|id| self.panels.queued.queue().entry(id).cloned().ok_or_else(|| queue::missing(id)))
             .transpose()?;
         if add.bot.is_some() || old.as_ref().is_some_and(queue::Entry::is_bot) {
+            if add.when.is_some() || add.machine.is_some() {
+                return Err("a bot's entry runs in its own folder: it cannot wait for a machine".into());
+            }
             return self.bot_queue_request(client, edit, add, old.as_ref());
         }
-        if routine::is_routine_request(add, old.as_ref()) {
+        if free::is_free_request(add, old.as_ref()) {
+            free::refuse_free_mix(add, old.as_ref())?;
+        } else if routine::is_routine_request(add, old.as_ref()) {
             return self.routine_request(caller, edit, add, old.as_ref());
         }
         let prepared = self.prepare_queue(caller, add, old.as_ref())?;
@@ -142,7 +150,10 @@ impl App {
         add: &QueueAdd,
         old: Option<&queue::Entry>,
     ) -> Result<Prepared, Refusal> {
-        let task = self.queue_task(caller, add, old)?;
+        let mut task = self.queue_task(caller, add, old)?;
+        if free::is_free_request(add, old) {
+            self.make_free(&mut task, add, old)?;
+        }
         self.requested_accounts(None, &task.accounts)?;
         let (at, kept_at) = queue_time(add, old, &task.zone);
         let project = self
@@ -171,9 +182,13 @@ impl App {
 
     fn add_queue_now(&mut self, edit: Option<u64>, prepared: &mut Prepared) -> Handled {
         let Prepared { task, at, kept_at, clock, .. } = prepared;
-        task.at = kept_at.map_or_else(|| queue::clock::parse(at, &task.zone, *clock), Ok)?;
-        if task.at <= *clock {
-            return Err("choose a time in the future".into());
+        if task.wait.is_some() {
+            task.at = kept_at.unwrap_or(*clock);
+        } else {
+            task.at = kept_at.map_or_else(|| queue::clock::parse(at, &task.zone, *clock), Ok)?;
+            if task.at <= *clock {
+                return Err("choose a time in the future".into());
+            }
         }
         let task = task.clone();
         let id = self.panels.queued.schedule(edit, task)?;
@@ -231,6 +246,9 @@ impl App {
         }
         if entry.is_bot() {
             return self.run_bot_entry(&entry, now);
+        }
+        if entry.is_free() {
+            return self.run_free_now(id, now);
         }
         if entry.is_run() {
             return self.run_routine(&entry, now);
@@ -319,6 +337,7 @@ impl Prepared {
             }
         }
         task.at = match probe {
+            _ if task.wait.is_some() => kept_at.unwrap_or(clock),
             Some((agent, command, timeout)) => {
                 let report = usage::probe(agent, &command, None, timeout)?;
                 reset_time(&report, clock).map_err(Error::Api)?

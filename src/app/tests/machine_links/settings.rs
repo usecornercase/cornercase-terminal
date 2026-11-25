@@ -9,6 +9,7 @@ use crate::settings::{Page, Row};
 const WIDE: Rect = Rect { x: 0, y: 0, width: 144, height: 42 };
 const NARROW: Rect = Rect { x: 0, y: 0, width: 80, height: 24 };
 const VERSION_ROOM: usize = 12;
+const HERE_FREE: &str = " · 6 GB free of 16 GB";
 
 impl Rig {
     fn machines_page(&mut self) {
@@ -55,8 +56,9 @@ impl Rig {
 
     fn shown(&mut self, area: Rect) -> String {
         let room = VERSION_ROOM.saturating_sub(version::CURRENT.len());
-        let drawn = format!("{}{}", version::CURRENT, " ".repeat(room));
-        render(&mut self.app, area).backend().to_string().replace(&drawn, &format!("{:<VERSION_ROOM$}", "<version>"))
+        let drawn = format!("{}{HERE_FREE}{}", version::CURRENT, " ".repeat(room));
+        let hidden = format!("{:<VERSION_ROOM$}{HERE_FREE}", "<version>");
+        render(&mut self.app, area).backend().to_string().replace(&drawn, &hidden)
     }
 }
 
@@ -98,7 +100,7 @@ mod the_page {
 
         assert_eq!(
             (rig.page().page, rig.page().rows()),
-            (Page::Machines, vec![Row::Here, Row::Machine(0), Row::AddMachine])
+            (Page::Machines, vec![Row::Here, Row::Machine(0), Row::AddMachine, Row::DefaultMemory])
         );
     }
 
@@ -157,7 +159,7 @@ mod the_page {
         rig.app.machines.set_status(0, status(State::Older));
         rig.refresh(Duration::from_millis(500));
 
-        assert_eq!((rig.page().rows().len(), rig.selected()), (4, Row::AddMachine));
+        assert_eq!((rig.page().rows().len(), rig.selected()), (5, Row::AddMachine));
     }
 
     #[test]
@@ -230,7 +232,7 @@ mod the_page {
 
         rig.edit(vec![machine("vps", "vps.lan")], Duration::from_secs(2));
 
-        assert_eq!(rig.page().rows(), [Row::Here, Row::Machine(0), Row::AddMachine]);
+        assert_eq!(rig.page().rows(), [Row::Here, Row::Machine(0), Row::AddMachine, Row::DefaultMemory]);
     }
 
     #[test]

@@ -353,7 +353,8 @@ impl App {
             control::Queue::Remove(id)
             | control::Queue::Run(id)
             | control::Queue::Pause(id)
-            | control::Queue::Resume(id) => mine(id),
+            | control::Queue::Resume(id)
+            | control::Queue::First(id) => mine(id),
             control::Queue::Restore(undo) => {
                 self.panels.queued.removed(*undo).is_none_or(|entries| entries.iter().all(|e| e.bot() == Some(own)))
             }

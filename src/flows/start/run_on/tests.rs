@@ -73,9 +73,9 @@ fn chooses_a_machine_once_and_says_what_it_lacks() {
     assert!(!s.choose_machine(Some(0)));
     assert_eq!(
         texts(s.run_on_spans(Style::default())).as_deref(),
-        Some("○ this computer   ● ☁ vps · vps has no GitHub token for web-shop")
+        Some("○ this computer   ● ☁ vps   ○ auto · vps has no GitHub token for web-shop")
     );
-    assert_eq!(s.run_on_choices(), 2);
+    assert_eq!(s.run_on_choices(), 3);
 }
 
 #[test]

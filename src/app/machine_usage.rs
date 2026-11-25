@@ -11,13 +11,15 @@ use super::machine_links::{Held, MachineEvent, OLDER};
 use crate::agents::stats::View;
 use crate::control::contract::{Code, Refusal};
 use crate::control::usage::{MachineRead, MachineStats, Plans};
-use crate::control::{Command, Response, Stats, Usage};
+use crate::control::{Command, MachineList, Machines, Response, Stats, Usage};
 use crate::log::{Job, Level};
 use crate::machines::link::Down;
+use crate::machines::memory::MemoryInfo;
 use crate::machines::{self, State};
 use crate::time::Stamp;
 
 const STATS: Duration = Duration::from_secs(15);
+const MEMORY: Duration = Duration::from_secs(5);
 const SLACK: Duration = Duration::from_secs(15);
 pub(super) const UNREADABLE: &str = "its answer could not be read";
 pub(super) const GONE: &str = "the machine was removed before it answered";
@@ -40,6 +42,7 @@ impl<T> Default for Cached<T> {
 pub(super) struct Cache {
     pub(super) stats: Cached<View>,
     pub(super) usage: Cached<Plans>,
+    pub(super) memory: Cached<MemoryInfo>,
 }
 
 pub(super) trait Asked: DeserializeOwned + Clone + Send + 'static {
@@ -115,6 +118,40 @@ impl Asked for Plans {
 
     fn one(self, machine: MachineRead, _: SystemTime) -> Value {
         json(&Self { machine: Some(machine), ..self })
+    }
+}
+
+impl Asked for MemoryInfo {
+    const WHAT: &'static str = "memory";
+
+    fn command() -> Command {
+        Command::Machines(Machines::List)
+    }
+
+    fn timeout(_: &App) -> Duration {
+        MEMORY
+    }
+
+    fn kept(cache: &Cache) -> &Cached<Self> {
+        &cache.memory
+    }
+
+    fn cached(cache: &mut Cache) -> &mut Cached<Self> {
+        &mut cache.memory
+    }
+
+    fn event(link: u64, result: Result<Self, String>) -> MachineEvent {
+        MachineEvent::Memory { link, result }
+    }
+
+    fn read(value: Value, _: SystemTime) -> serde_json::Result<Self> {
+        let listed = serde_json::from_value::<MachineList>(value)?;
+        let memory = listed.here.memory.filter(|memory| memory.memory().is_some());
+        memory.ok_or_else(|| serde::de::Error::custom("no memory"))
+    }
+
+    fn one(self, machine: MachineRead, _: SystemTime) -> Value {
+        json(&serde_json::json!({ "machine": machine, "memory": self }))
     }
 }
 

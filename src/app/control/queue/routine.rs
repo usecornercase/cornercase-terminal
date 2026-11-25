@@ -27,7 +27,7 @@ fn refuse_mix(add: &QueueAdd, old: Option<&Entry>) -> Result<(), String> {
         return Err("a one-off entry cannot become a routine; add a new entry".into());
     }
     if add.repeat.is_none() && old.is_none() {
-        return Err("a flow is queued as a routine, and so is a cleanup: add --every".into());
+        return Err("a flow runs in a routine (add --every) or once a machine has room (add --when free)".into());
     }
     let refused = [
         (!add.at.is_empty(), AT_AND_EVERY),
@@ -77,7 +77,12 @@ impl App {
         Ok(Place { project: path, ..Place::default() })
     }
 
-    fn routine_flow(&self, add: &QueueAdd, old: Option<&Entry>, place: &Place) -> Result<Option<String>, String> {
+    pub(super) fn routine_flow(
+        &self,
+        add: &QueueAdd,
+        old: Option<&Entry>,
+        place: &Place,
+    ) -> Result<Option<String>, String> {
         let name = match (&add.flow, old) {
             (Some(name), _) => name.clone(),
             (None, Some(old)) if add.agent.is_none() => match &old.task.flow {
@@ -132,6 +137,7 @@ impl App {
             place,
             routine: None,
             fresh: None,
+            ..Task::default()
         };
         self.requested_accounts(None, &task.accounts)?;
         let id = self.panels.queued.schedule(edit, task)?;

@@ -39,7 +39,7 @@ impl Watching {
         self.last.retain(|entry| watched.contains(entry));
     }
 
-    fn generation(&mut self) -> u64 {
+    pub(super) fn generation(&mut self) -> u64 {
         self.generations += 1;
         self.generations
     }
@@ -99,6 +99,7 @@ pub(crate) enum Reader {
 pub(crate) enum QueueResultEvent {
     Captured { entry: u64, generation: u64, taken: Taken, read: Result<Option<Said>> },
     Conversation { entry: u64, to: Reader, result: Result<Talk> },
+    Pulled { entry: u64, found: std::result::Result<Option<Pull>, String> },
 }
 
 impl QueueResultEvent {
@@ -106,11 +107,12 @@ impl QueueResultEvent {
         match self {
             Self::Captured { .. } => "queue result",
             Self::Conversation { .. } => "queue conversation",
+            Self::Pulled { .. } => "queue pull request there",
         }
     }
 }
 
-fn pull_of(pull: &PullRequest) -> Pull {
+pub(super) fn pull_of(pull: &PullRequest) -> Pull {
     Pull {
         number: pull.number,
         title: pull.title.clone(),
@@ -174,9 +176,14 @@ impl App {
         }
         if self.panels.queued.results.seen.contains_key(&entry) {
             let branch = self.workspace_branch(look.workspace);
+            let opened = look.pull.clone();
             let seen = self.panels.queued.results.seen.get_mut(&entry);
+            let had = seen.as_ref().is_some_and(|seen| seen.pull.is_some());
             if seen.is_some_and(|seen| seen.follow(branch, look)) {
                 self.capture_seen(entry);
+            }
+            if let Some(pull) = opened.filter(|_| !had) {
+                self.pull_opened(entry, &pull);
             }
             return;
         }
@@ -284,6 +291,7 @@ impl App {
             QueueResultEvent::Conversation { entry, to: Reader::Window, result } => {
                 self.queue_conversation_shown(entry, result, area);
             }
+            QueueResultEvent::Pulled { entry, found } => self.pulled_there(entry, found),
         }
     }
 }

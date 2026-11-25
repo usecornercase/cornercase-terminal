@@ -1,11 +1,12 @@
 use serde_json::{Value, json};
 
-use super::machines::{VPS, in_state, reach, start_listing, wait_for_machine};
+use super::machines::{VPS, in_state, reach, start_listing_with, wait_for_machine};
 use super::remote::on_ssh_path;
 use super::*;
 
 const URL: &str = "https://github.com/acme/shop.git";
 const ANOTHER_RUN: &str = "1-1";
+const MEMORY_ENV: &str = "CORNERCASE_MEMORY";
 const VIEW: &str = r#"{"number":7,"title":"Fix the login","state":"OPEN","labels":[],"assignees":[],"author":{"login":"ana"},"updatedAt":"","url":"https://github.com/acme/shop/issues/7","body":"It breaks","comments":[]}"#;
 
 struct OnVps {
@@ -19,6 +20,10 @@ fn on_vps() -> OnVps {
 }
 
 fn on_vps_accepting_trust(accepts: bool) -> OnVps {
+    on_vps_with(accepts, None)
+}
+
+fn on_vps_with(accepts: bool, memory: Option<(&str, &str)>) -> OnVps {
     let machine = Session::new();
     let home = machine.dir.join("home");
     std::fs::create_dir_all(&home).expect("create the machine's home");
@@ -39,8 +44,10 @@ fn on_vps_accepting_trust(accepts: bool) -> OnVps {
         "agent": "fake",
         "agent_commands": agent_commands(&[("fake", &trusting)]),
     });
-    let reached = format!("{} HOME={}", reach(&machine), home.display());
-    start_listing(&here, &[(VPS, VPS)], &[(VPS, &reached)], config);
+    let there = memory.map(|(_, there)| format!(" {MEMORY_ENV}={there}")).unwrap_or_default();
+    let reached = format!("{} HOME={}{there}", reach(&machine), home.display());
+    let env: Vec<(&str, &str)> = memory.iter().map(|(here, _)| (MEMORY_ENV, *here)).collect();
+    start_listing_with(&here, &[(VPS, VPS)], &[(VPS, &reached)], config, &env);
     wait_for_machine(&here, VPS, "the machine is linked", in_state("linked"));
     OnVps { machine, here, home }
 }
@@ -413,4 +420,74 @@ fn a_refusal_from_a_machine_names_it_in_the_command_it_gives() {
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("`cornercase status`") && !stderr.contains("--machine vps"), "{out:?}");
     assert!(!stderr.contains("`cornercase status` there"), "{out:?}");
+}
+
+fn shop_on_both(vps: &OnVps) -> String {
+    vps.shop_there();
+    let repo = shop(&vps.here.dir);
+    let project = vps.here.says(&["open", &repo.display().to_string()]);
+    let known = |project: &Value| project["repo"] == "github.com/acme/shop";
+    wait_until("its identity is read here", || {
+        answer(&vps.here.says(&["status", "--json"]))["projects"].as_array().is_some_and(|all| all.iter().any(known))
+    });
+    project
+}
+
+#[test]
+fn auto_starts_on_the_machine_with_more_free_memory_and_says_why() {
+    let vps = on_vps_with(true, Some(("16GB,1GB", "32GB,9GB")));
+    let project = shop_on_both(&vps);
+
+    let out = vps.here.cli(&["start", "--machine", "auto", "--project", &project, "--prompt", "hello", "--json"]);
+
+    assert!(out.status.success(), "{out:?}");
+    let started = answer(&String::from_utf8_lossy(&out.stdout));
+    assert_eq!((&started["machine"], &started["auto"]), (&json!(VPS), &json!("auto → vps (9 GB free)")), "{started}");
+    let listed = answer(&vps.here.says(&["machines", "--json"]));
+    assert_eq!(listed["here"]["memory"]["available"], json!(1u64 << 30), "{listed}");
+    assert_eq!(listed["machines"][0]["memory"]["available"], json!(9u64 << 30), "{listed}");
+}
+
+#[test]
+fn auto_exits_8_when_no_machine_has_room() {
+    let vps = on_vps_with(true, Some(("16GB,1GB", "32GB,2GB")));
+    let project = shop_on_both(&vps);
+
+    let out = vps.here.cli(&["start", "--machine", "auto", "--project", &project, "--prompt", "hello"]);
+
+    assert_eq!(out.status.code(), Some(8), "{out:?}");
+    let said = String::from_utf8_lossy(&out.stderr);
+    assert!(said.contains("no machine has 4 GB free (best: vps, 2 GB)"), "{said}");
+}
+
+#[test]
+fn a_queued_entry_waits_for_room_and_starts_on_the_machine_that_has_it() {
+    let vps = on_vps_with(true, Some(("16GB,1GB", "32GB,9GB")));
+    let project = shop_on_both(&vps);
+    let repo = vps.machine.dir.join("shop");
+
+    let id = vps.here.says(&[
+        "queue",
+        "add",
+        "--when",
+        "free",
+        "--project",
+        &project,
+        "--prompt",
+        "hello",
+        "--agent",
+        "fake",
+    ]);
+
+    let id: u64 = id.parse().expect("the entry's id");
+    let started = |entry: &Value| entry["id"] == id && entry["state"] == "started";
+    wait_until("the entry starts there", || {
+        let listed = answer(&vps.here.says(&["queue", "list", "--json"]));
+        listed["entries"].as_array().is_some_and(|entries| entries.iter().any(started))
+    });
+    let listed = answer(&vps.here.says(&["queue", "list", "--json"]));
+    let entry = listed["entries"].as_array().and_then(|entries| entries.iter().find(|e| started(e)).cloned());
+    assert_eq!(entry.map(|entry| entry["there"]["machine"].clone()), Some(json!(VPS)), "{listed}");
+    let got = repo.join("got").display().to_string();
+    vps.machine.wait_for_file(&got, "the agent there gets the prompt", |text| text.starts_with("hello"));
 }

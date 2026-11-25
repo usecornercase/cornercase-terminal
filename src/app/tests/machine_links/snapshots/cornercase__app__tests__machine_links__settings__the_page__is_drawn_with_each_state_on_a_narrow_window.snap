@@ -1,13 +1,12 @@
 ---
 source: src/app/tests/machine_links/settings.rs
-assertion_line: 112
 expression: every_state().shown(NARROW)
 ---
 "                                                                                "
 "  ╭─ Settings ───────────────────────────────────────────────────────────────╮  "
 "  │ Worktrees Agents Accounts Flows Issues UI Remote Plugins Machines        │  "
 "  │  ⌕ search settings                                                       │  "
-"  │ ▌   ▭ this computer         <version>                                    │  "
+"  │ ▌   ▭ this computer         <version>    · 6 GB free of 16 GB            │  "
 "  │   ● ☁ vps                   miguel@v…   ~/code  linked · 0.12.200  ✓     │  "
 "  │   ○ ▣ mini                  mac-mini…   …/code  unreachable · not  ✓     │  "
 "  │   ◐ ◫ pi                    pi.lan      ~/code  older · 0.12.200   ✓     │  "
@@ -17,8 +16,8 @@ expression: every_state().shown(NARROW)
 "  │   ◌ ☁ devbox                devbox.l…   ~/code  hidden             ·     │  "
 "  │   + add machine             another computer you reach with ssh          │  "
 "  │                                                                          │  "
-"  │                                                                          │  "
-"  │                                                                          │  "
+"  │ Free memory                                                              │  "
+"  │   a start needs             4GB  what auto and the queue count on, unles │  "
 "  │                                                                          │  "
 "  │                                                                          │  "
 "  │                                                                          │  "

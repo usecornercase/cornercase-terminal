@@ -37,21 +37,28 @@ mod the_page {
     }
 
     #[test]
-    fn lists_this_computer_then_each_machine_in_order_then_add() {
+    fn lists_this_computer_then_each_machine_in_order_then_add_and_the_memory_a_start_needs() {
         let s = with(&[
             (machine("vps", "vps.lan"), State::Linked),
             (machine("pi", "pi.lan"), State::Older),
             (machine("mini", "mini.local"), State::Unreachable),
         ]);
 
-        let rows =
-            [Row::Here, Row::Machine(0), Row::Machine(1), Row::UpdateMachine(1), Row::Machine(2), Row::AddMachine];
+        let rows = [
+            Row::Here,
+            Row::Machine(0),
+            Row::Machine(1),
+            Row::UpdateMachine(1),
+            Row::Machine(2),
+            Row::AddMachine,
+            Row::DefaultMemory,
+        ];
         assert_eq!(s.rows(), rows);
     }
 
     #[test]
     fn with_no_machine_lists_this_computer_and_add() {
-        assert_eq!(with(&[]).rows(), [Row::Here, Row::AddMachine]);
+        assert_eq!(with(&[]).rows(), [Row::Here, Row::AddMachine, Row::DefaultMemory]);
     }
 }
 
@@ -168,7 +175,7 @@ mod acting {
 
         let removals: Vec<Option<Action>> = (0..s.rows().len()).map(|i| s.removal(i)).collect();
 
-        assert_eq!(removals, [None, Some(Action::RemoveMachine(0)), None, Some(Action::RemoveMachine(1)), None]);
+        assert_eq!(removals, [None, Some(Action::RemoveMachine(0)), None, Some(Action::RemoveMachine(1)), None, None]);
     }
 
     #[test]
@@ -198,7 +205,7 @@ mod the_toggle {
 
         let toggles: Vec<Option<bool>> = s.rows().iter().map(|row| s.row_text(row).toggle).collect();
 
-        assert_eq!(toggles, [None, Some(true), None, Some(false), None, None]);
+        assert_eq!(toggles, [None, Some(true), None, Some(false), None, None, None]);
     }
 
     #[test]
@@ -208,7 +215,7 @@ mod the_toggle {
         let flips: Vec<Option<Action>> = (0..s.rows().len()).map(|i| s.toggling(i)).collect();
 
         let expected =
-            [None, Some(Action::ShowMachine(0, false)), None, Some(Action::ShowMachine(1, true)), None, None];
+            [None, Some(Action::ShowMachine(0, false)), None, Some(Action::ShowMachine(1, true)), None, None, None];
         assert_eq!(flips, expected);
     }
 }
@@ -282,7 +289,7 @@ mod a_machine_that_is_not_shown {
     fn is_grey_says_so_and_has_no_update_row() {
         let s = with(&[(hidden(), State::Connecting)]);
 
-        assert_eq!(s.rows(), [Row::Here, Row::Machine(0), Row::AddMachine]);
+        assert_eq!(s.rows(), [Row::Here, Row::Machine(0), Row::AddMachine, Row::DefaultMemory]);
         let row = s.row_text(&Row::Machine(0));
         assert_eq!((row.note.as_str(), row.mark, row.dangerous), ("hidden", Some(State::Connecting), false));
     }
@@ -310,5 +317,64 @@ mod the_first_row_while_the_window_is_on_another_machine {
         assert_eq!(text(&s, &Row::Here).0, "  ▭ vps");
         go_to(&mut s, &Row::Here);
         assert!(s.hint().starts_with("vps runs the server this window is on"), "{}", s.hint());
+    }
+}
+
+mod the_memory_a_start_needs {
+    use super::*;
+
+    #[test]
+    fn shows_the_default_and_what_it_is_for() {
+        let s = with(&[]);
+
+        let (label, value, note, _) = text(&s, &Row::DefaultMemory);
+
+        assert_eq!((label.as_str(), value.as_str()), ("a start needs", "4GB"));
+        assert!(note.contains("auto and the queue"), "{note}");
+    }
+
+    #[test]
+    fn is_edited_and_saved_as_typed() {
+        let mut s = with(&[]);
+        go_to(&mut s, &Row::DefaultMemory);
+        press(&mut s, KeyCode::Enter);
+        s.edit.as_mut().expect("editing").input = "6 GB".into();
+
+        assert_eq!(saved(press(&mut s, KeyCode::Enter)).default_memory, "6 GB");
+        assert_eq!(s.notice.as_deref(), Some("a start that names no memory needs 6 GB"));
+    }
+
+    #[test]
+    fn an_amount_it_cannot_read_is_refused() {
+        let mut s = with(&[]);
+        go_to(&mut s, &Row::DefaultMemory);
+        press(&mut s, KeyCode::Enter);
+        s.edit.as_mut().expect("editing").input = "lots".into();
+
+        assert_eq!(press(&mut s, KeyCode::Enter), Action::None);
+        assert!(s.edit.as_ref().is_some_and(|edit| edit.error.is_some()));
+    }
+}
+
+mod this_computer {
+    use super::*;
+    use crate::machines::memory::MemoryInfo;
+    use crate::text::GB;
+
+    #[test]
+    fn says_how_much_memory_is_free() {
+        let mut s = with(&[]);
+        s.here_memory = Some(MemoryInfo { total: 16 * GB, available: 5 * GB, read_at: None });
+
+        let (_, _, note, _) = text(&s, &Row::Here);
+
+        assert_eq!(note, format!("{} · 5 GB free of 16 GB", version::CURRENT));
+    }
+
+    #[test]
+    fn says_only_its_version_while_its_memory_is_unknown() {
+        let (_, _, note, _) = text(&with(&[]), &Row::Here);
+
+        assert_eq!(note, version::CURRENT);
     }
 }

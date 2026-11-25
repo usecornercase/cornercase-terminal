@@ -200,6 +200,7 @@ const SOUND_FILE_ON_A_DRIVE: &str = r"use a file on a drive, such as C:\sounds\d
 pub(crate) const DEFAULT_ISSUE_TABS: [&str; 8] =
     ["all", "github", "gitlab", "shortcut", "linear", "jira", "plane", "asana"];
 pub(crate) const DEFAULT_FETCH_MINUTES: u64 = 5;
+pub(crate) const DEFAULT_MEMORY: &str = "4GB";
 pub(crate) const SYSTEM_ACCOUNT: &str = "System";
 
 pub(crate) const DEFAULT_BUILDS: [&str; 8] =
@@ -311,6 +312,7 @@ impl ShellChoice {
 pub(crate) struct Config {
     pub(crate) worktrees_dir: String,
     pub(crate) fetch_minutes: u64,
+    pub(crate) default_memory: String,
     pub(crate) pull_requests: bool,
     pub(crate) merged_pull_requests: bool,
     pub(crate) shared_files: bool,
@@ -396,6 +398,7 @@ impl Config {
     const BLANK: Self = Self {
         worktrees_dir: String::new(),
         fetch_minutes: 0,
+        default_memory: String::new(),
         pull_requests: false,
         merged_pull_requests: false,
         shared_files: false,
@@ -478,6 +481,7 @@ impl Default for Config {
         Self {
             worktrees_dir: DEFAULT_WORKTREES_DIR.into(),
             fetch_minutes: DEFAULT_FETCH_MINUTES,
+            default_memory: DEFAULT_MEMORY.into(),
             pull_requests: true,
             merged_pull_requests: true,
             shared_files: false,
@@ -605,6 +609,12 @@ impl Config {
 
     pub(crate) fn unknown_profile(&self) -> Option<&str> {
         (!self.profile.is_empty() && !self.profiles.contains_key(&self.profile)).then_some(self.profile.as_str())
+    }
+
+    pub(crate) fn default_memory(&self) -> u64 {
+        crate::text::parse_size(&self.default_memory)
+            .or_else(|| crate::text::parse_size(DEFAULT_MEMORY))
+            .unwrap_or(crate::text::GB)
     }
 
     pub(crate) fn fetch_every(&self) -> Option<Duration> {

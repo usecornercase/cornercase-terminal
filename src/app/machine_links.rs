@@ -67,6 +67,7 @@ pub(crate) enum MachineEvent {
     Repo { project: u64, repo: Option<Repo> },
     Stats { link: u64, result: std::result::Result<View, String> },
     Usage { link: u64, result: std::result::Result<Plans, String> },
+    Memory { link: u64, result: std::result::Result<machines::memory::MemoryInfo, String> },
     Acted(acting::Acted),
     Followed(Followed),
     Read(Box<panels::FileRead>),
@@ -121,6 +122,7 @@ pub(super) struct Machines {
     pub(super) flows: super::flow_sync::Syncing,
     pub(super) ports: ports::RemotePorts,
     pub(super) tunnels: tunnels::ThereTunnels,
+    pub(super) memory: super::machine_memory::MemoryState,
 }
 
 impl Machines {
@@ -148,6 +150,7 @@ impl Machines {
             flows: super::flow_sync::Syncing::default(),
             ports: ports::RemotePorts::default(),
             tunnels: tunnels::ThereTunnels::default(),
+            memory: super::machine_memory::MemoryState::default(),
         }
     }
 
@@ -328,6 +331,7 @@ impl App {
             MachineEvent::Repo { project, repo } => self.repo_read(project, repo),
             MachineEvent::Stats { link, result } => self.machine_answered(link, result),
             MachineEvent::Usage { link, result } => self.machine_answered(link, result),
+            MachineEvent::Memory { link, result } => self.memory_answered(link, result),
             MachineEvent::Acted(acted) => self.acted(acted),
             MachineEvent::Followed(followed) => self.remote_followed(followed),
             MachineEvent::Read(read) => self.remote_file_read(*read),
@@ -469,7 +473,8 @@ impl App {
             let held = self.machines.held.iter().find(|held| !unheld && held.destination == machine.destination);
             let error = held.and_then(|held| self.machines.reason(held));
             let retry_at = held.and_then(Held::retry_at);
-            Info { retry_at, ..Info::of(machine, held.map(|held| &held.status), problem, error) }
+            let memory = held.and_then(Self::held_memory);
+            Info { retry_at, memory, ..Info::of(machine, held.map(|held| &held.status), problem, error) }
         })
         .collect()
     }
@@ -478,11 +483,13 @@ impl App {
         if !matches!(&self.overlay, Some(Overlay::Settings(s)) if s.page == Page::Machines) {
             return;
         }
+        self.refresh_memory(super::machine_memory::REFRESH);
         let infos = self.machine_infos();
-        let on = self.window_on();
+        let (on, here) = (self.window_on(), self.here_memory());
         if let Some(Overlay::Settings(s)) = &mut self.overlay {
             s.take_machines(infos);
             s.on = on;
+            s.here_memory = here;
             s.now = SystemTime::now();
         }
     }

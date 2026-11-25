@@ -107,6 +107,7 @@ pub(crate) enum Row {
     Machine(usize),
     UpdateMachine(usize),
     AddMachine,
+    DefaultMemory,
 }
 
 impl Row {
@@ -132,6 +133,7 @@ impl Row {
             Self::DefaultAgent | Self::Submit | Self::Trust | Self::Resume | Self::KeepAwake => "Agent",
             Self::Kind(_) | Self::AddAgent => "How each agent starts",
             Self::Recap(_) => "Recap",
+            Self::DefaultMemory => "Free memory",
             _ => "",
         }
     }
@@ -186,7 +188,9 @@ impl Row {
             | Self::AddAccount(_)
             | Self::System(_)
             | Self::RenameAccount(..) => Page::Accounts,
-            Self::Here | Self::Machine(_) | Self::UpdateMachine(_) | Self::AddMachine => Page::Machines,
+            Self::Here | Self::Machine(_) | Self::UpdateMachine(_) | Self::AddMachine | Self::DefaultMemory => {
+                Page::Machines
+            }
             _ => Page::Ui,
         }
     }
@@ -474,6 +478,7 @@ pub(crate) struct Settings {
     pub(crate) accounts: Listed,
     pub(crate) machines: Vec<Info>,
     pub(crate) on: Option<String>,
+    pub(crate) here_memory: Option<crate::machines::memory::MemoryInfo>,
     pub(crate) shells: ShellsHere,
     pub(crate) now: SystemTime,
     pub(crate) find: Finder,
@@ -505,6 +510,7 @@ impl Settings {
             accounts: Listed::default(),
             machines: Vec::new(),
             on: None,
+            here_memory: None,
             shells: ShellsHere::default(),
             now: UNIX_EPOCH,
             find: Finder::default(),

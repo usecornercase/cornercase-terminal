@@ -29,6 +29,7 @@ pub(crate) enum Item {
     Help,
     More,
     Machine,
+    Queue,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -67,7 +68,7 @@ impl Item {
             Self::Flow => icons::FLOW,
             Self::Plugin(n) => view.plugin_buttons.get(usize::from(n)).map_or("", |face| face.icon.as_str()),
             Self::Help => icons::HELP,
-            Self::More => icons::MORE,
+            Self::More | Self::Queue => icons::MORE,
             Self::Machine => icons::MACHINE,
         }
     }
@@ -87,6 +88,7 @@ impl Item {
             Self::Help => HELP_LABEL.into(),
             Self::More => MORE.into(),
             Self::Machine => view.machine.clone().unwrap_or_default(),
+            Self::Queue => super::chrome::queue_label(view.queue_waiting),
         }
     }
 
@@ -112,6 +114,7 @@ impl Item {
                         | Overlay::QueueList(_)
                 )
             ),
+            Self::Queue => matches!(view.overlay, Some(Overlay::QueueList(_))),
             Self::Plugin(_) | Self::Machine => false,
         }
     }
@@ -125,6 +128,9 @@ impl Item {
                 .and_then(|b| b.files.filter(|files| *files > 0))
                 .map(|files| Span::styled(icons::count(files), Style::default().fg(Color::Cyan))),
             Self::Todo => (view.todo_dot && view.todo_pending).then(|| Span::styled(icons::DOT, muted)),
+            Self::More if view.queue_waiting > 0 => {
+                Some(Span::styled(icons::count(view.queue_waiting), Style::default().fg(Color::Yellow)))
+            }
             Self::More => {
                 view.remote.filter(|&on| on).map(|_| Span::styled(icons::DOT, Style::default().fg(Color::Green)))
             }

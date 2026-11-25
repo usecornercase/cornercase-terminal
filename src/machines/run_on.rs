@@ -3,12 +3,14 @@ use ratatui::text::Span;
 use serde_json::Value;
 
 use super::link::{clean_path, clean_within};
+use super::memory::AUTO;
 use super::{HERE, act};
 use crate::control::contract::Refusal;
 use crate::flows::folder::MAX_FILES;
 use crate::text::{self, truncate_right};
 
 pub(crate) const NEEDS_REMOTE: &str = "needs a git remote";
+const READING: &str = "reading each machine's free memory…";
 const GAP: &str = "   ";
 const SHOWN: usize = 3;
 const TEXT: usize = 60;
@@ -33,15 +35,59 @@ impl Target {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct Auto {
+    pub(crate) wanted: bool,
+    pub(crate) note: Option<(String, bool)>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct RunOn {
     pub(crate) targets: Vec<Target>,
     pub(crate) chosen: Option<usize>,
     pub(crate) blocked: Option<&'static str>,
     pub(crate) awaiting: Option<u64>,
     pub(crate) lost: Option<String>,
+    pub(crate) auto: Auto,
 }
 
 impl RunOn {
+    pub(crate) fn choices(&self) -> usize {
+        self.targets.len() + 2
+    }
+
+    pub(crate) fn is_auto(&self, at: Option<usize>) -> bool {
+        at == Some(self.targets.len())
+    }
+
+    pub(crate) fn want_auto(&mut self) -> bool {
+        if self.blocked.is_some() {
+            return false;
+        }
+        self.auto = Auto { wanted: true, note: Some((READING.into(), false)) };
+        true
+    }
+
+    pub(crate) fn settle_auto(&mut self, chose: Result<(Option<String>, String), String>) -> bool {
+        let (name, why) = match chose {
+            Ok(chose) => chose,
+            Err(refused) => return self.auto_said(refused, true),
+        };
+        let at = name.as_deref().map(|name| self.targets.iter().position(|t| t.name.eq_ignore_ascii_case(name)));
+        let at = match at {
+            Some(None) => return self.auto_said(format!("{} is no longer listed", name.unwrap_or_default()), true),
+            Some(at) => at,
+            None => None,
+        };
+        let moved = !self.is_chosen(at) && self.choose(at);
+        self.auto_said(why, false);
+        moved
+    }
+
+    fn auto_said(&mut self, note: String, refused: bool) -> bool {
+        self.auto = Auto { wanted: false, note: Some((note, refused)) };
+        false
+    }
+
     pub(crate) fn can_choose(&self, at: usize) -> bool {
         self.blocked.is_none() && self.targets.get(at).is_some_and(Target::enabled)
     }
@@ -52,6 +98,7 @@ impl RunOn {
         }
         self.chosen = at;
         self.lost = None;
+        self.auto = Auto::default();
         true
     }
 
@@ -69,6 +116,7 @@ impl RunOn {
         let mut fresh = fresh.unwrap_or_default();
         fresh.awaiting = shown.awaiting;
         fresh.lost.clone_from(&shown.lost);
+        fresh.auto.clone_from(&shown.auto);
         if let Some(target) = shown.machine() {
             fresh.chosen = fresh.targets.iter().position(|there| there.link == target.link);
             if fresh.chosen.is_none() {
@@ -102,8 +150,14 @@ impl RunOn {
                 (None, None) => spans.push(Span::raw(text)),
             }
         }
+        let auto = format!("{GAP}○ {AUTO}");
+        spans.push(if self.blocked.is_some() { Span::styled(auto, dim) } else { Span::raw(auto) });
         if let Some(blocked) = self.blocked {
             spans.push(Span::styled(format!(" — {blocked}"), dim));
+        }
+        if let Some((note, refused)) = &self.auto.note {
+            let style = if *refused { Style::default().fg(Color::Red) } else { dim };
+            spans.push(Span::styled(format!(" · {note}"), style));
         }
         if let Some(lost) = &self.lost {
             spans.push(Span::styled(format!(" · {lost}"), Style::default().fg(Color::Red)));

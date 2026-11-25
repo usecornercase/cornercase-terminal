@@ -179,7 +179,7 @@ Plugins run as you, with your rights: what they ask for is shown, not enforced. 
   crop={[2, 1, 106, 10]}
 />
 
-The other computers your work can run on, and the link your cornercase server keeps to the server on each: see [Machines](../../guides/machines/). **this computer** comes first, with its version, and can't be changed. Then a row per machine: its state's mark, icon and name, its destination and folder, and its state, `linked` with the version there, `unreachable` with how long since it was up, `older`, `connecting…`, or `hidden` (the machine is on the list and the machine button, but its **show its work here** is off). Each machine's row ends with a toggle, `show here ✓` or `show here ·`, that hides or shows it at once without opening the form. While the window is on another machine, the first row names that machine, whose list the page is. Select one and the line at the bottom says why it is not linked. `Enter` or a click opens the machine in a form to change it, `×` or `Backspace` removes it at once (its server keeps running there), **`update…`** under an `older` machine installs your release there, and **`+ add machine`** opens the form for a new one: a name, an icon, the `ssh` destination, a folder for clones (`~/code` unless you change it), an optional command for a window opened there and the **show its work here** box. What you set is kept in [`machines`](#machines-1).
+The other computers your work can run on, and the link your cornercase server keeps to the server on each: see [Machines](../../guides/machines/). **this computer** comes first, with its version and its [free memory](../../guides/machines/#free-memory) (`0.13.0 · 6 GB free of 16 GB`), and can't be changed. Then a row per machine: its state's mark, icon and name, its destination and folder, and its state, `linked` with the version there and, once read, its free memory, `unreachable` with how long since it was up, `older`, `connecting…`, or `hidden` (the machine is on the list and the machine button, but its **show its work here** is off). Each machine's row ends with a toggle, `show here ✓` or `show here ·`, that hides or shows it at once without opening the form. While the window is on another machine, the first row names that machine, whose list the page is. Select one and the line at the bottom says why it is not linked. `Enter` or a click opens the machine in a form to change it, `×` or `Backspace` removes it at once (its server keeps running there), **`update…`** under an `older` machine installs your release there, and **`+ add machine`** opens the form for a new one: a name, an icon, the `ssh` destination, a folder for clones (`~/code` unless you change it), an optional command for a window opened there and the **show its work here** box. What you set is kept in [`machines`](#machines-1). The last section, **Free memory**, holds **a start needs**, the free memory [`auto`](../../guides/machines/#let-cornercase-choose-with-auto) counts for a start whose flow doesn't say: [`default_memory`](#default_memory).
 
 ### Search the settings
 
@@ -225,7 +225,7 @@ The text holds five sections, each of which the other person can leave out:
 | `interface` | Every switch of the UI tab, from [`sidebar`](#sidebar) to [`tour`](#tour), with the sounds and the [prefix key](#prefix_key) |
 | `repositories` | Each project's [setup and teardown](../../guides/worktrees/#set-up-each-new-worktree), found by the project's git remotes (such as `github.com/acme/web-shop`) rather than its folder, so it reaches the same repository wherever your colleague cloned it |
 
-It never holds a token, a chat bot, a paired chat, browser or phone app, your accounts and profiles, [`jira_email`](#jira_email), [`remote`](#remote), [`remote_port`](#remote_port), [`phone_app`](#phone_app), [`phone_app_port`](#phone_app_port), [`keep_awake`](#keep_awake), [`recap_account`](#recap_account) or your [`machines`](#machines-1). It lists the trackers you are connected to, by name only, so the other side is told which to connect. A setup or a prompt is copied as you typed it, so when one looks like it holds a secret (`NPM_TOKEN=…`, `--api-key …`, `Bearer …`) the toast says where, in red: check before you send it.
+It never holds a token, a chat bot, a paired chat, browser or phone app, your accounts and profiles, [`jira_email`](#jira_email), [`remote`](#remote), [`remote_port`](#remote_port), [`phone_app`](#phone_app), [`phone_app_port`](#phone_app_port), [`keep_awake`](#keep_awake), [`recap_account`](#recap_account), your [`machines`](#machines-1) or [`default_memory`](#default_memory). It lists the trackers you are connected to, by name only, so the other side is told which to connect. A setup or a prompt is copied as you typed it, so when one looks like it holds a secret (`NPM_TOKEN=…`, `--api-key …`, `Bearer …`) the toast says where, in red: check before you send it.
 
 To import one, paste it on Share (or anywhere on a settings tab, when it has several lines) and click **` preview `**. **Settings › Import** shows every setting that would change, as its value now → the shared one, grouped by section; a repository's setup and teardown are shown in full, a line at a time, in red:
 
@@ -401,6 +401,7 @@ Every key is optional: a missing key takes its default. Here is a complete file,
 | [`account_names`](#account_names) | object | `{}` |
 | [`active_accounts`](#active_accounts) | object | `{}` |
 | [`machines`](#machines-1) | array | `[]` |
+| [`default_memory`](#default_memory) | string | `"4GB"` |
 
 #### `worktrees_dir`
 
@@ -741,7 +742,7 @@ Each agent's default account while no [profile](#profile) is active: what a new 
 
 #### `machines`
 
-The other computers your work can run on, in the order **Settings › Machines** lists them: each with its `name` (letters, digits, `.`, `_` and `-`, at most 20, different from the others' ignoring case, and not `all`), its `icon` (`☁`, `▭`, `▣`, `◫`, `⌂` or `◆`; another one shows as `☁`), its `destination` for `ssh` (a `Host` of `~/.ssh/config` or `user@host`, different from the others'), its `folder` for clones there (an absolute path, `~`, or one starting with `~/`), an optional `command` (what runs cornercase there, for a window you open there with the machine button) and `shown` (`true` unless written: `false` keeps the machine on the list and the button without a link). Your server keeps a link to the server on each shown one: see [Machines](../../guides/machines/). A program that adds a machine also writes `unreached: true`, until a window has reached it, so the window asks once before it first connects. Left out of the file while you have none. An entry the rules refuse shows in the list with what is wrong and gets no link. `cornercase machines` changes it, and it isn't part of the settings you [share](#share-your-setup).
+The other computers your work can run on, in the order **Settings › Machines** lists them: each with its `name` (letters, digits, `.`, `_` and `-`, at most 20, different from the others' ignoring case, and neither `all` nor `auto`), its `icon` (`☁`, `▭`, `▣`, `◫`, `⌂` or `◆`; another one shows as `☁`), its `destination` for `ssh` (a `Host` of `~/.ssh/config` or `user@host`, different from the others'), its `folder` for clones there (an absolute path, `~`, or one starting with `~/`), an optional `command` (what runs cornercase there, for a window you open there with the machine button) and `shown` (`true` unless written: `false` keeps the machine on the list and the button without a link). Your server keeps a link to the server on each shown one: see [Machines](../../guides/machines/). A program that adds a machine also writes `unreached: true`, until a window has reached it, so the window asks once before it first connects. Left out of the file while you have none. An entry the rules refuse shows in the list with what is wrong and gets no link. `cornercase machines` changes it, and it isn't part of the settings you [share](#share-your-setup).
 
 ```json
 "machines": [
@@ -750,6 +751,10 @@ The other computers your work can run on, in the order **Settings › Machines**
   { "name": "devbox", "icon": "▣", "destination": "me@10.0.0.5", "folder": "~", "shown": false }
 ]
 ```
+
+#### `default_memory`
+
+The free memory a start needs when its flow doesn't say its own ([`memory`](../../guides/flows/#the-memory-a-run-needs)): [`--machine auto`](../../guides/machines/#from-a-terminal), the `auto` of a dialog's `run on` row and the [queue](../../guides/queue/#wait-for-room) only pick a computer with that much free. An amount such as `"4GB"`, `"512MB"` or `"1.5GB"`, in powers of 1024; Settings › Machines refuses one it can't read, and a file that holds one counts `4GB`. It isn't part of the settings you [share](#share-your-setup), since it depends on your machines.
 
 ### A customised example
 

@@ -1,6 +1,7 @@
 {
   "worktrees_dir": "worktrees",
   "fetch_minutes": 12,
+  "default_memory": "6GB",
   "pull_requests": false,
   "merged_pull_requests": false,
   "shared_files": true,

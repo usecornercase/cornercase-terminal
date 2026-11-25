@@ -63,7 +63,15 @@ pub(super) fn draw_footer(f: &mut Frame, view: &View, areas: &Areas) {
         let style = button_style(view, help, Style::default().fg(view.muted), Color::Cyan);
         draw_button(f, help, "", HELP_LABEL, style);
     }
-    draw_more_button(f, view, more_button(areas.more));
+    let queue = queue_button(areas.more, view.queue_waiting);
+    let more = more_button(areas.more);
+    if queue.is_empty() {
+        draw_more_button(f, view, more);
+    } else {
+        let style = button_style(view, queue, Style::default().fg(Color::Yellow), Color::Cyan);
+        draw_button(f, queue, "", &queue_label(view.queue_waiting), style);
+        draw_more_button(f, view, Rect { width: queue.x - more.x, ..more });
+    }
     let worktrees = worktrees_button(areas.worktrees);
     if !worktrees.is_empty() {
         let style = button_style(view, worktrees, Style::default().fg(view.muted), Color::Cyan);
@@ -127,6 +135,19 @@ pub(crate) fn help_button(more: Rect) -> Rect {
 pub(crate) fn more_button(more: Rect) -> Rect {
     let help = help_button(more);
     if help.is_empty() { more } else { Rect { width: help.x - more.x, ..more } }
+}
+
+pub(crate) fn queue_label(waiting: usize) -> String {
+    format!("queue {waiting}")
+}
+
+pub(crate) fn queue_button(more: Rect, waiting: usize) -> Rect {
+    let room = more_button(more);
+    let width = button_width(&queue_label(waiting));
+    if waiting == 0 || room.width < button_width(MORE_LABEL) + width + 2 {
+        return Rect::default();
+    }
+    Rect { x: room.right() - width, width, ..room }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

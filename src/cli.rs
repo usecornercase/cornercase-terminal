@@ -430,8 +430,15 @@ fn run_send(send: args::SendArgs) -> Result<()> {
 }
 
 fn warn(value: &Value) {
+    picked(value);
     if let Some(warning) = value.get("warning").and_then(Value::as_str) {
         note(&format!("warning: {warning}\n"));
+    }
+}
+
+pub(super) fn picked(value: &Value) {
+    if let Some(auto) = value.get("auto").and_then(Value::as_str) {
+        note(&format!("{auto}\n"));
     }
 }
 
@@ -660,6 +667,9 @@ fn issue_features(issue: &args::issue::IssueArg) -> Result<()> {
 fn machine(on: args::machine::MachineArg) -> Result<Option<String>> {
     if on.machine.is_some() {
         client::use_machine_start()?;
+    }
+    if on.machine.as_deref().is_some_and(crate::machines::memory::is_auto) {
+        client::use_machine_auto()?;
     }
     Ok(on.machine)
 }

@@ -53,7 +53,9 @@ impl App {
         add: &QueueAdd,
         old: Option<&Entry>,
     ) -> Result<Task, String> {
-        let Chosen { agent, command, program, mode } = self.queue_agent(caller, add, old)?;
+        let flowing = add.flow.is_some() || (add.agent.is_none() && old.is_some_and(|entry| entry.task.flow.is_some()));
+        let chosen = if flowing { Chosen::default() } else { self.queue_agent(caller, add, old)? };
+        let Chosen { agent, command, program, mode } = chosen;
         let place = self.queue_target(caller, add, old)?;
         let prompt = add.prompt.clone().or_else(|| old.map(|entry| entry.task.prompt.clone())).unwrap_or_default();
         Ok(Task {

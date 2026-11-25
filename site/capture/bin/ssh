@@ -13,7 +13,7 @@ case "$destination" in
   ana@vps.example.com)
     mkdir -p "$CC_DATA/vps"
     chmod 700 "$CC_DATA/vps"
-    exec env CORNERCASE_SOCKET="$CC_DATA/vps/server.sock" "$CC_CAPTURE/../../target/debug/cornercase" proxy
+    exec env CORNERCASE_SOCKET="$CC_DATA/vps/server.sock" CORNERCASE_MEMORY=32GB,9.2GB "$CC_CAPTURE/../../target/debug/cornercase" proxy
     ;;
   mac-mini.local)
     echo 'cornercase-proxy 1 0.0.1'

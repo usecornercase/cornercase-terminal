@@ -112,6 +112,9 @@ pub(crate) const FEATURES: &[&str] = &[
     "bot-memory",
     "focus-bot",
     "persona-catalogue",
+    "memory",
+    "machine-auto",
+    "queue-when-free",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -129,6 +132,7 @@ pub(crate) enum Code {
     Failed,
     Busy,
     Conflict,
+    NoRoom,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

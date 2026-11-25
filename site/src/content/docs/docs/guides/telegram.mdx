@@ -47,6 +47,8 @@ The bot then sends the list of your agents, and **`More ▴`** shows a green **`
 
 - **A [bot](../bots/#a-bot-asks-for-a-secret) asks for a secret**: `Campus asks for a secret: campus-password; open cornercase to give it`. The value is given in cornercase only, never in the chat.
 
+- **The [queue](../queue/)** says what it does, in the words of its notices: a queued agent or a routine's run started (and where, for one that [waited for room](../queue/#wait-for-room)), failed, missed its time or kept its workspace, an entry waits for room, or its pull request opened.
+
 - **An agent reports a failure** through [OSC 7501](../../reference/agents/#program-status-protocol), or a Claude Code turn ends on an API error: `! claude failed · web-shop › dark-mode`, with its last message or its screen when no message reader exists.
 
 An OSC 7501 `idle` report cancels work without a finished message; `done` reports completion even if the tab is visible or no working state was observed.

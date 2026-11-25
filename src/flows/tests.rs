@@ -172,6 +172,31 @@ mod builtins {
 mod problems {
     use super::*;
 
+    #[rstest]
+    #[case::gigabytes("3GB", Some(3 << 30))]
+    #[case::megabytes("512MB", Some(512 << 20))]
+    #[case::no_memory_said("", None)]
+    fn the_memory_it_needs_is_read(#[case] memory: &str, #[case] needed: Option<u64>) {
+        let flow = Flow { memory: Some(memory.to_string()).filter(|memory| !memory.is_empty()), ..sample() };
+
+        assert_eq!((flow.memory_needed(), flow.problems()), (needed, Vec::<String>::new()));
+    }
+
+    #[test]
+    fn a_memory_it_cannot_read_is_a_problem() {
+        let flow = Flow { memory: Some("3 gigs".into()), ..sample() };
+
+        assert_eq!(flow.problems(), ["memory `3 gigs` is not an amount: write it like 3GB or 512MB"]);
+    }
+
+    #[test]
+    fn the_memory_is_read_from_the_flow_file() {
+        let text = toml::to_string(&Flow { memory: Some("6GB".into()), ..sample() }).expect("toml");
+
+        assert!(text.contains("memory = \"6GB\""), "{text}");
+        assert_eq!(toml::from_str::<Flow>(&text).expect("a flow").memory_needed(), Some(6 << 30));
+    }
+
     #[test]
     fn a_stage_can_only_go_back_to_an_earlier_one() {
         let mut flow = sample();
@@ -937,45 +962,4 @@ mod site_copy {
     }
 }
 
-mod personas {
-    use super::*;
-
-    fn following(id: &str) -> Flow {
-        let mut flow = sample();
-        flow.roles[1].persona = Some(id.into());
-        flow
-    }
-
-    #[test]
-    fn a_persona_must_be_an_id() {
-        let problems = following("Code Reviewer").problems();
-        assert_eq!(
-            problems,
-            ["`reviewer` follows `Code Reviewer`, which is not a persona id: use lower-case letters, digits and -"]
-        );
-        assert_eq!(following(" ").problems(), Vec::<String>::new());
-    }
-
-    #[test]
-    fn a_persona_not_among_yours_is_a_problem() {
-        let flow = following("engineering-code-reviewer");
-        assert_eq!(flow.problems(), Vec::<String>::new());
-        assert_eq!(flow.persona_problems(&["engineering-code-reviewer".into()]), Vec::<String>::new());
-        assert_eq!(
-            flow.persona_problems(&[]),
-            [
-                "`reviewer` follows the persona `engineering-code-reviewer`, which is not among your personas or cannot be \
-              read: import it with `cornercase persona import`, and `cornercase persona list` says why one cannot be read"
-            ]
-        );
-    }
-
-    #[test]
-    fn a_file_names_the_persona_only_when_a_role_has_one() {
-        let text = store::to_text(&following("engineering-code-reviewer")).expect("serialize");
-        assert!(text.contains("persona = \"engineering-code-reviewer\""), "{text}");
-        assert!(text.starts_with("version = 1\n"), "{text}");
-        assert_eq!(store::parse(&text).expect("parse"), following("engineering-code-reviewer"));
-        assert!(!store::to_text(&sample()).expect("serialize").contains("persona"));
-    }
-}
+mod personas;

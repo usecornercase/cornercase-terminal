@@ -67,7 +67,10 @@ mod the_row {
     fn lists_this_computer_chosen_and_each_machine() {
         let b = reading(Some(two_machines()));
 
-        assert_eq!(row(&b, "run on").as_deref(), Some("run on  ● this computer   ○ ☁ vps   ○ ☁ box · unreachable"));
+        assert_eq!(
+            row(&b, "run on").as_deref(),
+            Some("run on  ● this computer   ○ ☁ vps   ○ ☁ box · unreachable   ○ auto")
+        );
         let shown = rows(&b);
         let at = shown.iter().position(|text| text.starts_with("run on")).expect("the row");
         assert!(shown[at + 1].starts_with("start "), "{shown:?}");
@@ -80,7 +83,7 @@ mod the_row {
 
         assert_eq!(
             row(&b, "run on").as_deref(),
-            Some("run on  ● this computer   ○ ☁ vps   ○ ☁ box — needs a git remote")
+            Some("run on  ● this computer   ○ ☁ vps   ○ ☁ box   ○ auto — needs a git remote")
         );
     }
 
@@ -100,7 +103,9 @@ mod the_row {
 
         assert_eq!(
             shown.as_deref(),
-            Some("run on  ○ this computer   ● ☁ vps   ○ ☁ box · unreachable · vps has no Shortcut token for shop")
+            Some(
+                "run on  ○ this computer   ● ☁ vps   ○ ☁ box · unreachable   ○ auto · vps has no Shortcut token for shop"
+            )
         );
     }
 }
@@ -123,6 +128,11 @@ mod the_picker {
                 ("this computer".into(), "▭".into(), String::new()),
                 ("vps".into(), "☁".into(), String::new()),
                 ("box".into(), "☁".into(), "unreachable".into()),
+                (
+                    "auto".into(),
+                    "○".into(),
+                    "this computer or the machine with the project and the most free memory".into()
+                ),
             ]
         );
         assert_eq!(b.picker.as_ref().map(|p| (p.pick, p.search.selected())), Some((Pick::Machine, 0)));
@@ -295,7 +305,9 @@ mod a_machine_that_is_gone {
             assert_eq!(b.error.as_deref(), Some("vps is no longer listed"));
         }
         assert!(!b.labels(ROOM.buttons).contains(&"schedule"));
-        assert!(row(&b, "run on").is_some_and(|row| row.ends_with("○ this computer · vps is no longer listed")));
+        assert!(
+            row(&b, "run on").is_some_and(|row| row.ends_with("○ this computer   ○ auto · vps is no longer listed"))
+        );
     }
 
     #[test]

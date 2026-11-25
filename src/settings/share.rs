@@ -17,7 +17,7 @@ pub(crate) const NEVER_SHARED: [&str; 4] = [
     "remote access, the phone app and keep awake",
 ];
 #[cfg(test)]
-pub(crate) const LEFT_OUT: [&str; 19] = [
+pub(crate) const LEFT_OUT: [&str; 20] = [
     "jira_email",
     "discord_forum",
     "discord_forum_close",
@@ -36,6 +36,7 @@ pub(crate) const LEFT_OUT: [&str; 19] = [
     "default_flow",
     "flow_order",
     "machines",
+    "default_memory",
     "shell",
 ];
 

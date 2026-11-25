@@ -63,6 +63,7 @@ impl App {
             Asked::Pause(id) => self.pause_queued(id, true),
             Asked::Resume(id) => self.pause_queued(id, false),
             Asked::Remove(id) => self.remove_queued(id),
+            Asked::First(id) => self.first_queued(id),
             Asked::Clear => self.clear_queued(),
             Asked::Fold(id) => {
                 self.panels.queued.toggle_fold(id);

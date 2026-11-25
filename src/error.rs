@@ -119,6 +119,8 @@ pub enum Error {
     #[error("{0}")]
     StaleBoot(String),
     #[error("{0}")]
+    NoRoom(String),
+    #[error("{0}")]
     IgnoresBoot(String),
     #[error(
         "the running cornercase server is too old for `cornercase {0}`. Restart it: run `cornercase kill-server` \

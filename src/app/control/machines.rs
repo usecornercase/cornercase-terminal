@@ -140,7 +140,8 @@ impl App {
     }
 
     pub(in crate::app) fn machine_list(&self) -> MachineList {
-        let here = ThisComputer { icon: HERE_ICON.to_string(), version: version::CURRENT.into() };
+        let here =
+            ThisComputer { icon: HERE_ICON.to_string(), version: version::CURRENT.into(), memory: self.here_memory() };
         MachineList { here, machines: self.machine_infos() }
     }
 

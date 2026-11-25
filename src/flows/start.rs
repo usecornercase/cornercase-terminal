@@ -442,8 +442,8 @@ impl Start {
     fn focused_key(&mut self, key: KeyEvent, typing: bool, room: Room) -> Action {
         match self.focus {
             Focus::List => match key.code {
-                KeyCode::Up => self.select(self.cursor.saturating_sub(1)),
-                KeyCode::Down => self.select(self.cursor + 1),
+                KeyCode::Up => self.choose_flow(self.cursor.saturating_sub(1)),
+                KeyCode::Down => self.choose_flow(self.cursor + 1),
                 KeyCode::Enter => self.focus = Focus::Prompt,
                 _ => {}
             },
@@ -505,7 +505,7 @@ impl Start {
             Hit::Workspace if self.issue.is_some() => self.focus = Focus::Workspace,
             Hit::Close | Hit::Workspace => {}
             Hit::Row(i) => {
-                self.select(i);
+                self.choose_flow(i);
                 self.focus = Focus::List;
             }
             Hit::Prompt { line, col } => {
@@ -536,7 +536,7 @@ impl Start {
     }
 
     pub(crate) fn scroll_list(&mut self, delta: isize) {
-        self.select(self.cursor.saturating_add_signed(delta).min(self.flows.len().saturating_sub(1)));
+        self.choose_flow(self.cursor.saturating_add_signed(delta).min(self.flows.len().saturating_sub(1)));
     }
 }
 

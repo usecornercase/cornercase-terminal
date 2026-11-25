@@ -6,6 +6,7 @@ pub(crate) mod outcome;
 pub(crate) mod repeat;
 pub(crate) mod routine;
 
+use std::cmp::Reverse;
 use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -14,7 +15,8 @@ use serde::{Deserialize, Serialize};
 
 use repeat::Repeat;
 
-pub(crate) const VERSION: u32 = 3;
+pub(crate) const VERSION: u32 = 4;
+const BOTS: u32 = 3;
 const ROUTINES: u32 = 2;
 pub(crate) const RUNS_KEPT: usize = 10;
 pub(crate) const GRACE: i64 = 600;
@@ -62,6 +64,27 @@ pub(crate) struct Task {
     pub(crate) routine: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) fresh: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) wait: Option<Wait>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) machine: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) first: Option<u64>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum Wait {
+    Free,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct There {
+    pub(crate) machine: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) workspace: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) tab: Option<u64>,
 }
 
 #[expect(clippy::trivially_copy_pass_by_ref, reason = "serde's skip_serializing_if passes a reference")]
@@ -107,11 +130,34 @@ pub(crate) struct Entry {
     pub(crate) result: Option<outcome::Outcome>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub(crate) unsent: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) there: Option<There>,
 }
 
 impl Entry {
     pub(crate) fn new(id: u64, task: Task, state: State) -> Self {
-        Self { id, task, state, started: None, result: None, unsent: false }
+        Self { id, task, state, started: None, result: None, unsent: false, there: None }
+    }
+
+    pub(crate) fn is_free(&self) -> bool {
+        self.task.wait == Some(Wait::Free)
+    }
+
+    pub(crate) fn waits_for_room(&self) -> bool {
+        self.is_free() && self.state == State::Pending
+    }
+
+    fn order(&self) -> (bool, Reverse<u64>, i64, u64) {
+        (self.task.first.is_none(), Reverse(self.task.first.unwrap_or_default()), self.task.at, self.id)
+    }
+
+    fn uses_free(&self) -> bool {
+        let task = &self.task;
+        task.wait.is_some()
+            || task.machine.is_some()
+            || task.first.is_some()
+            || self.there.is_some()
+            || (task.flow.is_some() && task.repeat.is_none() && task.routine.is_none())
     }
 
     pub(crate) fn is_routine(&self) -> bool {
@@ -154,6 +200,16 @@ impl Entry {
     }
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct Waiting {
+    pub(crate) position: usize,
+    pub(crate) why: String,
+    pub(crate) since: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) needs: Option<u64>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Listed {
     #[serde(flatten)]
@@ -162,6 +218,8 @@ pub(crate) struct Listed {
     pub(crate) next: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) result_at: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) waiting: Option<Waiting>,
 }
 
 impl From<&Entry> for Listed {
@@ -171,9 +229,10 @@ impl From<&Entry> for Listed {
         let listed = Entry {
             started: entry.started,
             unsent: entry.unsent,
+            there: entry.there.clone(),
             ..Entry::new(entry.id, entry.task.clone(), entry.state.clone())
         };
-        Self { entry: listed, next, result_at }
+        Self { entry: listed, next, result_at, waiting: None }
     }
 }
 
@@ -280,21 +339,35 @@ impl Queue {
         self.entries.iter().filter(|entry| entry.state == State::Pending).count()
     }
 
+    pub(crate) fn waiting(&self) -> Vec<u64> {
+        let mut waiting: Vec<&Entry> = self.entries.iter().filter(|entry| entry.waits_for_room()).collect();
+        waiting.sort_by_key(|entry| entry.order());
+        waiting.into_iter().map(|entry| entry.id).collect()
+    }
+
+    pub(crate) fn put_first(&mut self, id: u64) -> Result<(), String> {
+        let first = self.entries.iter().filter_map(|entry| entry.task.first).max().unwrap_or_default();
+        let entry = self.entry_mut(id).ok_or_else(|| missing(id))?;
+        if !entry.waits_for_room() {
+            return Err(format!("queue entry {id} does not wait for room: only those take turns"));
+        }
+        entry.task.first = Some(first.saturating_add(1));
+        Ok(())
+    }
+
     pub(crate) fn next(&self, now: i64) -> Option<Duration> {
         self.entries
             .iter()
-            .filter(|entry| entry.state == State::Pending && !entry.task.paused)
+            .filter(|entry| entry.state == State::Pending && !entry.task.paused && !entry.is_free())
             .map(|entry| Duration::from_secs(u64::try_from(entry.task.at.saturating_sub(now)).unwrap_or_default()))
             .min()
     }
 
     pub(crate) fn due(&mut self, now: i64) -> Vec<u64> {
         let mut due = Vec::new();
-        for entry in self
-            .entries
-            .iter_mut()
-            .filter(|entry| entry.state == State::Pending && !entry.is_routine() && entry.task.at <= now)
-        {
+        for entry in self.entries.iter_mut().filter(|entry| {
+            entry.state == State::Pending && !entry.is_routine() && !entry.is_free() && entry.task.at <= now
+        }) {
             if now.saturating_sub(entry.task.at) > GRACE {
                 entry.state = State::Missed;
             } else {
@@ -305,8 +378,10 @@ impl Queue {
     }
 
     pub(crate) fn saved(&self) -> Saved {
-        let version = if self.entries.iter().any(Entry::uses_bots) {
+        let version = if self.entries.iter().any(Entry::uses_free) {
             VERSION
+        } else if self.entries.iter().any(Entry::uses_bots) {
+            BOTS
         } else if self.entries.iter().any(Entry::uses_routines) {
             ROUTINES
         } else {

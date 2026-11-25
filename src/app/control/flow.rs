@@ -124,7 +124,7 @@ impl App {
             ));
         }
         if let Some(machine) = run.machine.clone() {
-            return self.relay_request(client, &machine, Send::FlowRun(run));
+            return self.flow_run_there(asked, &machine, run);
         }
         let area = sized(area)?;
         if run.issue.is_some() {
@@ -157,6 +157,13 @@ impl App {
             ..Starting::new(flow, task, branch, accounts)
         };
         self.run_flow(Some(client), self.projects[p].id, starting, area)
+    }
+
+    fn flow_run_there(&mut self, asked: Asked, machine: &str, run: control::FlowRun) -> Handled {
+        if crate::machines::memory::is_auto(machine) {
+            return self.auto_flow_run(asked, run);
+        }
+        self.relay_request(asked.client, machine, Send::FlowRun(run))
     }
 
     pub(in crate::app) fn run_flow(

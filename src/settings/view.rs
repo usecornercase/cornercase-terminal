@@ -316,6 +316,9 @@ impl Settings {
                     .to_string()
             }
             Row::Fetch => "fetch branches every (minutes, 0 turns it off)".to_string(),
+            Row::DefaultMemory => {
+                "free memory a start needs when its flow does not say, such as 4GB or 512MB".to_string()
+            }
             Row::Token(source) => format!("{} {}", source.name(), source.token_name()),
             Row::GitlabUrl => "GitLab URL for a self-hosted server (empty is gitlab.com)".to_string(),
             Row::JiraSite => "Jira site, such as acme.atlassian.net".to_string(),
