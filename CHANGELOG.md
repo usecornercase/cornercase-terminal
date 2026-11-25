@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.14.1
+
+- **A machine's tabs in the tabs above the pane.** With **settings → UI → tabs** set to *top*, the bar above the pane shows the tabs of the machine's workspace you are on, instead of this computer's: click one to show it, **`+`** opens a tab there, and each tab has its **`⋯`** (or a right-click) to rename or close it and its **`×`**, as the machine's rows in the sidebar. A tab with an agent asks before closing, a closing tab reads `closing…`, and while the machine is down the bar is dimmed and says why nothing was sent. The line under the tabs shows the model and context of the pane you are in there.
+
 ## 0.14.0
 
 - **Let cornercase pick the machine with room.** `cornercase start`, `start` with a model or mode, and `flow run` take `--machine auto`: cornercase reads how much memory is free on this computer and on each linked machine that has the project, and starts where there is the most room, this computer on a tie. It says where and why (`auto → torre (11.3 GB free)`). When no machine has the memory a start needs it starts nothing and exits with status 8: `no machine has 6 GB free (best: mac, 4.1 GB)`. What it just sent to a machine counts as taken there for 5 minutes, so a burst of starts spreads out instead of landing on one machine.
