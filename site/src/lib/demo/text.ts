@@ -122,6 +122,26 @@ export function truncateLeft(s: string, max: number): string {
 
 export const pad = (s: string, n: number): string => s + ' '.repeat(Math.max(0, n - [...s].length));
 
+const MB = 1024 * 1024;
+const GB = 1024 * MB;
+const UNIT: Record<string, number> = { '': 1, b: 1, k: 1024, kb: 1024, kib: 1024, m: MB, mb: MB, mib: MB, g: GB, gb: GB, gib: GB, t: 1024 * GB, tb: 1024 * GB, tib: 1024 * GB };
+
+export function parseSize(text: string): number | null {
+  const found = /^(\d*(?:\.\d*)?)\s*([a-z]*)$/i.exec(text.trim());
+  const unit = found ? UNIT[found[2].toLowerCase()] : undefined;
+  if (!found || unit === undefined || found[1] === '' || found[1] === '.') return null;
+  const bytes = Math.floor(Number(found[1]) * unit);
+  return bytes > 0 && Number.isSafeInteger(bytes) ? bytes : null;
+}
+
+export function memoryShown(bytes: number): string {
+  const megabytes = Math.floor((bytes + MB / 2) / MB);
+  if (megabytes === 0) return `${Math.floor((bytes + 512) / 1024)} KB`;
+  if (megabytes < 1024) return `${megabytes} MB`;
+  const tenths = Math.floor((bytes * 10 + GB / 2) / GB);
+  return tenths % 10 ? `${Math.floor(tenths / 10)}.${tenths % 10} GB` : `${tenths / 10} GB`;
+}
+
 export function slug(text: string, max = 40): string {
   const folded = text
     .toLowerCase()

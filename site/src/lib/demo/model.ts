@@ -284,6 +284,7 @@ export interface Config {
   worktreesDir: string;
   freshBranches: boolean;
   fetchMinutes: number;
+  defaultMemory: string;
   agent: string;
   submit: boolean;
   trust: boolean;
@@ -324,6 +325,7 @@ export const defaultConfig = (): Config => ({
   worktreesDir: '~/.cornercase/worktrees',
   freshBranches: false,
   fetchMinutes: 5,
+  defaultMemory: '4GB',
   agent: 'claude',
   submit: false,
   trust: false,

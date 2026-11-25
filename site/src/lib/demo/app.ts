@@ -110,13 +110,14 @@ import { AGENT_KINDS, Agent, Editor, type Host, type Key, type Place, Shell } fr
 import { type KeysAction, type KeysGroup, type KeysStep, isPrefix, keysItems, keysLookup, prefixClash, prefixOf } from './keys';
 import { type Node, type PanePlace, beside, fits, hasRoom, moved, placeArea, placeAt, ratioAt, remove, setRatio, split, visible } from './split';
 import { type Stretch, dragged as extended } from './stretch';
-import { type Line, folderSlug, seg, slug, truncateRight } from './text';
+import { type Line, folderSlug, memoryShown, parseSize, seg, slug, truncateRight } from './text';
 import { type Drag, type Frame, Painter, type Region } from './ui';
 
 const NO_PLUGINS = '`cornercase plugin install <owner/repo>` adds one, then enter turns it on here';
 const MACHINES_NEED = 'this needs cornercase on your computer: the demo has no other machines to reach';
 const MACHINES_HINT = 'enter edits a machine · × removes it, and its server keeps running there';
 const HERE_HINT = 'this computer runs the server you are using; it links to each machine below';
+const HERE_MEMORY = { total: 16 * 1024 ** 3, available: 6 * 1024 ** 3 };
 const REMOTE_NEEDS = 'this needs cornercase on your computer: the demo has neither Tailscale nor a chat app';
 const PHONE_APP_NEEDS = 'the demo cannot listen on your network: the phone app needs cornercase on your computer';
 
@@ -3565,8 +3566,9 @@ export class App {
     }
     if (page === PAGE.machines) {
       return [
-        { id: 'here', section: '', label: '  ▭ this computer', value: '', note: 'the demo, in your browser' },
+        { id: 'here', section: '', label: '  ▭ this computer', value: '', note: `the demo, in your browser · ${memoryShown(HERE_MEMORY.available)} free of ${memoryShown(HERE_MEMORY.total)}` },
         { id: 'addMachine', section: '', label: '+ add machine', value: '', note: 'another computer you reach with ssh' },
+        { id: 'defaultMemory', section: 'Free memory', label: 'a start needs', value: c.defaultMemory, note: 'what auto and the queue count on, unless a flow says' },
       ];
     }
     if (page === PAGE.remote) {
@@ -3665,6 +3667,7 @@ export class App {
     o.notice = undefined;
     if (row.id === 'folder') o.edit = { row: row.id, label: 'worktrees folder', input: c.worktreesDir, token: false };
     else if (row.id === 'fetch') o.edit = { row: row.id, label: 'fetch branches every (minutes, 0 turns it off)', input: String(c.fetchMinutes), token: false };
+    else if (row.id === 'defaultMemory') o.edit = { row: row.id, label: 'free memory a start needs when its flow does not say, such as 4GB or 512MB', input: c.defaultMemory, token: false };
     else if (row.id === 'fresh') {
       c.freshBranches = !c.freshBranches;
       o.notice = c.freshBranches ? 'new branches start from the default branch, fetched first' : "new branches start from the project's HEAD";
@@ -3928,6 +3931,15 @@ export class App {
         this.config.fetchMinutes = Number(v);
         o.edit = undefined;
         o.notice = this.config.fetchMinutes ? `branches are fetched every ${this.config.fetchMinutes} min` : 'branches are not fetched: commits to pull are not shown';
+      }
+    } else if (edit.row === 'defaultMemory') {
+      const typed = edit.input.trim();
+      const bytes = parseSize(typed);
+      if (bytes === null) edit.error = 'write an amount such as 4GB or 512MB';
+      else {
+        this.config.defaultMemory = typed;
+        o.edit = undefined;
+        o.notice = `a start that names no memory needs ${memoryShown(bytes)}`;
       }
     } else if (edit.row.startsWith('token:')) {
       const source = edit.row.slice(6) as Remote;

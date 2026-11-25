@@ -207,7 +207,10 @@ cornercase usage --machine all --json
 cornercase start claude --issue '#482' --project 2 --machine vps --focus
 cornercase start claude --issue '#482' --project 2 --machine vps --placed --json
 cornercase flow run Quick --prompt 'Fix the login form' --project 2 --machine vps
+cornercase start claude --issue '#482' --project 2 --machine auto
 ```
+
+`start` and `flow run` also take `--machine auto`: your server picks this computer or the linked machine that has the project and the most free memory, counting what the start needs (a flow's [`memory`](../../guides/flows/#the-memory-a-run-needs), else [`default_memory`](../configuration/#default_memory)), and says which on standard error, `auto → torre (11.3 GB free)`. Its ids are this computer's. When no machine has room it starts nothing and exits with status 8 (`error: no machine has 6 GB free (best: mac, 4.1 GB)`). See [Start work on a machine](../../guides/machines/#from-a-terminal).
 
 ### `cornercase tour`
 
