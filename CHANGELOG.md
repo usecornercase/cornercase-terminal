@@ -2,6 +2,19 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.14.0
+
+- **Let cornercase pick the machine with room.** `cornercase start`, `start` with a model or mode, and `flow run` take `--machine auto`: cornercase reads how much memory is free on this computer and on each linked machine that has the project, and starts where there is the most room, this computer on a tie. It says where and why (`auto → torre (11.3 GB free)`). When no machine has the memory a start needs it starts nothing and exits with status 8: `no machine has 6 GB free (best: mac, 4.1 GB)`. What it just sent to a machine counts as taken there for 5 minutes, so a burst of starts spreads out instead of landing on one machine.
+- **`auto` in the run on row** of Issues, start a flow and New workspace: choosing it picks this computer or the machine with the most free memory, as if you had clicked it, and says why after the row.
+- **Queue work until a machine has room.** `cornercase queue add --when free` (or **when there is room** in the schedule form) puts an entry in line instead of at a time: as soon as this computer or a linked machine with the project has the memory it needs, it starts there, then the next one. Entries take turns in the order you added them, and `queue first ID` (or ` first ` in the Queue list) puts one at the head. `--machine NAME` waits for one machine only. A one-off entry can now run a flow with `--flow`.
+  - While entries wait, the footer shows **`queue 3`** (also in a `cornercase remote` window); it opens the Queue list, where the waiting entries come first, in turn, each saying for how long and why it waits (`waits 12m · needs 6 GB · best: torre 4.1 GB`).
+  - An entry started on another machine shows its agent's state there, says `paused` while that machine is down (it is followed again when it comes back), opens its tab there on a click, and its pull request is found by its branch.
+  - New notices, also on Telegram and Discord while you are away: an entry waits for room (with its turn and what it needs), and its pull request opened; the started notice names the machine.
+- **Free memory everywhere.** Settings › Machines shows how much memory this computer and each linked machine have free (`linked · 0.14.0 · 9.2 GB free of 32 GB`), and `cornercase machines --json` lists it. It counts available memory (the file cache included), read on Linux, macOS and Windows.
+- **How much a start needs**: a flow file can say `memory = "3GB"`; otherwise Settings › Machines › **a start needs** (`default_memory`, 4GB) counts.
+- A machine can no longer be named `auto`.
+- **For programs**: `auto` as the `machine` of `start`, `start-with` and `flow-run`, with the `auto` text in their answer and the error code `no-room`; `memory` in the `machines` answer; `when`, `machine` and the `first` action in `queue`, and `wait`, `machine`, `first`, `waiting` and `there` in its entries; the `queue-waiting` and `queue-pull-request` notices; and the features `memory`, `machine-auto` and `queue-when-free` in `cornercase contract`.
+
 ## 0.13.118
 
 - **Pick the personas to import from the command line.** `persona import SOURCE --catalogue` lists every persona of a repository, a folder or a file by division, each with why it cannot be imported when it cannot (not a persona, an id or a name that appears twice, or a name one of yours already has), and saves nothing; unlike `--check`, one such persona no longer fails the whole list. `--only ID`, repeated, imports just those ids.
