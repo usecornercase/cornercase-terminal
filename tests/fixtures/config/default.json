@@ -1,6 +1,7 @@
 {
   "worktrees_dir": "~/.cornercase/worktrees",
   "fetch_minutes": 5,
+  "default_memory": "4GB",
   "pull_requests": true,
   "merged_pull_requests": true,
   "shared_files": false,

@@ -172,6 +172,31 @@ mod builtins {
 mod problems {
     use super::*;
 
+    #[rstest]
+    #[case::gigabytes("3GB", Some(3 << 30))]
+    #[case::megabytes("512MB", Some(512 << 20))]
+    #[case::no_memory_said("", None)]
+    fn the_memory_it_needs_is_read(#[case] memory: &str, #[case] needed: Option<u64>) {
+        let flow = Flow { memory: Some(memory.to_string()).filter(|memory| !memory.is_empty()), ..sample() };
+
+        assert_eq!((flow.memory_needed(), flow.problems()), (needed, Vec::<String>::new()));
+    }
+
+    #[test]
+    fn a_memory_it_cannot_read_is_a_problem() {
+        let flow = Flow { memory: Some("3 gigs".into()), ..sample() };
+
+        assert_eq!(flow.problems(), ["memory `3 gigs` is not an amount: write it like 3GB or 512MB"]);
+    }
+
+    #[test]
+    fn the_memory_is_read_from_the_flow_file() {
+        let text = toml::to_string(&Flow { memory: Some("6GB".into()), ..sample() }).expect("toml");
+
+        assert!(text.contains("memory = \"6GB\""), "{text}");
+        assert_eq!(toml::from_str::<Flow>(&text).expect("a flow").memory_needed(), Some(6 << 30));
+    }
+
     #[test]
     fn a_stage_can_only_go_back_to_an_earlier_one() {
         let mut flow = sample();

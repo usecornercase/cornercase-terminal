@@ -122,6 +122,18 @@ impl Settings {
         }
     }
 
+    fn submit_default_memory(&mut self) -> Action {
+        let Some(edit) = &mut self.edit else { return Action::None };
+        let typed = edit.input.trim().to_string();
+        let Some(bytes) = crate::text::parse_size(&typed) else {
+            edit.error = Some("write an amount such as 4GB or 512MB".into());
+            return Action::None;
+        };
+        self.edit = None;
+        let notice = format!("a start that names no memory needs {}", crate::host::memory::shown(bytes));
+        self.save(Config { default_memory: typed, ..self.config.clone() }, notice)
+    }
+
     fn submit_issue_branch(&mut self) -> Action {
         let Some(edit) = &mut self.edit else { return Action::None };
         match naming::check(&edit.input) {
@@ -146,6 +158,7 @@ impl Settings {
         match edit.row.clone() {
             Row::Folder => self.submit_folder(),
             Row::IssueBranch => self.submit_issue_branch(),
+            Row::DefaultMemory => self.submit_default_memory(),
             Row::Fetch => self.submit_fetch(),
             Row::Token(source) => self.submit_token(source),
             Row::Bot(via) => self.submit_bot(via),

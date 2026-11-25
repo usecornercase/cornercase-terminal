@@ -14,6 +14,7 @@ const HIDDEN_HINT: &str =
     "hidden: nothing is linked and its server keeps running there; its toggle shows it here again";
 const UPDATE_NOTE: &str = "installs this version there with cornercase update; nothing restarts";
 const ADD_NOTE: &str = "another computer you reach with ssh";
+const MEMORY_NOTE: &str = "what auto and the queue count on, unless a flow says";
 
 pub(super) enum Picked {
     Machine { at: usize, machine: Machine, update: bool },
@@ -29,7 +30,7 @@ impl Settings {
                 rows.push(Row::UpdateMachine(at));
             }
         }
-        rows.push(Row::AddMachine);
+        rows.extend([Row::AddMachine, Row::DefaultMemory]);
         rows
     }
 
@@ -107,6 +108,9 @@ impl Settings {
                 let note = if updating { "updating…" } else { UPDATE_NOTE };
                 ("    update…".into(), String::new(), note.into(), false)
             }
+            Row::DefaultMemory => {
+                ("a start needs".into(), self.config.default_memory.clone(), MEMORY_NOTE.into(), false)
+            }
             _ => ("+ add machine".into(), String::new(), ADD_NOTE.into(), false),
         }
     }
@@ -168,8 +172,9 @@ impl Settings {
         Some(Action::ShowMachine(at, !shown))
     }
 
-    pub(super) fn activate_machine(row: &Row) -> Action {
+    pub(super) fn activate_machine(&mut self, row: &Row) -> Action {
         match row {
+            Row::DefaultMemory => self.start_edit(row.clone(), self.config.default_memory.clone()),
             Row::Machine(at) => Action::EditMachine(*at),
             Row::UpdateMachine(at) => Action::UpdateMachine(*at),
             Row::AddMachine => Action::AddMachine,

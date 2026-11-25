@@ -87,6 +87,7 @@ mod file {
         let expected = Config {
             worktrees_dir: "worktrees".into(),
             fetch_minutes: 12,
+            default_memory: "6GB".into(),
             pull_requests: false,
             merged_pull_requests: false,
             shared_files: true,

@@ -71,6 +71,14 @@ fn a_flow_survives_json_and_back() {
 }
 
 #[test]
+fn a_spec_keeps_the_memory_so_sync_sees_it_change() {
+    let flow = Flow { memory: Some("3GB".into()), ..example() };
+
+    assert_ne!(FlowSpec::from(&flow), FlowSpec::from(&example()));
+    assert_eq!(back_and_forth(&flow).memory.as_deref(), Some("3GB"));
+}
+
+#[test]
 fn a_spec_names_the_orchestrator_whatever_it_says() {
     let mut spec = FlowSpec::from(&example());
     spec.orchestrator.name = "boss".into();

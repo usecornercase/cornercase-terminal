@@ -100,7 +100,7 @@ mod the_page {
 
         assert_eq!(
             (rig.page().page, rig.page().rows()),
-            (Page::Machines, vec![Row::Here, Row::Machine(0), Row::AddMachine])
+            (Page::Machines, vec![Row::Here, Row::Machine(0), Row::AddMachine, Row::DefaultMemory])
         );
     }
 
@@ -159,7 +159,7 @@ mod the_page {
         rig.app.machines.set_status(0, status(State::Older));
         rig.refresh(Duration::from_millis(500));
 
-        assert_eq!((rig.page().rows().len(), rig.selected()), (4, Row::AddMachine));
+        assert_eq!((rig.page().rows().len(), rig.selected()), (5, Row::AddMachine));
     }
 
     #[test]
@@ -232,7 +232,7 @@ mod the_page {
 
         rig.edit(vec![machine("vps", "vps.lan")], Duration::from_secs(2));
 
-        assert_eq!(rig.page().rows(), [Row::Here, Row::Machine(0), Row::AddMachine]);
+        assert_eq!(rig.page().rows(), [Row::Here, Row::Machine(0), Row::AddMachine, Row::DefaultMemory]);
     }
 
     #[test]
