@@ -128,6 +128,7 @@ mod layout;
 mod links;
 mod machine_form;
 mod machine_links;
+mod machine_memory;
 mod machine_usage;
 mod machines;
 mod menus;

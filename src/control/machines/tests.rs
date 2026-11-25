@@ -8,7 +8,7 @@ use crate::test_util::fixture;
 
 fn answer() -> MachineList {
     MachineList {
-        here: ThisComputer { icon: "▭".into(), version: "0.12.225".into() },
+        here: ThisComputer { icon: "▭".into(), version: "0.12.225".into(), memory: None },
         machines: vec![
             Info {
                 name: "vps".into(),
@@ -25,6 +25,7 @@ fn answer() -> MachineList {
                 error: None,
                 updating: false,
                 problem: None,
+                memory: None,
             },
             Info {
                 name: "pi".into(),

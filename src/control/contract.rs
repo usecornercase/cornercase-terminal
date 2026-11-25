@@ -112,6 +112,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "bot-memory",
     "focus-bot",
     "persona-catalogue",
+    "memory",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

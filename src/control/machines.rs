@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use super::{Fields, Item, ProjectInfo, TunnelInfo};
+use crate::machines::memory::MemoryInfo;
 use crate::machines::{Info, State};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -76,6 +77,8 @@ pub(crate) struct MachineList {
 pub(crate) struct ThisComputer {
     pub(crate) icon: String,
     pub(crate) version: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) memory: Option<MemoryInfo>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

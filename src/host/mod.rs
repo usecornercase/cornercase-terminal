@@ -1,4 +1,5 @@
 pub mod clipboard;
+pub(crate) mod memory;
 pub(crate) mod name;
 pub(crate) mod network;
 pub(crate) mod notify;

@@ -63,6 +63,7 @@ use crate::issues::Secret;
 use crate::issues::browser::{Browser, Screen};
 #[cfg(unix)]
 use crate::issues::{self};
+use crate::os::memory::Memory;
 use crate::paths;
 #[cfg(unix)]
 use crate::project::picker::Picker;
@@ -84,6 +85,7 @@ use crate::term::mouse;
 #[cfg(unix)]
 use crate::test_util::{Locked, git_repo, is_sh, wait_until_within};
 use crate::test_util::{TempDir, wait_until};
+use crate::text::GB;
 #[cfg(unix)]
 use crate::ui::changes::{self as panel, Action as HunkAction};
 #[cfg(unix)]
@@ -218,6 +220,7 @@ fn new_app_with_shell(shell: &str, config_path: impl AsRef<Path>) -> (App, Recei
     app.machines
         .set_updater(std::sync::Arc::new(|_| Err(Error::Ssh { host: "a machine".into(), reason: NO_SSH.into() })));
     app.machines.repos.set_resolver(std::sync::Arc::new(|_| None));
+    app.machines.memory.read = || Ok(Memory { total: 16 * GB, available: 6 * GB });
     (app, rx)
 }
 

@@ -273,6 +273,18 @@ mod a_status {
     }
 
     #[test]
+    fn linked_says_its_free_memory_once_read() {
+        let gb = text::GB;
+        let memory = memory::MemoryInfo { total: 32 * gb, available: gb * 92 / 10, read_at: None };
+        let info = Info {
+            memory: Some(memory),
+            ..Info::of(&machine("vps", "vps.lan"), Some(&linked("0.13.0", "0.13.0")), None, None)
+        };
+
+        assert_eq!(info.note(at(NOW)), "linked · 0.13.0 · 9.2 GB free of 32 GB");
+    }
+
+    #[test]
     fn linked_to_an_older_running_server_says_until_when() {
         assert_eq!(
             note(&linked("0.12.225", "0.12.224")),

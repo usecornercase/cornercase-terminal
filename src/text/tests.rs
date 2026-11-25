@@ -20,6 +20,26 @@ fn size_reads_in_kilobytes_megabytes_then_gigabytes(#[case] bytes: u64, #[case] 
     assert_eq!(size(bytes), expected);
 }
 
+#[rstest]
+#[case::gigabytes("3GB", Some(3 * GB))]
+#[case::megabytes_with_a_space("512 MB", Some(512 * MB))]
+#[case::lower_case("4gb", Some(4 * GB))]
+#[case::binary_units("2GiB", Some(2 * GB))]
+#[case::one_letter("8G", Some(8 * GB))]
+#[case::a_fraction("1.5GB", Some(GB * 3 / 2))]
+#[case::bytes("1024", Some(1024))]
+#[case::terabytes("1TB", Some(1 << 40))]
+#[case::zero("0GB", None)]
+#[case::no_number("GB", None)]
+#[case::two_points("1.2.3GB", None)]
+#[case::a_word("three GB", None)]
+#[case::an_unknown_unit("3 gigs", None)]
+#[case::a_negative("-3GB", None)]
+#[case::too_big("99999999999TB", None)]
+fn parse_size_reads_memory_amounts(#[case] text: &str, #[case] parsed: Option<u64>) {
+    assert_eq!(parse_size(text), parsed);
+}
+
 #[test]
 fn one_line_joins_lines_and_spaces() {
     assert_eq!(one_line(" a\n  b\tc "), "a b c");

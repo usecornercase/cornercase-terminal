@@ -139,6 +139,29 @@ pub(crate) fn size(bytes: u64) -> String {
     format!("{}.{} GB", tenths / 10, tenths % 10)
 }
 
+pub(crate) fn parse_size(text: &str) -> Option<u64> {
+    let text = text.trim();
+    let split = text.find(|c: char| !(c.is_ascii_digit() || c == '.')).unwrap_or(text.len());
+    let (number, unit) = text.split_at(split);
+    let unit = match unit.trim().to_ascii_lowercase().as_str() {
+        "" | "b" => 1,
+        "k" | "kb" | "kib" => 1 << 10,
+        "m" | "mb" | "mib" => MB,
+        "g" | "gb" | "gib" => GB,
+        "t" | "tb" | "tib" => 1 << 40,
+        _ => return None,
+    };
+    let (whole, tenths) = number.split_once('.').unwrap_or((number, ""));
+    if whole.is_empty() && tenths.is_empty() || tenths.contains('.') {
+        return None;
+    }
+    let whole: u64 = if whole.is_empty() { 0 } else { whole.parse().ok()? };
+    let digits = u32::try_from(tenths.len()).ok().filter(|digits| *digits <= 9)?;
+    let fraction: u64 = if tenths.is_empty() { 0 } else { tenths.parse().ok()? };
+    let parts = whole.checked_mul(unit)?.checked_add(fraction.checked_mul(unit)? / 10_u64.pow(digits))?;
+    (parts > 0).then_some(parts)
+}
+
 pub(crate) fn within_bytes(text: &str, max: usize) -> &str {
     let cut = (0..=max.min(text.len())).rev().find(|&at| text.is_char_boundary(at)).unwrap_or_default();
     &text[..cut]

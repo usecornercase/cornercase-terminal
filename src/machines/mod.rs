@@ -17,6 +17,7 @@ pub(crate) mod form;
 pub(crate) mod heard;
 pub(crate) mod link;
 pub(crate) mod list;
+pub(crate) mod memory;
 pub(crate) mod repo;
 pub(crate) mod run_on;
 pub(crate) mod send;
@@ -339,6 +340,8 @@ pub(crate) struct Info {
     pub(crate) error: Option<String>,
     pub(crate) updating: bool,
     pub(crate) problem: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) memory: Option<memory::MemoryInfo>,
 }
 
 impl Info {
@@ -364,6 +367,7 @@ impl Info {
             error,
             updating: status.is_some_and(|status| status.updating),
             problem,
+            memory: None,
         }
     }
 
@@ -393,7 +397,10 @@ impl Info {
                 let release = self.version.as_deref().unwrap_or_default();
                 let running = self.server_version.as_deref().filter(|running| *running != release);
                 let note = running.map(|running| format!(" · its server runs {running} until it restarts there"));
-                format!("linked · {release}{}", note.unwrap_or_default())
+                let free = self.memory.as_ref().and_then(memory::MemoryInfo::memory);
+                let free =
+                    free.map(|memory| format!(" · {}", crate::host::memory::free_of(memory.available, memory.total)));
+                format!("linked · {release}{}{}", free.unwrap_or_default(), note.unwrap_or_default())
             }
             State::Unreachable => format!("unreachable · {}", self.seen_ago(now).unwrap_or_else(|| NOT_SEEN.into())),
             State::Older => self.version.as_ref().map_or_else(|| "older".into(), |there| format!("older · {there}")),

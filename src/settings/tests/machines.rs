@@ -312,3 +312,26 @@ mod the_first_row_while_the_window_is_on_another_machine {
         assert!(s.hint().starts_with("vps runs the server this window is on"), "{}", s.hint());
     }
 }
+
+mod this_computer {
+    use super::*;
+    use crate::machines::memory::MemoryInfo;
+    use crate::text::GB;
+
+    #[test]
+    fn says_how_much_memory_is_free() {
+        let mut s = with(&[]);
+        s.here_memory = Some(MemoryInfo { total: 16 * GB, available: 5 * GB, read_at: None });
+
+        let (_, _, note, _) = text(&s, &Row::Here);
+
+        assert_eq!(note, format!("{} · 5 GB free of 16 GB", version::CURRENT));
+    }
+
+    #[test]
+    fn says_only_its_version_while_its_memory_is_unknown() {
+        let (_, _, note, _) = text(&with(&[]), &Row::Here);
+
+        assert_eq!(note, version::CURRENT);
+    }
+}

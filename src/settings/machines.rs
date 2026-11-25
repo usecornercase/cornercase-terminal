@@ -1,3 +1,5 @@
+use crate::host::memory::free_of;
+use crate::machines::memory::MemoryInfo;
 use crate::machines::{self, HERE_ICON, Info, Machine, State};
 use crate::text::{cells, pad_cells, truncate_cells_left};
 use crate::version;
@@ -97,7 +99,7 @@ impl Settings {
         match row {
             Row::Here => {
                 let name = self.on.as_deref().unwrap_or(machines::HERE);
-                (format!("  {HERE_ICON} {name}"), String::new(), version::CURRENT.into(), false)
+                (format!("  {HERE_ICON} {name}"), String::new(), self.here_note(), false)
             }
             Row::Machine(at) => self.machine_text(*at),
             Row::UpdateMachine(at) => {
@@ -106,6 +108,13 @@ impl Settings {
                 ("    update…".into(), String::new(), note.into(), false)
             }
             _ => ("+ add machine".into(), String::new(), ADD_NOTE.into(), false),
+        }
+    }
+
+    fn here_note(&self) -> String {
+        match self.here_memory.as_ref().and_then(MemoryInfo::memory) {
+            Some(memory) => format!("{} · {}", version::CURRENT, free_of(memory.available, memory.total)),
+            None => version::CURRENT.into(),
         }
     }
 
