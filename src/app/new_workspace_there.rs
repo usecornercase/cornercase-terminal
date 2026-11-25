@@ -47,7 +47,8 @@ impl App {
         let Some(Overlay::NewWorkspace { project, run_on, .. }) = &self.overlay else { return };
         let project = *project;
         let mut fresh = RunOn::kept(self.run_on_for(project), run_on.as_ref());
-        let chose = fresh.as_ref().and_then(|run_on| self.auto_choice(run_on, project));
+        let needs = self.config.default_memory();
+        let chose = fresh.as_ref().and_then(|run_on| self.auto_choice(run_on, project, needs));
         let moved = chose.is_some_and(|chose| fresh.as_mut().is_some_and(|run_on| run_on.settle_auto(chose)));
         if let Some(Overlay::NewWorkspace { run_on, error, .. }) = &mut self.overlay {
             *run_on = fresh;

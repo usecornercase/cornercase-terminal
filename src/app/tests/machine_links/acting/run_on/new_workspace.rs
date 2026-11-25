@@ -225,5 +225,5 @@ fn auto_chooses_the_machine_with_the_most_free_memory_and_says_why() {
     let Some(Overlay::NewWorkspace { run_on: Some(run_on), .. }) = &reading.remote.rig.app.overlay else {
         panic!("New workspace is not open")
     };
-    assert_eq!(run_on.auto.note, Some(("auto → vps (11 GB free)".into(), false)));
+    assert_eq!(run_on.auto.note, Some(("auto → vps (11 GB free, needs 4 GB)".into(), false)));
 }

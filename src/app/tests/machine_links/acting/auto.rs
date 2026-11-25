@@ -348,3 +348,79 @@ mod the_queue {
         assert!(matches!(auto.remote.rig.app.overlay, Some(Overlay::QueueList(_))));
     }
 }
+
+mod the_start_flow_dialog {
+    use super::*;
+    use crate::agents::Known;
+    use crate::flows::{builtin, store};
+
+    fn with_flows(auto: &mut Auto) {
+        let dir = paths::flows(auto.remote.rig.app.config_file.path());
+        let quick = builtin::flows(&[Known::Claude], Some(Known::Claude)).remove(0);
+        for (name, memory) in [("Small", "2GB"), ("Big", "12GB")] {
+            let flow = crate::flows::Flow { name: name.into(), memory: Some(memory.into()), ..quick.clone() };
+            store::save(&dir, &flow, None).expect("save the flow");
+        }
+    }
+
+    fn open_on(auto: &mut Auto, name: &str) {
+        let app = &mut auto.remote.rig.app;
+        let start = app.start_flow_here();
+        app.open_start_flow(start);
+        let Some(Overlay::StartFlow { start, .. }) = &mut app.overlay else { panic!("Start flow is not open") };
+        let at = start.flows.iter().position(|saved| saved.flow.name == name).expect("the flow is listed");
+        start.select(at);
+    }
+
+    fn wheel_to(auto: &mut Auto, name: &str) {
+        let Some(Overlay::StartFlow { start, .. }) = &mut auto.remote.rig.app.overlay else {
+            panic!("Start flow is not open")
+        };
+        let at = start.flows.iter().position(|saved| saved.flow.name == name).expect("the flow is listed");
+        let delta = isize::try_from(at).expect("small") - isize::try_from(start.cursor).expect("small");
+        start.scroll_list(delta);
+    }
+
+    fn choose_auto(auto: &mut Auto) {
+        let app = &mut auto.remote.rig.app;
+        let Some(Overlay::StartFlow { start, .. }) = &mut app.overlay else { panic!("Start flow is not open") };
+        let at = start.run_on.as_ref().map(|run_on| run_on.targets.len());
+        start.choose_machine(at);
+        settle(auto);
+    }
+
+    fn settle(auto: &mut Auto) {
+        let app = &mut auto.remote.rig.app;
+        app.follow_start_flow_run_on();
+        auto.remote.rig.until("auto settles", |app| {
+            matches!(&app.overlay, Some(Overlay::StartFlow { start, .. })
+                if start.run_on.as_ref().is_some_and(|run_on| !run_on.auto.wanted))
+        });
+    }
+
+    fn row(auto: &Auto) -> (Option<String>, Option<(String, bool)>) {
+        let Some(Overlay::StartFlow { start, .. }) = &auto.remote.rig.app.overlay else {
+            panic!("Start flow is not open")
+        };
+        let run_on = start.run_on.as_ref().expect("the run on row");
+        (run_on.machine().map(|target| target.name.clone()), run_on.auto.note.clone())
+    }
+
+    #[test]
+    fn counts_the_selected_flow_s_memory_and_picks_again_when_the_flow_changes() {
+        let mut auto = auto(roomy, vec![web_shop()]);
+        with_flows(&mut auto);
+        open_on(&mut auto, "Big");
+
+        choose_auto(&mut auto);
+
+        let refused = ("no machine has 12 GB free (best: vps, 11 GB)".to_string(), true);
+        assert_eq!(row(&auto), (None, Some(refused)));
+
+        wheel_to(&mut auto, "Small");
+        settle(&mut auto);
+
+        let picked = ("auto → vps (11 GB free, needs 2 GB)".to_string(), false);
+        assert_eq!(row(&auto), (Some("vps".to_string()), Some(picked)));
+    }
+}

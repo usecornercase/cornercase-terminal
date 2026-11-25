@@ -378,7 +378,7 @@ at_most = 2
 
 ### The memory a run needs
 
-`memory`, at the top of the file, is how much free memory a run of the flow needs, such as `"6GB"` or `"512MB"` (units are powers of 1024). [`flow run --machine auto`](../machines/#from-a-terminal) only picks a machine with that much free; a flow without it counts **a start needs** of [Settings › Machines](../machines/#free-memory), `4GB` unless you change it. An amount cornercase can't read is one of the flow's problems, and `flow list --json` gives it as `memory`.
+`memory`, at the top of the file, is how much free memory a run of the flow needs, such as `"6GB"` or `"512MB"` (units are powers of 1024). [`flow run --machine auto`](../machines/#from-a-terminal), the queue and the **auto** choice of the start dialog only pick a machine with that much free; a flow without it counts **a start needs** of [Settings › Machines](../machines/#free-memory), `4GB` unless you change it. An amount cornercase can't read is one of the flow's problems, and `flow list --json` gives it as `memory`.
 
 ## From scripts
 

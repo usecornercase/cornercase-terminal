@@ -112,8 +112,7 @@ impl App {
 
     fn entry_memory(&self, entry: &Entry, p: usize) -> Result<u64, String> {
         let Some(name) = &entry.task.flow else { return Ok(self.config.default_memory()) };
-        let (flow, _) = super::super::flow::pick(&self.flow_listing(Some(&self.projects[p].path)), name)?;
-        Ok(flow.memory_needed().unwrap_or_else(|| self.config.default_memory()))
+        self.flow_needs(self.projects[p].id, name)
     }
 
     fn free_candidates(&self, entry: &Entry, project: u64, now: Instant) -> Vec<Candidate> {

@@ -35,7 +35,8 @@ impl App {
         let Some(Overlay::Issues(b)) = &self.overlay else { return };
         let project = issue_project(b);
         let mut run_on = RunOn::kept(self.run_on_for(b.project), b.run_on.as_ref());
-        let chose = run_on.as_ref().and_then(|run_on| self.auto_choice(run_on, project));
+        let needs = self.config.default_memory();
+        let chose = run_on.as_ref().and_then(|run_on| self.auto_choice(run_on, project, needs));
         if chose.is_some_and(|chose| run_on.as_mut().is_some_and(|run_on| run_on.settle_auto(chose))) {
             if let Some(Overlay::Issues(b)) = &mut self.overlay {
                 b.run_on = run_on;
@@ -247,6 +248,11 @@ impl App {
     pub(super) fn on_the_chosen_machine(&self, mut start: Start, issue: &Issue) -> Start {
         start.asked = Some((issue.key.clone(), issue.source.id().to_string()));
         let Some(Overlay::Issues(b)) = &self.overlay else { return start };
+        if b.run_on.as_ref().is_some_and(|run_on| run_on.auto.note.is_some())
+            && let Some(run_on) = &mut start.run_on
+        {
+            run_on.want_auto();
+        }
         let Some(link) = b.machine().map(|target| target.link) else { return start };
         start.pick_there(self.chosen_accounts());
         if let Some(run_on) = &mut start.run_on {

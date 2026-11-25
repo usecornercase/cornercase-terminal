@@ -98,8 +98,12 @@ impl App {
 
     fn memory_needed(&self, wanted: &Wanted, project: u64) -> Result<u64, Refusal> {
         let Wanted::FlowRun(run) = wanted else { return Ok(self.config.default_memory()) };
-        let p = self.projects.project_index(project).ok_or_else(|| none("project", project))?;
-        let (flow, _) = pick(&self.flow_listing(Some(&self.projects[p].path)), &run.name)?;
+        Ok(self.flow_needs(project, &run.name)?)
+    }
+
+    pub(in crate::app) fn flow_needs(&self, project: u64, name: &str) -> Result<u64, String> {
+        let p = self.projects.project_index(project).ok_or_else(|| none("project", project).message)?;
+        let (flow, _) = pick(&self.flow_listing(Some(&self.projects[p].path)), name)?;
         Ok(flow.memory_needed().unwrap_or_else(|| self.config.default_memory()))
     }
 

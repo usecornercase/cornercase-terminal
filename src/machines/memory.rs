@@ -98,6 +98,10 @@ impl Best {
     pub(crate) fn label(&self) -> &str {
         self.name.as_deref().unwrap_or(HERE)
     }
+
+    pub(crate) fn chose(&self, needs: u64) -> String {
+        format!("auto → {} ({} free, needs {})", self.label(), shown(self.free), shown(needs))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

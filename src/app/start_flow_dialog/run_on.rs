@@ -42,6 +42,12 @@ impl App {
         self.follow_start_flow_run_on();
     }
 
+    fn start_flow_needs(&self, start: &Start, project: u64) -> u64 {
+        let Some(saved) = start.selected() else { return self.config.default_memory() };
+        self.flow_needs(project, &saved.flow.name)
+            .unwrap_or_else(|_| saved.flow.memory_needed().unwrap_or_else(|| self.config.default_memory()))
+    }
+
     fn start_flow_auto_moved(&mut self, run_on: Option<RunOn>) {
         if let Some(Overlay::StartFlow { start, .. }) = &mut self.overlay {
             start.run_on = run_on;
@@ -63,7 +69,8 @@ impl App {
         let Some(Overlay::StartFlow { start, .. }) = &self.overlay else { return };
         let project = start.project;
         let mut run_on = RunOn::kept(self.run_on_for(project), start.run_on.as_ref());
-        let chose = run_on.as_ref().and_then(|run_on| self.auto_choice(run_on, project));
+        let needs = self.start_flow_needs(start, project);
+        let chose = run_on.as_ref().and_then(|run_on| self.auto_choice(run_on, project, needs));
         if chose.is_some_and(|chose| run_on.as_mut().is_some_and(|run_on| run_on.settle_auto(chose))) {
             return self.start_flow_auto_moved(run_on);
         }

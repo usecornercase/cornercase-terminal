@@ -41,6 +41,15 @@ impl Start {
         self.there.as_ref().filter(|_| self.machine().is_some())
     }
 
+    pub(super) fn choose_flow(&mut self, at: usize) {
+        let before = self.cursor;
+        self.select(at);
+        let auto = self.run_on.as_mut().filter(|run_on| run_on.auto.note.is_some());
+        if let Some(run_on) = auto.filter(|_| self.cursor != before) {
+            run_on.want_auto();
+        }
+    }
+
     pub(crate) fn choose_machine(&mut self, at: Option<usize>) -> bool {
         let Some(run_on) = &mut self.run_on else { return false };
         if run_on.is_auto(at) {

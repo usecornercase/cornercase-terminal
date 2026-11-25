@@ -53,7 +53,7 @@ impl App {
         format!("{how} on {name}, in {}", text::display_path(&there.path, home))
     }
 
-    pub(in crate::app) fn auto_choice(&mut self, run_on: &RunOn, project: u64) -> Option<Chose> {
+    pub(in crate::app) fn auto_choice(&mut self, run_on: &RunOn, project: u64, needs: u64) -> Option<Chose> {
         if !run_on.auto.wanted {
             return None;
         }
@@ -61,10 +61,10 @@ impl App {
         if self.memory_asking() {
             return None;
         }
-        let picked = self.pick_machine(project, self.config.default_memory(), Instant::now());
+        let picked = self.pick_machine(project, needs, Instant::now());
         let label = self.project_name(project);
         Some(match &picked {
-            Picked::Fits(best) => Ok((best.name.clone(), picked.why(&label))),
+            Picked::Fits(best) => Ok((best.name.clone(), best.chose(needs))),
             Picked::Nowhere { .. } => Err(picked.refusal(&label)),
         })
     }

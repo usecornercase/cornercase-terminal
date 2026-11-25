@@ -97,6 +97,13 @@ mod saying_why {
     }
 
     #[test]
+    fn a_choice_in_a_dialog_also_says_what_it_needed() {
+        let best = Best { name: None, free: GB * 113 / 10 };
+
+        assert_eq!(best.chose(6 * GB), "auto → this computer (11.3 GB free, needs 6 GB)");
+    }
+
+    #[test]
     fn a_wait_names_the_best_and_what_is_left_out() {
         let picked = Picked::Nowhere {
             needs: 6 * GB,
