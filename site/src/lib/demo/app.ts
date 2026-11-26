@@ -61,6 +61,9 @@ import {
   workspaceLayout,
   workspaceRows,
   withFullScreen,
+  type Folds,
+  NO_FOLDS,
+  type Section,
 } from './layout';
 import { render as markdown } from './markdown';
 import {
@@ -97,6 +100,7 @@ import {
   needsYou,
   paneStatus,
   followAgent,
+  projectAttention,
   projectLabel,
   tabContext,
   tabLabel,
@@ -539,6 +543,8 @@ export class App {
   groups: Group[] = [];
   projects: Project[] = [];
   active = 0;
+  folds: Folds = NO_FOLDS;
+  private revealAgain = false;
   projectsScroll = 0;
   workspacesScroll = 0;
   tabBarScroll = 0;
@@ -974,7 +980,7 @@ export class App {
   private agentsDragged(y: number): Widths {
     const end = bottom(this.areas().agents);
     const wanted = { ...this.widths, agents: Math.max(0, end - (y + 1)) };
-    const rows = layout(this.cols, this.rows, wanted, this.nav, this.panelShown(), this.sidebar(), true, this.tabsOnTop(), this.bots.shape()).agents.h;
+    const rows = layout(this.cols, this.rows, wanted, this.nav, this.panelShown(), this.sidebar(), true, this.tabsOnTop(), this.bots.shape(), this.folds).agents.h;
     return { ...wanted, agents: rows };
   }
 
@@ -990,7 +996,7 @@ export class App {
   }
 
   areas() {
-    const areas = layout(this.cols, this.rows, this.widths, this.nav, this.panelShown(), this.sidebar(), this.config.agentsSection, this.tabsOnTop(), this.bots.shape());
+    const areas = layout(this.cols, this.rows, this.widths, this.nav, this.panelShown(), this.sidebar(), this.config.agentsSection, this.tabsOnTop(), this.bots.shape(), this.folds);
     return this.fileFullScreen() ? withFullScreen(areas, this.cols, this.rows) : areas;
   }
 
@@ -1200,16 +1206,18 @@ export class App {
   private follow(): void {
     const p = this.project();
     const { tabBar } = this.areas();
-    const { list, pitch, tree } = layout(this.cols, this.rows, this.widths, 'projects', false, this.sidebar(), this.config.agentsSection, this.tabsOnTop(), this.bots.shape());
+    const { list, pitch, tree } = layout(this.cols, this.rows, this.widths, 'projects', false, this.sidebar(), this.config.agentsSection, this.tabsOnTop(), this.bots.shape(), this.folds);
+    const again = this.revealAgain;
+    this.revealAgain = false;
     const focus: Focus = { project: p?.id ?? null, workspace: this.workspace()?.id ?? null, tab: this.tab()?.id ?? null, tree };
     const before = this.followed;
     if (focus.project !== before.project || focus.workspace !== before.workspace || focus.tab !== before.tab) this.files.full = false;
-    if (focus.project === before.project && focus.workspace === before.workspace && focus.tab === before.tab && tree === before.tree) return;
+    if (!again && focus.project === before.project && focus.workspace === before.workspace && focus.tab === before.tab && tree === before.tree) return;
     this.followed = focus;
     if (before.project !== null && (focus.project !== before.project || focus.workspace !== before.workspace)) this.unfoldFocus();
     this.revealInTabBar(tabBar, focus.workspace !== before.workspace);
     if (tree) return this.revealInTree(list);
-    if (!p || (focus.project === before.project && !before.tree)) return;
+    if (!p || (!again && focus.project === before.project && !before.tree)) return;
     const sidebar = this.sidebarRows();
     const i = activeRow(sidebar, this.active, this.groupIndex(p.group));
     if (i >= 0) this.projectsScroll = sidebarLayout(list, pitch, sidebar, this.projectsScroll).reveal(i);
@@ -2685,6 +2693,22 @@ export class App {
     pane.shell.start(new Editor(this.host(p, w, () => pane.id), () => pane.shell.finish(), path, text, line - 1));
     w.tabs.push(this.newTab([pane]));
     this.goto(this.projects.indexOf(p), p.workspaces.indexOf(w), w.tabs.length - 1);
+  }
+
+  toggleSection(section: Section): void {
+    this.folds = { ...this.folds, [section]: !this.folds[section] };
+    if (!this.folds[section]) this.revealAgain = true;
+    this.dirty();
+  }
+
+  sectionTags(section: Section): { count: number; attention: Status | null } {
+    if (section === 'projects') return { count: this.projects.length, attention: attention(this.projects.map(projectAttention)) };
+    if (section === 'workspaces') {
+      const list = this.project()?.workspaces ?? [];
+      return { count: list.length, attention: attention(list.map((w) => attention(w.tabs.map(tabStatus)))) };
+    }
+    const rows = this.agentRows();
+    return { count: rows.length, attention: attention(rows.map((r) => r.status)) };
   }
 
   navTo(nav: Exclude<Nav, null>): void {
@@ -5173,7 +5197,7 @@ export class App {
           border === 'agents'
             ? this.agentsDragged(y)
             : border !== 'changes' && this.sidebar() !== 'side_by_side'
-              ? draggedStacked(this.widths, border, x, y, total, this.rows, this.config.agentsSection && !this.bots.page)
+              ? draggedStacked(this.widths, border, x, y, total, this.rows, this.config.agentsSection && !this.bots.page, this.folds.agents)
               : dragged(this.widths, border, x, total);
       }
       else {

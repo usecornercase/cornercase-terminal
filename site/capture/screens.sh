@@ -1,5 +1,5 @@
 #!/bin/sh
-CC_SCREENS="first-run tour sidebar-stacked workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents close-agent close-agents agents-closed agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu open-in group-style rename-menu rename-form remove-workspace worktrees worktrees-confirm worktrees-free pull-requests pull-request-checks pull-request-stack issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-names issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every changes-discard changes-stage files files-file files-full files-find files-search files-names files-link todo todo-add recap settings-worktrees settings-agents settings-flows settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui settings-share settings-import context usage usage-stats usage-accounts settings-accounts account-pills tab-account keys-menu processes remote-reconnecting queue queue-form queue-routine bots bots-lobby bot-form bot-routines flow-run flow-messages flow-agents flows-list flows-personas flows-deleted flows-import flows-edit flow-start settings-machines machine-menu machines-sidebar machines-agents machines-run-on machines-clone"
+CC_SCREENS="first-run tour sidebar-stacked sidebar-folded workspace-folded groups hover-close reorder codex-context search search-sessions sidebar-tree tab-bar sidebar-agents close-agent close-agents agents-closed agent-failed compact-bar compact-menu-workspaces compact-menu-projects compact-menu-agents picker picker-filter new-workspace new-workspace-plain pane-menu open-in group-style rename-menu rename-form remove-workspace worktrees worktrees-confirm worktrees-free pull-requests pull-request-checks pull-request-stack issues-list issues-token issues-people issues-person-picker issues-mine issue-detail issue-detail-end issue-agent-picker issue-names issue-started overview splits toast changes changes-commits changes-base changes-filter changes-every changes-discard changes-stage files files-file files-full files-find files-search files-names files-link todo todo-add recap settings-worktrees settings-agents settings-flows settings-remote settings-claude-modes settings-gemini-modes settings-default-agent settings-issues settings-ui settings-share settings-import context usage usage-stats usage-accounts settings-accounts account-pills tab-account keys-menu processes remote-reconnecting queue queue-form queue-routine bots bots-lobby bot-form bot-routines flow-run flow-messages flow-agents flows-list flows-personas flows-deleted flows-import flows-edit flow-start settings-machines machine-menu machines-sidebar machines-agents machines-run-on machines-clone"
 
 pane_in() {
   cc status --json | node -e '
@@ -48,7 +48,7 @@ cc_s1_at() {
   sleep 1
   cc send --pane "$(pane_in code/web-shop 0)" --enter 'nvim src/returns/address.rs'
   cc send --pane "$(pane_in code/web-shop 1)" --enter 'git log --oneline --graph'
-  cc send --pane "$(pane_in feat-dark-mode)" --enter "CC_AGENT_STATE=$CC_DARK_STATE CC_AGENT_TASK=dark CC_AGENT_PERCENT=$CC_DARK_PERCENT claude --permission-mode plan"
+  cc send --pane "$(pane_in feat-dark-mode)" --enter "CC_AGENT_STATE=$CC_DARK_STATE CC_AGENT_TASK=dark CC_AGENT_PERCENT=$CC_DARK_PERCENT CC_AGENT_SESSION=dark-mode claude --permission-mode plan"
   cc send --pane "$(pane_in feat-gift-cards)" --enter 'codex'
   cc send --pane "$(pane_in code/orders-api)" --enter 'npm run dev'
   cc send --pane "$(pane_in fix-pagination)" --enter 'CC_AGENT_STATE=waiting CC_AGENT_TASK=pagination claude --permission-mode plan'
@@ -98,6 +98,15 @@ screen_sidebar_stacked() {
   cc_shot sidebar-stacked
 }
 
+screen_sidebar_folded() {
+  agents_knobs
+  cc_s1
+  cc_click '▾ Projects'
+  cc_wait '▸ Projects'
+  cc_park
+  cc_shot sidebar-folded
+}
+
 screen_workspace_folded() {
   cc_s1
   cc_click '▾ feat/d'
@@ -108,7 +117,7 @@ screen_workspace_folded() {
 screen_groups() {
   cc_s1
   cc_click '◆ personal'
-  cc_hover 'Workspaces'
+  cc_park
   cc_wait '▸ ◆ personal (2)             │'
   cc_shot groups
 }
@@ -137,7 +146,7 @@ screen_reorder() {
 screen_codex_context() {
   cc_s1
   cc_click 'feat/gift-cards'
-  cc_hover 'Workspaces'
+  cc_park
   cc_wait 'Add gift cards to the checkout'
   cc_wait '▌ ├ ◐ codex                    │'
   cc_shot codex-context
@@ -182,7 +191,7 @@ screen_tab_bar() {
   cc_s1
   cc new-tab --workspace "$(ws_in feat-dark-mode)" >/dev/null
   cc_click 'feat/d'
-  cc_hover 'Workspaces'
+  cc_park
   cc_wait 'Opus 5.5 · 7%'
   cc_shot tab-bar
 }
@@ -235,7 +244,7 @@ screen_agent_failed() {
   CC_BLOG_COMMAND='CC_AGENT_STATE=failed CC_AGENT_PERCENT=2 CC_AGENT_MODEL=claude-sonnet-5-5 claude'
   cc_s1_at 110 44
   cc_wait_status 'claude  failed  Sonnet 5.5'
-  cc_hover 'Workspaces'
+  cc_park
   cc_shot agent-failed
 }
 
@@ -309,7 +318,7 @@ screen_new_workspace_plain() {
   new_workspace_form
   cc_click 'its own worktree'
   cc_wait '[ ] with its own worktree'
-  cc_hover 'Workspaces'
+  cc_park
   cc_type 'feat/login'
   cc_wait '› feat/login'
   cc_wait 'in ~/code/web-shop'
@@ -522,7 +531,7 @@ screen_issue_started() {
   cc_wait '> https://github.com/acme/web-shop/issues/482' 40
   cc_wait_status 'claude  idle  Opus 5.5 · 7%'
   cc_wheel 'feat/d' down 3
-  cc_hover 'Workspaces'
+  cc_park
   cc_wait '▌ │   Opus 5.5 · 7%'
   cc_wait '  ▾ feat/dark-mode  +4 −0      │'
   cc_wait '    blog (1)                   │'
@@ -535,7 +544,7 @@ issue_pane() {
 
 issue_listed() {
   cc_wheel '+ New' down 3 -1
-  cc_hover 'Workspaces'
+  cc_park
   cc_wait "$1"
 }
 
@@ -624,7 +633,7 @@ screen_changes() {
 
 screen_changes_commits() {
   changes_commits
-  cc_hover 'Workspaces'
+  cc_park
   cc_shot changes-commits
 }
 
@@ -642,7 +651,7 @@ screen_changes_filter() {
   cc_click '' 0 1 95
   cc_type '!tests.rs'
   cc_wait '2 of 3 files'
-  cc_hover 'Workspaces'
+  cc_park
   cc_shot changes-filter
 }
 
@@ -650,7 +659,7 @@ screen_changes_every() {
   changes_open
   cc_click 'Every project' 0 1 95
   cc_wait 'expand all'
-  cc_hover 'Workspaces'
+  cc_park
   cc_shot changes-every
 }
 
@@ -695,7 +704,7 @@ files_open() {
 
 screen_files() {
   files_open
-  cc_hover 'Workspaces'
+  cc_park
   cc_shot files
 }
 
@@ -709,7 +718,7 @@ screen_files_file() {
   cc_wait 'lines 11-12'
   cc_click '▎' 0 1 95
   cc_wait '-         self.lines.first().unw'
-  cc_hover 'Workspaces'
+  cc_park
   cc_shot files-file
 }
 
@@ -736,7 +745,7 @@ screen_files_find() {
   cc_wait '1/3'
   cc_keys Down
   cc_wait '2/3'
-  cc_hover 'Workspaces'
+  cc_park
   cc_shot files-find
 }
 
@@ -745,7 +754,7 @@ screen_files_search() {
   cc_click 'text in the files'
   cc_type first_line
   cc_wait '3 matches in 3 files'
-  cc_hover 'Workspaces'
+  cc_park
   cc_shot files-search
 }
 
@@ -754,7 +763,7 @@ screen_files_names() {
   cc_click '' 0 1 95
   cc_type retadd
   cc_wait '1 file'
-  cc_hover 'Workspaces'
+  cc_park
   cc_shot files-names
 }
 
@@ -814,7 +823,7 @@ screen_todo_add() {
   cc_click '+ New TODO'
   cc_type 'ask legal about the new return window'
   cc_wait 'window'
-  cc_hover 'Workspaces'
+  cc_park
   cc_shot todo-add
 }
 
@@ -945,13 +954,14 @@ screen_machines_sidebar() {
   cc_wait '☁ vps'
   cc_click 'fix/login'
   cc_wait 'running cargo test' 30
-  cc_hover 'Workspaces'
+  cc_park
   cc_wait '▌ │   Opus 5.5 · 31%           │'
   cc_shot machines-sidebar
 }
 
 screen_machines_agents() {
   agents_knobs
+  CC_FLAT=1
   CC_CONFIG="{\"agents_section\":true,${VPS_CONFIG#\{}"
   vps_web_shop "'$CC_BIN' new-tab -- CC_AGENT_STATE=busy CC_AGENT_TASK=tests CC_AGENT_PERCENT=12 CC_AGENT_MODEL=claude-sonnet-5-5 claude && "
   cc_s1_at 110 44
@@ -959,7 +969,7 @@ screen_machines_agents() {
   cc_wait '◐ web-shop › fix/l… ☁ vps' 30
   cc_wait '· 12%' 30
   cc_wait 'this computer ▴'
-  cc_hover 'Workspaces'
+  cc_park
   cc_shot machines-agents
 }
 
@@ -1154,7 +1164,7 @@ screen_tab_account() {
   cc new-tab --workspace "$(ws_in feat-dark-mode)" --account claude=personal -- CC_AGENT_STATE=busy CC_AGENT_TASK=dark CC_AGENT_PERCENT=12 claude >/dev/null
   cc_click 'feat/d'
   cc_wait '· personal · 12%'
-  cc_hover 'Workspaces'
+  cc_park
   cc_shot tab-account
 }
 
@@ -1163,7 +1173,7 @@ screen_keys_menu() {
   cc_s1
   cc_click 'bash'
   cc_wait 'Release 0.5.0'
-  cc_hover 'Workspaces'
+  cc_park
   cc_keys 'C-]'
   cc_wait 'next tab'
   cc_shot keys-menu
@@ -1209,7 +1219,7 @@ JS
 flow_482() {
   cc_s1_at 140 38
   cc flow run 'Full issue' --prompt 'Fix https://github.com/acme/web-shop/issues/482: the returns page crashes on an empty address.' --worktree issue-482-returns-page-crashes-on-empty-address --focus >/dev/null
-  cc_wait 'Sending issue #482 to coder' 60
+  cc_wait 'Sending issue #482 to coder' 150
 }
 
 flow_settled() {
@@ -1217,7 +1227,7 @@ flow_settled() {
   cc_wait 'findings 1/3' 60
   cc_wait 'waiting for reviewer…' 30
   cc_wheel 'feat/d' down 3
-  cc_hover 'Workspaces'
+  cc_park
   cc_wait '├ ○ tester'
   i=0
   while cc_text | grep -qF 'finished in'; do
@@ -1234,9 +1244,9 @@ screen_flow_run() {
 
 screen_flow_messages() {
   flow_settled
-  cc_wheel 'Messages' down 20
+  cc_wheel 'Team · 5' down 20
   cc_wait 'coder-2.md' 30
-  cc_hover 'Workspaces'
+  cc_park
   cc_shot flow-messages
 }
 
@@ -1244,13 +1254,13 @@ screen_flow_agents() {
   CC_CONFIG='{"agents_section":true}'
   cc_s1_at 110 44
   cc flow run 'Full issue' --prompt 'Fix https://github.com/acme/web-shop/issues/482: the returns page crashes on an empty address.' --worktree issue-482-returns-page-crashes-on-empty-address --focus >/dev/null
-  cc_wait 'Sending issue #482 to coder' 60
+  cc_wait 'Sending issue #482 to coder' 150
   cc_wait 'tester' 30
   cc_find '─────' 2 -3
   tmux -L "$CC_TMUX" send-keys -t 0 -l "$(printf '\033[<0;%s;%sM\033[<32;%s;%sM\033[<0;%s;%sm' "$col" "$row" "$col" "$((row - 6))" "$col" "$((row - 6))")"
   sleep 0.3
   cc_wheel 'web-shop › feat/dark' down 1
-  cc_hover 'Workspaces'
+  cc_park
   cc_wait '└ ○ tester' 30
   cc_shot flow-agents
 }
@@ -1535,7 +1545,7 @@ screen_queue_routine() {
   cc_keys Down
   cc_keys Enter
   cc_wait 'remove the workspace'
-  cc_hover 'Workspaces'
+  cc_park
   cc_shot queue-routine
 }
 
@@ -1549,6 +1559,6 @@ screen_queue_form() {
   cc_click 'new   done'
   cc_wait 'Schedule an agent'
   cc_type 'Fix the login form'
-  cc_hover 'Workspaces'
+  cc_park
   cc_shot queue-form
 }
