@@ -341,6 +341,18 @@ fn compact_menu(section: Section) -> View<'static> {
 }
 
 #[rstest]
+#[case::open(&[], 23, " ▾ 界 界 … ")]
+#[case::the_name_cut_beside_the_icon(&[Section::Workspaces], 29, " ▸ 界 界 界 界 … ! ")]
+#[case::the_whole_name_short_of_the_count(&[Section::Workspaces], 33, " ▸ 界 界 界 界 界     ! ")]
+#[case::room_for_both(&[Section::Workspaces], 34, " ▸ 界 界 界 界 界  (3) ! ")]
+fn a_wide_project_name_is_measured_in_cells(#[case] folded: &[Section], #[case] cols: u16, #[case] expected: &str) {
+    let projects = view(&["cornercase", "界界界界界"]).projects;
+    let view = View { projects, folded: Sections::of(folded), ..compact_menu(Section::Workspaces) };
+
+    assert_eq!(compact_title(&view, Section::Workspaces, cols), expected);
+}
+
+#[rstest]
 #[case::only_the_icon_fits(26, " ▸ ! ")]
 #[case::one_cell_short_of_a_name(28, " ▸   ! ")]
 #[case::the_name_cut_beside_the_icon(29, " ▸ P… ! ")]

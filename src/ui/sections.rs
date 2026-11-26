@@ -11,7 +11,7 @@ use super::widgets::draw_band;
 use super::workspaces::WORKSPACES_TITLE;
 use crate::agents::activity::Status;
 use crate::state::Section;
-use crate::text::truncate_right;
+use crate::text::{cells, truncate_cells};
 
 const LEAD: u16 = 3;
 
@@ -75,11 +75,11 @@ fn title_line(view: &View, width: u16, (title, folded): (&str, bool), tags: Opti
     let badge = tags.attention.map(|status| status_icon(view.muted, status, view.spin));
     let marks = Tags::fit_whole(badge.into_iter().collect(), room);
     let left = room.saturating_sub(marks.reserved());
-    let kept = title.chars().count().clamp(MIN_NAME, NAME_BESIDE_COUNT);
+    let kept = cells(title).clamp(MIN_NAME, NAME_BESIDE_COUNT);
     let count = count_text(view.counts, tags.count, left.saturating_sub(kept));
     let bare = marks.is_empty() && count.is_empty();
-    let name = cut(title, if bare { width } else { left.saturating_sub(count.chars().count()) });
-    let used = name.chars().count() + count.chars().count();
+    let name = cut(title, if bare { width } else { left.saturating_sub(cells(&count)) });
+    let used = cells(&name) + cells(&count);
     line.extend([Span::styled(name, bold), Span::styled(count, Style::default().fg(view.muted))]);
     marks.push_onto(&mut line, used, room);
     Line::from(line)
@@ -87,9 +87,9 @@ fn title_line(view: &View, width: u16, (title, folded): (&str, bool), tags: Opti
 
 fn count_text(counts: bool, count: usize, room: usize) -> String {
     let text = format!(" ({count})");
-    if counts && text.chars().count() <= room { text } else { String::new() }
+    if counts && cells(&text) <= room { text } else { String::new() }
 }
 
 fn cut(title: &str, max: usize) -> String {
-    if max < MIN_NAME { String::new() } else { truncate_right(title, max) }
+    if max < MIN_NAME { String::new() } else { truncate_cells(title, max) }
 }
