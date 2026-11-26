@@ -5,15 +5,17 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
 use super::View;
-use super::chrome::{draw_back, draw_border};
+use super::chrome::{draw_back_button, draw_border};
 use super::layout::{Areas, Border};
 use super::rows::{MIN_MENU_ROW_WIDTH, draw_close_in};
 use super::rows::{Rows, Tags, draw_hidden, draw_rail, marker, row_close_button};
+use super::sections::draw_section_title;
 use super::theme::status_icon;
-use super::widgets::{button_style, dim, draw_band, draw_button, draw_separator, draw_title, middle};
+use super::widgets::{button_style, dim, draw_band, draw_button, draw_separator, middle};
 use super::workspaces::{DetailLine, Details, Guide, MachineTag, draw_details, draw_guide};
 use super::workspaces::{dim_row, machine_span, seen_note, spin};
 use crate::agents::activity::Status;
+use crate::state::Section;
 use crate::text::{CRUMB_SEPARATOR, truncate_right};
 
 pub(crate) const AGENTS_LABEL: &str = "Agents ›";
@@ -91,12 +93,14 @@ pub(super) fn draw_agents(f: &mut Frame, view: &View, agents: &AgentsView, areas
         }
         return;
     }
-    draw_separator(f, view.line(), areas.agents_border);
+    draw_separator(f, view.line(), areas.agents_line);
     draw_border(f, view, areas.agents_border, Border::Agents);
     if areas.compact() {
-        draw_back(f, view, areas, AGENTS_TITLE);
-    } else {
-        draw_title(f, view.muted, areas.agents_title, AGENTS_TITLE);
+        draw_back_button(f, view, areas);
+    }
+    draw_section_title(f, view, areas, Section::Agents, AGENTS_TITLE);
+    if areas.folded.agents {
+        return;
     }
     let list = areas.agents_list;
     let rows = agent_rows(list, areas.pitch, agents.entries.len(), agents.scroll);

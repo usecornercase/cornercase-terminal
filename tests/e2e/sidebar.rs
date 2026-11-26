@@ -10,7 +10,23 @@ fn sidebar_shows_the_search_and_the_title() {
     let search = app.row(areas.search.y);
     assert!(search.contains("search projects"), "search row: {search:?}");
     let title = app.row(areas.title.y);
-    assert!(title.starts_with(" Projects"), "title row: {title:?}");
+    assert!(title.starts_with(" ▾ Projects"), "title row: {title:?}");
+}
+
+#[test]
+fn a_click_on_a_title_collapses_its_section_for_status_and_expand_opens_it() {
+    let mut app = Harness::start();
+    let areas = areas();
+    app.wait_for("the title is open", |s| s.contains("▾ Projects") && s.contains(&first_entry()));
+
+    app.click(Position::new(areas.title.x + 3, areas.title.y));
+    app.wait_for("the section collapses", |s| s.contains("▸ Projects") && !s.contains(&first_entry()));
+
+    let report: serde_json::Value = serde_json::from_str(&app.session.says(&["status", "--json"])).expect("a report");
+    assert_eq!(report["collapsed_sections"], serde_json::json!(["projects"]), "{report}");
+    app.session.says(&["expand", "--section", "projects"]);
+
+    app.wait_for("the section opens", |s| s.contains("▾ Projects") && s.contains(&first_entry()));
 }
 
 #[test]

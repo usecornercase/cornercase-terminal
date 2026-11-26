@@ -4,7 +4,7 @@ expression: "shown(&mut s.app, WIDE)"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                                                            "
 "                                                         │                                                                                            "
-" Proj╭─ Flows › Full issue copy ────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮     "
+" ▾ Pr╭─ Flows › Full issue copy ────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮     "
 "     │ coder › prompt                                                                                                                           │     "
 "  + N│                                                                                                                                          │     "
 "     │  You are the coder in a team of coding agents working in this git worktree. Another agent, the orchestrator, sends you the work.         │     "

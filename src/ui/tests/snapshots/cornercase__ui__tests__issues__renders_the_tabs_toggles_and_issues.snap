@@ -4,7 +4,7 @@ expression: render(&with(issues(list(Some(0))))).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "  ╭─ Issues · shop ──────────────────────────────────────────────────────────────────────────────╮  "
-" P│  All   GitHub   Shortcut   Linear                                    [ ] closed    [x] mine  │  "
+" ▾│  All   GitHub   Shortcut   Linear                                    [ ] closed    [x] mine  │  "
 "  │                                                                                              │  "
 "▌ │ ›                                                                                            │  "
 "  │                                                                                              │  "

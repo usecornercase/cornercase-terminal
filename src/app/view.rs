@@ -8,6 +8,7 @@ use super::interaction::{Drag, Grab};
 use super::layout::{List, Side};
 use super::links::Resolving;
 use super::machine_links;
+use super::sidebar::section_tags;
 use super::toast::Toast;
 use crate::accounts;
 use crate::agents::context::Context;
@@ -198,6 +199,12 @@ impl App {
     }
 
     pub(super) fn lists_view(&self, area: Rect, now: Instant) -> ui::View<'_> {
+        let mut view = self.untagged_view(area, now);
+        view.section_tags = section_tags(&view);
+        view
+    }
+
+    fn untagged_view(&self, area: Rect, now: Instant) -> ui::View<'_> {
         let remote = self.remote_projects();
         let column = self.column(&remote);
         let (active_workspace, active_tab) = self.column_active(&column);
@@ -231,6 +238,7 @@ impl App {
             hover: self.screen.hover.filter(|_| self.screen.drag.as_ref().is_none_or(Drag::shows_hover)),
             widths: self.screen.widths,
             sidebar: self.sidebar(),
+            folded: self.screen.sections,
             resizing: self.screen.drag.as_ref().and_then(Drag::border),
             light: self.themes.light(),
             muted: ui::muted(self.themes.host()),
@@ -278,7 +286,7 @@ impl App {
         moved.and_then(|(d, pos)| match d.target {
             Grab::Row(target) => self.drag_view(target, pos, area),
             Grab::Todo(id) => Some(ui::Drag::Todo(id)),
-            Grab::Agent(_) | Grab::Bot(_) | Grab::Remote(_) => None,
+            Grab::Agent(_) | Grab::Bot(_) | Grab::Remote(_) | Grab::Section(_) => None,
         })
     }
 }

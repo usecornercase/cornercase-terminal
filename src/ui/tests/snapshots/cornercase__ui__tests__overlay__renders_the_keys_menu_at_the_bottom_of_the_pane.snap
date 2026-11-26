@@ -1,11 +1,10 @@
 ---
 source: src/ui/tests/overlay.rs
-assertion_line: 81
 expression: "render(&with(Overlay::Keys(keys_menu()))).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "                                                         │                                          "
-" Projects                      │ Workspaces              │                                          "
+" ▾ Projects                    │ ▾ Workspaces            │                                          "
 "                               │                         │                                          "
 "▌ cor╭─ Keys ─────────────────────────────────────────────────────────────────────────────────╮     "
 "     │ n     next tab                /     search                  e     queue                │     "

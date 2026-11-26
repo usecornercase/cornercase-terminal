@@ -4,7 +4,7 @@ expression: "render_sized(&shown(Form::new(agents(), \"claude\")), 100, 32).back
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "                                                         │                                          "
-" Projects                      │ Workspaces              │                                          "
+" ▾ Projects                    │ ▾ Workspaces            │                                          "
 "                               │                         │                                          "
 "▌ cornercase╭─ New bot ────────────────────────────────────────────────────────────────╮            "
 "            │                                                                          │            "

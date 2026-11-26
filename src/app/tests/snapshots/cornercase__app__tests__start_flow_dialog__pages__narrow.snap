@@ -4,7 +4,7 @@ expression: "format!(\"{}\", render(&mut s.app, NARROW).backend())"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                "
 "  ╭─ Start a flow ─────────────────────────────────────────────────────────────────────╮  "
-" P│ Full issue in web-shop, in a worktree of its own                                   │  "
+" ▾│ Full issue in web-shop, in a worktree of its own                                   │  "
 "  │                                                                                    │  "
 "▌ │ Flow templates                                                                     │  "
 "  │   Arena                                                                  6 agents  │  "

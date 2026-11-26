@@ -4,7 +4,7 @@ expression: rig.shown(WIDE)
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                                                      "
 "  ╭─ Settings › Machines › new machine ──────────────────────────────────────────────────────────────────────────────────────────────────────╮  "
-" P│ Another computer you reach with ssh. cornercase keeps a link to its server, starts one there when none runs, and never stops it:         │  "
+" ▾│ Another computer you reach with ssh. cornercase keeps a link to its server, starts one there when none runs, and never stops it:         │  "
 "  │ removing the machine here leaves its server running.                                                                                     │  "
 "  │                                                                                                                                          │  "
 "  │ name           pi                                                                                                                        │  "

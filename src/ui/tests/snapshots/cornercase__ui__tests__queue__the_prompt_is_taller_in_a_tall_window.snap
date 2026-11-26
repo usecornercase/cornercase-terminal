@@ -1,11 +1,10 @@
 ---
 source: src/ui/tests/queue.rs
-assertion_line: 146
 expression: "shown(f, 100, 40).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "                                                         │                                          "
-" Projects                      │ Workspaces              │                                          "
+" ▾ Projects                    │ ▾ Workspaces            │                                          "
 "                               │                         │                                          "
 "▌ shop (1)                     │                         │                                          "
 "                               │                         │                                          "

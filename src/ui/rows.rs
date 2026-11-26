@@ -76,11 +76,17 @@ impl Rows {
     }
 
     pub(crate) fn scrolled(&self, delta: isize) -> usize {
+        if self.list.is_empty() {
+            return self.scroll;
+        }
         let max = self.fitting_before(self.heights.len());
         self.scroll.min(max).saturating_add_signed(delta).min(max)
     }
 
     pub(crate) fn reveal(&self, i: usize) -> usize {
+        if self.list.is_empty() {
+            return self.scroll;
+        }
         let first = self.first();
         if i >= self.heights.len() || (first..self.end()).contains(&i) {
             first

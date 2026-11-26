@@ -6,6 +6,7 @@ use rstest::rstest;
 use super::*;
 use crate::cli::args::{Cli, Command, Control};
 use crate::control::arrange::{Locked, RoleTree};
+use crate::state::Section;
 
 fn parse(args: &[&str]) -> std::result::Result<Cli, clap::Error> {
     Cli::try_parse_from(std::iter::once("cornercase").chain(args.iter().copied()))
@@ -34,6 +35,8 @@ mod parsing {
     #[case::a_folded_branch(&["collapse", "--worktree", "fix/login"])]
     #[case::a_collapsed_agent(&["collapse", "--pane", "5"])]
     #[case::an_expanded_agent(&["expand", "--pane", "5"])]
+    #[case::a_collapsed_section(&["collapse", "--section", "agents"])]
+    #[case::an_expanded_section(&["expand", "--section", "projects", "--boot", "4242-1"])]
     #[case::a_new_group(&["group", "new", "side", "projects"])]
     #[case::a_style(&["group", "style", "3", "--icon", "★", "--colour", "99"])]
     #[case::a_style_read(&["group", "style", "3", "--json"])]
@@ -62,6 +65,13 @@ mod parsing {
     }
 
     #[test]
+    fn a_fold_carries_its_section() {
+        let Control::Expand(args) = control(&["expand", "--section", "workspaces"]) else { panic!("not expand") };
+
+        assert_eq!((args.section.map(Section::from), args.pane, args.group), (Some(Section::Workspaces), None, None));
+    }
+
+    #[test]
     fn several_words_make_one_group_name() {
         let Control::Group(args) = control(&["group", "new", "side", "projects"]) else { panic!("not group") };
         let GroupAction::New { name, .. } = args.action else { panic!("not new") };
@@ -79,6 +89,8 @@ mod parsing {
     #[case::folding_nothing(&["collapse"])]
     #[case::folding_a_tab(&["collapse", "--tab", "1"])]
     #[case::folding_a_pane_and_a_group(&["collapse", "--pane", "1", "--group", "2"])]
+    #[case::folding_a_section_and_a_group(&["collapse", "--section", "agents", "--group", "1"])]
+    #[case::folding_a_section_of_tabs(&["collapse", "--section", "tabs"])]
     #[case::a_style_without_a_group(&["group", "style"])]
     #[case::a_group_without_a_name(&["group", "new"])]
     #[case::unlocking_without_removing(&["close", "--workspace", "1", "--unlock"])]

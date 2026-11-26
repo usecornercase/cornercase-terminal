@@ -696,6 +696,7 @@ mod recap;
 mod repos;
 mod run_setup;
 mod searching;
+mod section_folds;
 mod setup;
 mod start_server;
 mod stats_cached;

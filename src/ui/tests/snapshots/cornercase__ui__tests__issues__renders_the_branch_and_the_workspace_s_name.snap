@@ -4,7 +4,7 @@ expression: render(&with(naming())).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "  ╭─ Issues · shop ──────────────────────────────────────────────────────────────────────────────╮  "
-" P│ Start #482 Returns page crashes in a new worktree                                            │  "
+" ▾│ Start #482 Returns page crashes in a new worktree                                            │  "
 "  │                                                                                              │  "
 "▌ │ › branch    issue-482-returns-page-crashes                                                   │  "
 "  │                                                                                              │  "

@@ -4,7 +4,7 @@ expression: "snapshot(w, BIG)"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                              "
 "  ╭─ Worktrees ──────────────────────────────────────────────────────────────────────────────────────────────────────╮  "
-" P│ › filter                                                                             safe first   largest first  │  "
+" ▾│ › filter                                                                             safe first   largest first  │  "
 "  │                                                                                                                  │  "
 "▌ │  ○ web-shop   feat/old-spike    …/old-spike 41 days ago …                      prunable                          │  "
 "  │  ✓ web-shop   feat/gift-cards   …gift-cards 3 days ago  …                     merged ↑2                          │  "

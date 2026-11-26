@@ -1,11 +1,10 @@
 ---
 source: src/ui/tests/machine_rows.rs
-assertion_line: 321
 expression: "render_sized(&in_tree(), W, TALL).backend()"
 ---
 "  ⌕ search projects, workspa…  │                                                                    "
 "                               │                                                                    "
-" Projects                      │                                                                    "
+" ▾ Projects                    │                                                                    "
 "                               │                                                                    "
 "  ▾ web-shop                   │                                                                    "
 "    ▾ login                    │                                                                    "

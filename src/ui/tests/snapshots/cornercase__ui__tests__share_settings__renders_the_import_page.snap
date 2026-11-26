@@ -4,7 +4,7 @@ expression: t.backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                                                      "
 "  ╭─ Settings › Import ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮  "
-" P│ Tick the sections to import: their settings take the shared values, the rest stay as they are. Red notes are programs that will run, or  │  "
+" ▾│ Tick the sections to import: their settings take the shared values, the rest stay as they are. Red notes are programs that will run, or  │  "
 "  │ values to check.                                                                                                                         │  "
 "▌ │                                                                                                                                          │  "
 "  │ [x] agents · 2 changes                                                                                                                   │  "

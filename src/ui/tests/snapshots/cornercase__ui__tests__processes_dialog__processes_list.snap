@@ -4,7 +4,7 @@ expression: "snapshot(processes(), BIG)"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                              "
 "  ╭─ Processes ──────────────────────────────────────────────────────────────────────────────────────────────────────╮  "
-" P│ › filter                                                                                    cpu   memory   name  │  "
+" ▾│ › filter                                                                                    cpu   memory   name  │  "
 "  │  3 panes · 7 processes · cpu 136.0% · 1.9 GB                                                                     │  "
 "▌ │ ▌▾ web-shop › fix/login › dev                                       npm                         98.0% go  close  │  "
 "  │      zsh                                                            pid 4200                     0.0%      4 MB  │  "

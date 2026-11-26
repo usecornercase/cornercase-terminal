@@ -4,7 +4,7 @@ expression: t.backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │  ◐ claude      › zsh      +              "
 "                                                         │  Opus 5.5 · work · 15%                   "
-" Projects                      │ Workspaces              │                                          "
+" ▾ Projects                    │ ▾ Workspaces            │                                          "
 "                               │                         │                                          "
 "▌ cornercase (1)               │    main                 │                                          "
 "                               │                         │                                          "

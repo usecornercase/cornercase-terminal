@@ -4,7 +4,7 @@ expression: t.backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                              "
 "                                                         │                                                              "
-" Projects                      │ Workspaces              │                                                              "
+" ▾ Projects                    │ ▾ Workspaces            │                                                              "
 "          ╭─ Routines › prs ─────────────────────────────────────────────────────────────────────────────────╮          "
 "▌ web-shop│ ▌Review PRs                                                    ↻ weekday 09:00 · next Mon 09:00  │          "
 "          │ ▌  last run answered · Fri 14 Nov 09:00                           run now  pause  edit…  remove  │          "

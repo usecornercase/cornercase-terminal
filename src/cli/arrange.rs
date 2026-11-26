@@ -1,7 +1,7 @@
 use super::args::CloseArgs;
 use super::args::arrange::{FoldArgs, GroupAction, MoveArgs, MovePaneArgs};
 use super::{id, note, print_json, print_out, say, workspace};
-use crate::client::{answer, ask, use_agent_folds, use_close_agent_tabs};
+use crate::client::{answer, ask, use_agent_folds, use_close_agent_tabs, use_section_folds};
 use crate::control::arrange::{
     AgentClosing, CloseAgent, Fold, GroupDelete, GroupNew, GroupStyle, Locked, Move, MovePane, PaneRef, Removal,
     RemovalCheck, Styled,
@@ -45,6 +45,16 @@ pub(super) fn move_row(args: &MoveArgs) -> Result<()> {
 }
 
 pub(super) fn fold(args: &FoldArgs, command: &'static str) -> Result<()> {
+    let request = fold_of(args, command)?;
+    let command_request = if command == "collapse" { Command::Collapse(request) } else { Command::Expand(request) };
+    ask(command, command_request).map(drop)
+}
+
+fn fold_of(args: &FoldArgs, command: &'static str) -> Result<Fold> {
+    if let Some(section) = args.section {
+        use_section_folds()?;
+        return Ok(Fold { section: Some(section.into()), ..Fold::default() });
+    }
     let row = Row {
         group: args.group,
         project: args.project,
@@ -56,9 +66,7 @@ pub(super) fn fold(args: &FoldArgs, command: &'static str) -> Result<()> {
     if args.pane.is_some() {
         use_agent_folds()?;
     }
-    let request = Fold { item: row.item(command)? };
-    let command_request = if command == "collapse" { Command::Collapse(request) } else { Command::Expand(request) };
-    ask(command, command_request).map(drop)
+    Ok(Fold { item: Some(row.item(command)?), ..Fold::default() })
 }
 
 pub(super) fn move_pane(args: &MovePaneArgs) -> Result<()> {

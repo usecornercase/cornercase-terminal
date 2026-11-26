@@ -6,6 +6,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 use super::machines::{MachineSeen, ShownRemote};
 use super::{ConfigInfo, Ids, Layout, MachineTunnelInfo, ThemeInfo, TunnelInfo, ViewInfo};
+use crate::state::Section;
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -36,6 +37,8 @@ pub struct Report {
     pub(crate) tunnels: Vec<TunnelInfo>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(crate) machine_tunnels: Vec<MachineTunnelInfo>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) collapsed_sections: Vec<Section>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

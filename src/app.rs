@@ -579,11 +579,13 @@ impl App {
             todo: self.screen.side == Some(Side::Todo),
             files: self.screen.side == Some(Side::Files),
             flow: self.screen.side == Some(Side::Flow),
+            collapsed_sections: self.screen.sections.listed(),
         }
     }
 
     pub(crate) fn restore(&mut self, saved: &State, area: Rect) -> bool {
         self.screen.widths = saved.widths.unwrap_or_default();
+        self.screen.sections = state::Sections::of(&saved.collapsed_sections);
         if let Some(changes) = saved.changes {
             self.panels.changes.set_mode(changes.mode);
             self.panels.changes.set_scope(changes.scope.unwrap_or_default());

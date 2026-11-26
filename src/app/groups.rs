@@ -27,6 +27,7 @@ pub(super) struct Screen {
     pub(super) side: Option<Side>,
     pub(super) hover: Option<Position>,
     pub(super) widths: state::Widths,
+    pub(super) sections: state::Sections,
     pub(super) drag: Option<Drag>,
     pub(super) clicks: Clicks,
     pub(super) field_menu: Option<FieldMenu>,

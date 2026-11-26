@@ -4,7 +4,7 @@ expression: render(&v).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "              ╭─ Pull request ───────────────────────────────────────────────────────╮              "
-" Projects     │ #482 Returns page crashes on an empty address                        │              "
+" ▾ Projects   │ #482 Returns page crashes on an empty address                        │              "
 "              │                                                                      │              "
 "▌ cornercase (│                                                                      │              "
 "              │                                                                      │              "

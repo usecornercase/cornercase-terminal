@@ -35,6 +35,7 @@ pub(crate) mod remote_access;
 mod remote_card;
 mod remote_tab;
 mod rows;
+mod sections;
 mod sidebar;
 mod star;
 mod stats;
@@ -172,6 +173,7 @@ pub use rows::row_close_button;
 #[cfg(test)]
 pub(crate) use rows::row_menu_button;
 pub(crate) use rows::{MIN_MENU_ROW_WIDTH, ROW_MENU_ICON, Rows, more_above};
+pub(crate) use sections::{SectionTags, section_title};
 pub use sidebar::{NEW_BUTTON, SidebarRow, close_button, new_project_button, sidebar_rows};
 pub(crate) use sidebar::{ProjectEntry, SidebarHit, active_row, entry_row, machine_rows, project_rows, sidebar_hit};
 #[cfg(test)]
@@ -202,7 +204,7 @@ use crate::agents::activity::Status;
 use crate::config::Sidebar;
 use crate::plugins::manifest::Face;
 use crate::project::group::GroupEntry;
-use crate::state::Widths;
+use crate::state::{self, Sections, Widths};
 
 use agents_section::draw_agents;
 use chrome::{
@@ -264,6 +266,8 @@ pub(crate) struct View<'a> {
     pub(crate) hover: Option<Position>,
     pub(crate) widths: Widths,
     pub(crate) sidebar: Sidebar,
+    pub(crate) folded: Sections,
+    pub(crate) section_tags: Vec<(state::Section, SectionTags)>,
     pub(crate) resizing: Option<Border>,
     pub(crate) light: bool,
     pub(crate) muted: Color,
@@ -337,6 +341,10 @@ impl View<'_> {
 
     fn bots_page(&self) -> bool {
         self.bots.as_ref().is_some_and(|bots| bots.page)
+    }
+
+    fn tags_of(&self, section: state::Section) -> Option<SectionTags> {
+        self.section_tags.iter().find_map(|&(listed, tags)| (listed == section).then_some(tags))
     }
 
     fn lobby(&self) -> Option<Lobby> {
@@ -479,7 +487,7 @@ fn draw_chrome(f: &mut Frame, view: &View, areas: &Areas) {
     } else {
         draw_column_border(f, view.line(), areas.projects_border);
         draw_column_border(f, view.line(), areas.workspaces_border);
-        draw_separator(f, view.line(), areas.stack_border);
+        draw_separator(f, view.line(), areas.stack_line);
         draw_borders(f, view, areas);
         draw_search_bar(f, view, areas.search);
         activity::draw(f, view, areas.activity);
@@ -505,6 +513,7 @@ fn screen_of(view: &View) -> Screen {
         plugins: !view.plugin_buttons.is_empty(),
         machine: view.machine.is_some(),
         bots,
+        folded: view.folded,
     }
 }
 

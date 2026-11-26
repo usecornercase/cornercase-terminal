@@ -1,5 +1,6 @@
 use super::*;
 use crate::project::split::{Dir, Node};
+use crate::state::Section;
 use crate::test_util::fixture;
 
 const CONVERSATION: &str = "0199f1c2-7a31-7e52-9b1f-3c5d8e2a4f60";
@@ -149,8 +150,21 @@ fn snapshot() -> Snapshot {
             shown_bot: None,
             tunnels: Vec::new(),
             machine_tunnels: Vec::new(),
+            collapsed_sections: Vec::new(),
         },
     }
+}
+
+#[test]
+fn a_report_leaves_collapsed_sections_out_unless_one_is_collapsed() {
+    let open = serde_json::to_value(Report::default()).expect("json");
+    let folded = Report { collapsed_sections: vec![Section::Workspaces], ..Report::default() };
+    let folded = serde_json::to_value(folded).expect("json");
+
+    assert!(open.get("collapsed_sections").is_none(), "{open}");
+    assert_eq!(folded["collapsed_sections"], json!(["workspaces"]));
+    let read: Report = serde_json::from_value(folded).expect("a report");
+    assert_eq!(read.collapsed_sections, [Section::Workspaces]);
 }
 
 #[test]

@@ -27,6 +27,7 @@ pub(super) enum Grab {
     Agent(u64),
     Bot(u64),
     Remote(RemoteAt),
+    Section(state::Section),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

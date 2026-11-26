@@ -89,7 +89,7 @@ mod the_button {
         let a = full_layout(TALL, widths, screen);
         assert_eq!(a.bots_button.width, 8);
         let t = render_sized(&View { widths, ..shown(Sidebar::SideBySide, entries(), false) }, W, TALL.height);
-        assert_eq!(title_row(&t, &a), " Projects     Bots › ");
+        assert_eq!(title_row(&t, &a), " ▾ Projects   Bots › ");
         assert_eq!(row_text(&t, a.bots_button), " Bots › ");
     }
 
@@ -114,14 +114,19 @@ mod the_button {
     }
 
     #[rstest]
-    #[case::the_plain_label(18, " Projects Bots › ")]
-    #[case::the_short_label(16, " Projects Bots ")]
-    fn keeps_the_projects_title_whole_down_to_the_narrowest_column(#[case] projects: u16, #[case] row: &str) {
+    #[case::the_plain_label(20, " ▾ Projects Bots › ", 11)]
+    #[case::the_short_label(18, " ▾ Projects Bots ", 11)]
+    #[case::the_title_cut_at_the_narrowest_column(16, " ▾ Proje… Bots ", 9)]
+    fn keeps_the_projects_title_whole_until_the_column_is_the_narrowest(
+        #[case] projects: u16,
+        #[case] row: &str,
+        #[case] button: u16,
+    ) {
         let widths = Widths { projects, ..Widths::default() };
         let a = full_layout(TALL, widths, marked());
         let t = render_sized(&View { widths, ..shown(Sidebar::SideBySide, entries(), false) }, W, TALL.height);
         assert_eq!(title_row(&t, &a), row);
-        assert_eq!((a.bots_button.x, a.bots_button.right()), (a.title.x + 9, a.title.right()));
+        assert_eq!((a.bots_button.x, a.bots_button.right()), (a.title.x + button, a.title.right()));
     }
 
     #[rstest]

@@ -4,7 +4,7 @@ expression: render(&v).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "                                                         │                                          "
-" Projects                      │ Workspaces              │                                          "
+" ▾ Projects                    │ ▾ Workspaces            │                                          "
 "                               │                         │                                          "
 "▌ a-folder-with-a-re… (1)      │                         │                                          "
 "                               │                         │                                          "

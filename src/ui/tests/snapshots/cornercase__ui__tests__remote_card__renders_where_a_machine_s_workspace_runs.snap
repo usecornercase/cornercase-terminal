@@ -4,7 +4,7 @@ expression: shown(card(None)).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "                                                         │                                          "
-" Projects                      │ Workspaces              │                                          "
+" ▾ Projects                    │ ▾ Workspaces            │                                          "
 "                               │                         │                                          "
 "▌ web-shop (1)                 │                         │                                          "
 "                               │                         │                                          "

@@ -4,6 +4,7 @@ use super::{
     Close, Command, Mark, NewTab, NewWorkspace, Open, ProfileDelete, ProfileNew, ProfileUse, SendText, Split, Start,
     Wait,
 };
+use crate::state::Section;
 
 impl Command {
     pub(crate) fn fields(&self) -> Vec<(&'static str, String)> {
@@ -74,7 +75,7 @@ impl Command {
             Self::Move(moving) => moving.fields(fields),
             Self::MovePane(moving) => moving.fields(fields),
             Self::Collapse(fold) | Self::Expand(fold) => {
-                fields.add("item", fold.item);
+                fields.maybe("item", fold.item).maybe("section", fold.section.map(Section::name));
             }
             Self::GroupNew(new) => {
                 fields.add("name", &new.name);

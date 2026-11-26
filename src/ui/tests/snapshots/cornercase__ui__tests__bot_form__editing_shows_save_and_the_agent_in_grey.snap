@@ -4,7 +4,7 @@ expression: drawn(form).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "            ╭─ Edit bot · prs ─────────────────────────────────────────────────────────╮            "
-" Projects   │                                                                          │            "
+" ▾ Projects │                                                                          │            "
 "            │ Name         PRs                                                         │            "
 "▌ cornercase│                                                                          │            "
 "            │ For          Review my pull requests.                                    │            "

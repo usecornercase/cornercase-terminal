@@ -1,11 +1,10 @@
 ---
 source: src/ui/tests/queue.rs
-assertion_line: 51
 expression: t.backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                              "
 "     ╭─ Queue ────────────────────────────────────────────────────────────────────────────────────────────────────╮     "
-" Proj│ ›                                                                                                          │     "
+" ▾ Pr│ ›                                                                                                          │     "
 "     │                                                                                                            │     "
 "▌ sho│ ▌  2026-10-14 14:30  #482 Fix the login form                          pending · claude · shop › issue-482  │     "
 "     │    2026-10-14 15:00  Update the docs                                      started · pane 7 · codex · shop  │     "

@@ -4,7 +4,7 @@ expression: "snapshot(ports(), BIG)"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                              "
 "  ╭─ Ports › feat/checkout ──────────────────────────────────────────────────────────────────────────────────────────╮  "
-" P│  this workspace   every port                                                                         4 listening │  "
+" ▾│  this workspace   every port                                                                         4 listening │  "
 "  │                                                                                                                  │  "
 "▌ │ ▌○ http://localhost:3000  node next dev               pid 48211    pane 12 · dev           copy  open  go  stop  │  "
 "  │  ✓ http://localhost:5173  node vite                   pid 48390    agent claude · pane 9 · claude                │  "

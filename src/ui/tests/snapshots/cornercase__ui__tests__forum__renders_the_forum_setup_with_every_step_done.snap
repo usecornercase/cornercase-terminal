@@ -4,7 +4,7 @@ expression: render(&with(ready())).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "                                                         │                                          "
-" Projects                      │ Workspaces              │                                          "
+" ▾ Projects                    │ ▾ Workspaces            │                                          "
 "                               │                         │                                          "
 "▌ cornercase (1)               │                         │                                          "
 "                  ╭─ Discord forum ──────────────────────────────────────────────╮                  "

@@ -4,7 +4,7 @@ expression: "snapshot(w, BIG)"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                              "
 "  ╭─ Worktrees ──────────────────────────────────────────────────────────────────────────────────────────────────────╮  "
-" P│ web-shop › feat/gift-cards                                                                                       │  "
+" ▾│ web-shop › feat/gift-cards                                                                                       │  "
 "  │   2 commits not pushed, a teardown runs first                                                                    │  "
 "▌ │ orders-api › fix/pagination                                                                                      │  "
 "  │   4 files changed, locked by a pid that is gone                                                                  │  "

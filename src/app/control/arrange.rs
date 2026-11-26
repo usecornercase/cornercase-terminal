@@ -6,7 +6,7 @@ use super::{Asker, Handled, conflict, json, malformed, name_of, none, pane_ids, 
 use crate::app::menus::{Marked, Target};
 use crate::app::notifications::{Message, MessageKind, Went};
 use crate::app::{App, Toast};
-use crate::control::arrange::{GroupDelete, GroupNew, GroupStyle, Move, MovePane, Styled};
+use crate::control::arrange::{Fold, GroupDelete, GroupNew, GroupStyle, Move, MovePane, Styled};
 use crate::control::contract::{Code, Refusal};
 use crate::control::terminal::Moved;
 use crate::control::{self, Command, Done, Item, Layout, Request, TodoItem, TodoList};
@@ -333,7 +333,19 @@ impl App {
         Ok(())
     }
 
-    pub(super) fn fold_request(&mut self, command: &str, item: Item, collapsed: bool) -> Handled {
+    pub(super) fn fold_request(&mut self, command: &str, fold: &Fold, collapsed: bool) -> Handled {
+        match (fold.item, fold.section) {
+            (Some(item), None) => self.fold_item(command, item, collapsed),
+            (None, Some(section)) => {
+                self.set_section_fold(section, collapsed);
+                Ok(Some(json(&Done::default())))
+            }
+            (Some(_), Some(_)) => Err(malformed(format!("`{command}` takes an item or a section, not both"))),
+            (None, None) => Err(malformed(format!("`{command}` needs an item or a section"))),
+        }
+    }
+
+    fn fold_item(&mut self, command: &str, item: Item, collapsed: bool) -> Handled {
         let target = match item {
             Item::Group(id) => {
                 self.group_index(id).ok_or_else(|| none("group", id))?;

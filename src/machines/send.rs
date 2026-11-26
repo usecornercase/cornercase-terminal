@@ -34,6 +34,10 @@ pub(crate) fn folding(collapse: bool) -> &'static str {
     if collapse { "collapse" } else { "expand" }
 }
 
+fn pane_fold(pane: u64) -> Fold {
+    Fold { item: Some(Item::Pane(pane)), section: None }
+}
+
 impl Send {
     pub(crate) fn command(self) -> Command {
         match self {
@@ -48,8 +52,8 @@ impl Send {
             Self::AccountList => Command::AccountList(AccountList { check: true }),
             Self::IssueSources(project) => Command::IssueSources(IssueSources { project: Some(project) }),
             Self::FlowList(project) => Command::FlowList(FlowList { project: Some(project) }),
-            Self::Fold { pane, collapse: true } => Command::Collapse(Fold { item: Item::Pane(pane) }),
-            Self::Fold { pane, collapse: false } => Command::Expand(Fold { item: Item::Pane(pane) }),
+            Self::Fold { pane, collapse: true } => Command::Collapse(pane_fold(pane)),
+            Self::Fold { pane, collapse: false } => Command::Expand(pane_fold(pane)),
         }
     }
 

@@ -1,11 +1,10 @@
 ---
 source: src/ui/tests/queue.rs
-assertion_line: 99
 expression: t.backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                              "
 "     ╭─ Queue ────────────────────────────────────────────────────────────────────────────────────────────────────╮     "
-" Proj│ ›                                                                                                          │     "
+" ▾ Pr│ ›                                                                                                          │     "
 "     │                                                                                                            │     "
 "▌ sho│ ▌▾ 2026-10-15 09:00  Review the open pull requests                      ↻ every day 09:00 · claude · shop  │     "
 "     │      2026-10-14 09:00  started · pane 7                                    claude · shop › routine/review  │     "

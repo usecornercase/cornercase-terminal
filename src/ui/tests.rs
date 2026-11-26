@@ -159,6 +159,7 @@ mod routines;
 mod row_hover;
 mod scrollback;
 mod search;
+mod section_folds;
 mod settings;
 mod share_settings;
 mod sidebar_hit;

@@ -1,11 +1,10 @@
 ---
 source: src/app/tests/flows_dialog/personas.rs
-assertion_line: 215
 expression: "shown(&mut s.app, WIDE)"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                                                            "
 "                                                         │                                                                                            "
-" Proj╭─ Flows › personas › Code Reviewer ───────────────────────────────────────────────────────────────────────────────────────────────────────╮     "
+" ▾ Pr╭─ Flows › personas › Code Reviewer ───────────────────────────────────────────────────────────────────────────────────────────────────────╮     "
 "     │ Code Reviewer: a persona of yours, saved in personas/ next to config.json                                                                │     "
 "  + N│                                                                                                                                          │     "
 "     │ ▌ name            Code Reviewer  id reviewer: flows name it                                                                              │     "

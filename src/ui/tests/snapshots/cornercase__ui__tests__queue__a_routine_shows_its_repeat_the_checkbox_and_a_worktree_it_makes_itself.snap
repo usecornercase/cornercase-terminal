@@ -4,7 +4,7 @@ expression: t.backend()
 ---
 "  ⌕ search pro╭─ Schedule an agent ──────────────────────────────────────────────────╮              "
 "              │ Prompt                                                               │              "
-" Projects     │ Review the open pull requests                                        │              "
+" ▾ Projects   │ Review the open pull requests                                        │              "
 "              │                                                                      │              "
 "▌ shop (1)    │                                                                      │              "
 "              │                                                                      │              "
