@@ -199,15 +199,16 @@ fn expanding_a_section_reveals_the_active_row_it_moved_out_of_view() {
     assert!(!shown.is_empty(), "{:?} at {}", areas.list, app.scroll.of(List::Projects));
 }
 
-#[test]
-fn the_wheel_over_a_folded_section_keeps_its_scroll() {
+#[rstest]
+#[case::down(MouseEventKind::ScrollDown)]
+#[case::up(MouseEventKind::ScrollUp)]
+fn the_wheel_over_a_folded_section_keeps_its_scroll(#[case] wheel: MouseEventKind) {
     let (mut app, _rx, _dirs) = laid_out(config::Sidebar::SideBySide, 8);
     app.scroll.set(List::Projects, 3);
     click_title(&mut app, TALL, Section::Projects);
     let at = title(&app, TALL, Section::Projects);
 
-    mouse_in(&mut app, MouseEventKind::ScrollDown, at, TALL);
-    mouse_in(&mut app, MouseEventKind::ScrollUp, at, TALL);
+    mouse_in(&mut app, wheel, at, TALL);
 
     assert_eq!(app.scroll.of(List::Projects), 3);
 }
