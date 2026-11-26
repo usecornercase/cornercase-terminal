@@ -1217,6 +1217,7 @@ export class App {
     if (before.project !== null && (focus.project !== before.project || focus.workspace !== before.workspace)) this.unfoldFocus();
     this.revealInTabBar(tabBar, focus.workspace !== before.workspace);
     if (tree) return this.revealInTree(list);
+    if (again) this.revealWorkspaceRows();
     if (!p || (!again && focus.project === before.project && !before.tree)) return;
     const sidebar = this.sidebarRows();
     const i = activeRow(sidebar, this.active, this.groupIndex(p.group));
@@ -1228,6 +1229,17 @@ export class App {
     const w = this.workspace();
     if (isEmpty(bar) || !w?.tabs.length) return;
     this.tabBarScroll = this.tabStrip(bar).reveal(Math.max(0, w.tabs.indexOf(this.tab()!)));
+  }
+
+  private revealWorkspaceRows(): void {
+    const p = this.project();
+    if (!p) return;
+    const w = p.workspaces[p.active];
+    const { workspacesList, pitch } = layout(this.cols, this.rows, this.widths, 'workspaces', false, this.sidebar(), this.config.agentsSection, this.tabsOnTop(), this.bots.shape(), this.folds);
+    const tabs = this.tabLines();
+    const rows = workspaceRows(tabs, this.tabsListed(), this.workspacesFolded());
+    const shown = [rows.findIndex((r) => r.kind === 'ws' && r.w === p.active), rows.findIndex((r) => r.kind === 'tab' && r.w === p.active && r.t === w?.active)];
+    for (const i of shown) if (i >= 0) this.workspacesScroll = workspaceLayout(workspacesList, pitch, rows, tabs, this.workspacesScroll).reveal(i);
   }
 
   private revealInTree(list: Rect): void {

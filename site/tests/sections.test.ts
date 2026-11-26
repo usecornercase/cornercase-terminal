@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { App } from '../src/lib/demo/app';
-import { bottom, type Section, sectionTitle, type Sidebar } from '../src/lib/demo/layout';
+import { bottom, type Section, sectionTitle, type Sidebar, workspaceLayout, workspaceRows } from '../src/lib/demo/layout';
 import { world } from '../src/lib/demo/world';
 
 function demo(sidebar: Sidebar, cols = 140, rows = 38): App {
@@ -179,6 +179,29 @@ for (const nav of ['projects', 'workspaces', 'agents'] as const) {
     app.destroy();
   });
 }
+
+test('expanding Workspaces reveals the active workspace and tab scrolled out of view', () => {
+  const app = demo('side_by_side', 140, 16);
+  const shop = app.project()!;
+  const active = () => {
+    const tabs = app.tabLines();
+    const rows = workspaceRows(tabs, app.tabsListed(), app.workspacesFolded());
+    const { workspacesList, pitch } = app.areas();
+    const shown = workspaceLayout(workspacesList, pitch, rows, tabs, app.workspacesScroll);
+    const tab = shop.workspaces[shop.active].active;
+    return rows.flatMap((r, i) => ((r.kind === 'ws' || (r.kind === 'tab' && r.t === tab)) && r.w === shop.active ? [shown.item(i).h > 0] : []));
+  };
+  const list = app.areas().workspacesList;
+  for (let turn = 0; turn < 20; turn++) app.wheel(list.x + 2, list.y + 1, 1);
+  app.render();
+  assert.deepEqual(active(), [false, false]);
+
+  clickTitle(app, 'workspaces');
+  clickTitle(app, 'workspaces');
+
+  assert.deepEqual(active(), [true, true]);
+  app.destroy();
+});
 
 test('the tree folds whole under the Projects title and has no Workspaces title', () => {
   const app = demo('tree');
