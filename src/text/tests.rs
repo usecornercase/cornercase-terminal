@@ -61,6 +61,7 @@ fn escape_hidden_shows_invisible_characters(#[case] text: &str, #[case] shown: &
 #[case::fits("npm ci", 10, &["npm ci"])]
 #[case::splits_at_the_width("abcdefg", 3, &["abc", "def", "g"])]
 #[case::never_splits_a_wide_char("a编码", 2, &["a", "编", "码"])]
+#[case::emoji_presentation("❤️❤️❤️", 4, &["❤️❤️", "❤️"])]
 #[case::empty("", 4, &[""])]
 #[case::no_width("abc", 0, &["abc"])]
 fn wrap_cells_keeps_every_character_within_the_width(#[case] text: &str, #[case] max: usize, #[case] rows: &[&str]) {
