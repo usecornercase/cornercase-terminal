@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.14.1
+
+- **Collapse a whole sidebar section.** Click **Projects**, **Workspaces** or **Agents** to fold the section under its title (`▸`), and click it again to open it. It works in every sidebar layout and in compact mode, and the other sections take its room. A folded title shows how many rows it hides and whether one of them needs you. It is kept across restarts and is the same in every window. An open title shows `▾`, so in the narrowest projects column **Projects** is now cut to fit beside **Bots**.
+- **For programs**: `cornercase collapse` and `expand` take `--section projects|workspaces|agents` (the `section` field of the requests), `status`, `watch` and `view` list the collapsed ones in `collapsed_sections`, and `cornercase contract` has the feature `section-folds`.
+
 ## 0.14.0
 
 - **Let cornercase pick the machine with room.** `cornercase start`, `start` with a model or mode, and `flow run` take `--machine auto`: cornercase reads how much memory is free on this computer and on each linked machine that has the project, and starts where there is the most room, this computer on a tie. It says where and why (`auto → torre (11.3 GB free)`). When no machine has the memory a start needs it starts nothing and exits with status 8: `no machine has 6 GB free (best: mac, 4.1 GB)`. What it just sent to a machine counts as taken there for 5 minutes, so a burst of starts spreads out instead of landing on one machine.
