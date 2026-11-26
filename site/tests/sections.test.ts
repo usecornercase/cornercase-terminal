@@ -124,6 +124,28 @@ test('a folded title says how many rows it hides', () => {
   app.destroy();
 });
 
+for (const [section, name] of [
+  ['projects', 'Projects'],
+  ['workspaces', 'Workspaces'],
+] as const) {
+  test(`a folded ${section} title is never cut to make room for its count`, () => {
+    const app = demo('side_by_side');
+    clickTitle(app, section);
+    const counted = new Set<boolean>();
+
+    for (let width = 16; width <= 32; width++) {
+      app.widths = { ...app.widths, [section]: width };
+      app.render();
+      const row = titleRow(app, section);
+      assert.ok(!row.includes('(') || row.startsWith(` ▸ ${name} (`), `${width}: ${row}`);
+      counted.add(row.includes('('));
+    }
+
+    assert.equal(counted.size, 2);
+    app.destroy();
+  });
+}
+
 test('the tree folds whole under the Projects title and has no Workspaces title', () => {
   const app = demo('tree');
 

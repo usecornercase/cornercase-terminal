@@ -723,7 +723,8 @@ export class Painter {
     const marks = fitTags(tags.attention ? [statusIcon(tags.attention, spinAt(this.app))] : [], room - MIN_NAME);
     const left = room - marks.reserved;
     const wanted = ` (${tags.count})`;
-    const count = this.app.config.counts && wanted.length + MIN_NAME <= left ? wanted : '';
+    const kept = Math.min(Math.max([...text].length, MIN_NAME), WORKSPACES_TITLE.length);
+    const count = this.app.config.counts && wanted.length + kept <= left ? wanted : '';
     const name = cut(left - count.length);
     const line = [...lead, seg(name, bold), seg(count, DARK)];
     pushTags(line, marks, [...name].length + count.length, room);

@@ -295,12 +295,35 @@ fn an_open_title_says_nothing_of_what_is_under_it() {
 }
 
 #[rstest]
-#[case::projects(Section::Projects)]
-#[case::workspaces(Section::Workspaces)]
-#[case::agents(Section::Agents)]
-fn a_folded_title_keeps_what_needs_you_in_a_narrow_column(#[case] section: Section) {
-    let view = with_bots(View { widths: NARROW_COLUMN, ..shown(Sidebar::SideBySide, &[section]) });
-    let text = title_text(&view, section);
+#[case::projects_in_the_narrowest_column(Section::Projects, 16, " ▸ Pr… ! ")]
+#[case::projects_just_short_of_the_count(Section::Projects, 26, " ▸ Projects    ! ")]
+#[case::projects_with_room_for_both(Section::Projects, 27, " ▸ Projects (3) ! ")]
+#[case::workspaces_in_the_narrowest_column(Section::Workspaces, 16, " ▸ Workspac… ! ")]
+#[case::workspaces_just_short_of_the_count(Section::Workspaces, 20, " ▸ Workspaces    ! ")]
+#[case::workspaces_with_room_for_both(Section::Workspaces, 21, " ▸ Workspaces (3) ! ")]
+#[case::agents_just_short_of_the_count(Section::Agents, 16, " ▸ Agents    ! ")]
+#[case::agents_with_room_for_both(Section::Agents, 17, " ▸ Agents (3) ! ")]
+fn a_folded_title_adds_its_count_only_beside_its_whole_name_and_keeps_what_needs_you(
+    #[case] section: Section,
+    #[case] width: u16,
+    #[case] expected: &str,
+) {
+    let widths = Widths { projects: width, workspaces: width, ..NARROW_COLUMN };
+    let view = with_bots(View { widths, ..shown(Sidebar::SideBySide, &[section]) });
 
-    assert!(text.contains('!') && text.contains('…'), "{text}");
+    assert_eq!(title_text(&view, section), expected);
+}
+
+#[rstest]
+#[case::no_room_beside_ten_cells(33, " ▸ documentatio… ! ")]
+#[case::room_beside_ten_cells(34, " ▸ documenta… (3) ! ")]
+fn a_long_project_name_gives_up_cells_to_the_count_only_down_to_ten(#[case] cols: u16, #[case] expected: &str) {
+    let folded = shown(Sidebar::SideBySide, &[Section::Workspaces]);
+    let projects = view(&["cornercase", "documentation-site"]).projects;
+    let view = View { nav: Some(Nav::Workspaces), projects, ..folded };
+    let title =
+        section_title(&full_layout(Rect::new(0, 0, cols, 30), view.widths, screen_of(&view)), Section::Workspaces);
+    let t = render_sized(&view, cols, 30);
+
+    assert_eq!(row_text(&t, Rect { y: title.y + 1, height: 1, ..title }), expected);
 }

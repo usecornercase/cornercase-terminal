@@ -29,7 +29,7 @@ mod machine;
 pub(crate) use machine::MachineTag;
 pub(super) use machine::{dim_row, machine_span, seen_note, spin};
 
-const WORKSPACES_TITLE: &str = "Workspaces";
+pub(super) const WORKSPACES_TITLE: &str = "Workspaces";
 
 const SHELL_ICON: &str = "›";
 

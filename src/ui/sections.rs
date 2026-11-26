@@ -8,6 +8,7 @@ use super::layout::Areas;
 use super::rows::{Tags, arrow};
 use super::theme::status_icon;
 use super::widgets::draw_band;
+use super::workspaces::WORKSPACES_TITLE;
 use crate::agents::activity::Status;
 use crate::state::Section;
 use crate::text::truncate_right;
@@ -15,6 +16,8 @@ use crate::text::truncate_right;
 const LEAD: u16 = 3;
 
 const MIN_NAME: usize = 2;
+
+const NAME_BESIDE_COUNT: usize = WORKSPACES_TITLE.len();
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct SectionTags {
@@ -72,7 +75,8 @@ fn title_line(view: &View, width: u16, (title, folded): (&str, bool), tags: Opti
     let badge = tags.attention.map(|status| status_icon(view.muted, status, view.spin));
     let marks = Tags::fit(badge.into_iter().collect(), room.saturating_sub(MIN_NAME));
     let left = room.saturating_sub(marks.reserved());
-    let count = count_text(view.counts, tags.count, left);
+    let kept = title.chars().count().clamp(MIN_NAME, NAME_BESIDE_COUNT);
+    let count = count_text(view.counts, tags.count, left.saturating_sub(kept));
     let name = cut(title, left.saturating_sub(count.chars().count()));
     let used = name.chars().count() + count.chars().count();
     line.extend([Span::styled(name, bold), Span::styled(count, Style::default().fg(view.muted))]);
@@ -82,7 +86,7 @@ fn title_line(view: &View, width: u16, (title, folded): (&str, bool), tags: Opti
 
 fn count_text(counts: bool, count: usize, room: usize) -> String {
     let text = format!(" ({count})");
-    if counts && text.chars().count() + MIN_NAME <= room { text } else { String::new() }
+    if counts && text.chars().count() <= room { text } else { String::new() }
 }
 
 fn cut(title: &str, max: usize) -> String {
