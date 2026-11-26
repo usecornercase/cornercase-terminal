@@ -4,7 +4,7 @@ expression: "render(&folded(&[Some(Status::Working), Some(Status::Waiting)])).ba
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "                                                         │                                          "
-" Projects                      │ Workspaces              │                                          "
+" ▾ Projects                    │ ▾ Workspaces            │                                          "
 "                               │                         │                                          "
 "▌ shop (1)                     │  ▸ login         !      │                                          "
 "                               │                         │                                          "

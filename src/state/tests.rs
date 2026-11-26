@@ -34,6 +34,7 @@ fn state(dirs: &[&str]) -> State {
         todo: false,
         files: false,
         flow: false,
+        collapsed_sections: Vec::new(),
     }
 }
 
@@ -165,6 +166,7 @@ mod file {
             todo: true,
             files: true,
             flow: false,
+            collapsed_sections: Vec::new(),
         };
         let fixture = crate::test_util::fixture!("session/v5.json");
         round_trip(fixture, &expected);
@@ -373,6 +375,20 @@ mod file {
         }];
         let fixture = crate::test_util::fixture!("session/accounts.json");
         round_trip(fixture, &saved);
+    }
+
+    #[test]
+    fn collapsed_sections_round_trip_through_their_own_fixture() {
+        let saved = State { collapsed_sections: vec![Section::Projects, Section::Agents], ..state(&["projects/team"]) };
+        let fixture = crate::test_util::fixture!("session/sections.json");
+        round_trip(fixture, &saved);
+    }
+
+    #[test]
+    fn a_session_without_folded_sections_writes_no_key() {
+        let text = serde_json::to_string(&state(&["projects/team"])).expect("json");
+
+        assert!(!text.contains("collapsed_sections"));
     }
 
     #[test]

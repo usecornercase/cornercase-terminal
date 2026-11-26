@@ -1,11 +1,10 @@
 ---
 source: src/app/tests/flows_dialog/personas.rs
-assertion_line: 208
 expression: "shown(&mut s.app, WIDE)"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                                                            "
 "                                                         │                                                                                            "
-" Proj╭─ Flows › personas ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮     "
+" ▾ Pr╭─ Flows › personas ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮     "
 "     │ personas: how a role's agent works, picked in a role's persona row                                                                       │     "
 "  + N│                                                                                                                                          │     "
 "     │ ▌ 👁️ Code Reviewer          Reviews code.  yours                                          ╭─ Persona ──────────────────────────────────╮ │     " Hidden by multi-width symbols: [(10, " ")]

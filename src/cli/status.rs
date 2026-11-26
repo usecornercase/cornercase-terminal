@@ -73,6 +73,7 @@ pub(crate) fn render(report: &Report, home: Option<&Path>, now: SystemTime) -> S
         machine_lines(&mut lines, machine, report.shown_remote.as_ref(), now);
     }
     lines.extend(report.shown_bot.as_ref().map(|bot| format!("bot {bot}  (shown)")));
+    lines.extend(report.collapsed_sections.iter().map(|section| format!("section {}  collapsed", section.name())));
     lines.into_iter().map(|line| line + "\n").collect()
 }
 

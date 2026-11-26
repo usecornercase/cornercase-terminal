@@ -357,19 +357,28 @@ test('the Bots button drops its marks before they cover the Projects title', () 
   const a = app.areas();
   assert.equal(a.botsButton.w, 8);
   const row = screen(app).split('\n')[a.title.y].slice(0, a.title.w);
-  assert.equal(row, ' Projects     Bots › ');
+  assert.equal(row, ' ▾ Projects   Bots › ');
   app.widths = { ...app.widths, projects: 32 };
   app.render();
-  assert.match(screen(app).split('\n')[app.areas().title.y], / Projects +\S ●3 Bots › /);
+  assert.match(screen(app).split('\n')[app.areas().title.y], / ▾ Projects +\S ●3 Bots › /);
 });
 
-test('at the narrowest projects column the Bots button reads Bots beside the whole title', () => {
+test('at the narrowest projects column the Bots button reads Bots beside the cut title', () => {
   const app = panes(140);
   app.widths = { ...app.widths, projects: 16 };
   app.render();
   const a = app.areas();
   assert.deepEqual([a.botsButton.x, a.botsButton.w], [a.title.x + 9, 6]);
-  assert.equal(screen(app).split('\n')[a.title.y].slice(0, a.title.w), ' Projects Bots ');
+  assert.equal(screen(app).split('\n')[a.title.y].slice(0, a.title.w), ' ▾ Proje… Bots ');
+});
+
+test('the Projects title stays whole beside Bots down to the column before the narrowest', () => {
+  const app = panes(140);
+  app.widths = { ...app.widths, projects: 18 };
+  app.render();
+  const a = app.areas();
+  assert.deepEqual([a.botsButton.x, a.botsButton.w], [a.title.x + 11, 6]);
+  assert.equal(screen(app).split('\n')[a.title.y].slice(0, a.title.w), ' ▾ Projects Bots ');
 });
 
 test('in a narrow compact menu the Bots button never shares cells with Agents', () => {

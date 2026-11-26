@@ -8,16 +8,18 @@ use ratatui::widgets::Clear;
 
 use super::View;
 use super::drop::landed;
-use super::layout::{Areas, PROJECTS_TITLE, projects_title_room};
+use super::layout::{Areas, PROJECTS_TITLE};
 use super::rows::{
     Band, GAP, RowButton, Rows, Tags, arrow, draw_hidden, draw_landing, draw_rail, draw_row_buttons, marker,
     row_button, row_close_button, row_rect,
 };
+use super::sections::draw_section_title;
 use super::theme::status_icon;
-use super::widgets::{button_style, draw_band, draw_button, draw_title};
+use super::widgets::{button_style, draw_band, draw_button};
 use super::workspaces::{MachineTag, dim_row, machine_span, spin};
 use crate::agents::activity::{self, Status};
 use crate::project::group::GroupEntry;
+use crate::state::Section;
 use crate::text::truncate_right;
 
 pub const NEW_BUTTON: &str = "+ New";
@@ -132,13 +134,14 @@ pub(super) fn group_header(group: &GroupEntry, max: usize) -> Span<'static> {
 }
 
 pub(super) fn draw_projects_title(f: &mut Frame, view: &View, areas: &Areas) {
-    let room = projects_title_room(areas.title, areas.bots_button);
-    let text = truncate_right(PROJECTS_TITLE, usize::from(room.saturating_sub(1)));
-    draw_title(f, view.muted, Rect { width: room, ..areas.title }, &text);
+    draw_section_title(f, view, areas, Section::Projects, PROJECTS_TITLE);
 }
 
 pub(super) fn draw_sidebar(f: &mut Frame, view: &View, areas: &Areas) {
     draw_projects_title(f, view, areas);
+    if areas.folded.projects {
+        return;
+    }
     let sidebar = view.sidebar_rows();
     let base = project_rows(areas.list, areas.pitch, &sidebar, view.projects_scroll);
     let landing = view.sidebar_landing();

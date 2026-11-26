@@ -4,6 +4,7 @@ use super::App;
 use super::menus::MenuAction;
 use super::overlay::Overlay;
 use super::toast::Toast;
+use crate::state::Section;
 use crate::tour::{self, TOURS, Target};
 use crate::ui::{self, ActivityItem};
 
@@ -118,7 +119,22 @@ impl App {
             .then(|| items.into_iter().find_map(|(i, r)| (i == item).then_some(r)).unwrap_or_default())
     }
 
+    fn folded_target(areas: &ui::Areas, target: Target) -> Option<Rect> {
+        let section = match target {
+            Target::Tabs if !areas.tab_bar.is_empty() => return None,
+            Target::NewProject | Target::Projects => Section::Projects,
+            Target::Workspaces | Target::Tabs if areas.tree => Section::Projects,
+            Target::Workspaces | Target::Tabs => Section::Workspaces,
+            Target::Agents => Section::Agents,
+            _ => return None,
+        };
+        areas.folded.folded(section).then(|| ui::section_title(areas, section))
+    }
+
     fn region_target(areas: &ui::Areas, target: Target) -> Option<Rect> {
+        if let Some(title) = Self::folded_target(areas, target) {
+            return Some(title);
+        }
         Some(match target {
             Target::None => Rect::default(),
             Target::NewProject if !areas.tree => return None,

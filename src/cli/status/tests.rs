@@ -2,7 +2,22 @@ use std::time::{Duration, UNIX_EPOCH};
 
 use super::*;
 use crate::control::TabInfo;
+use crate::state::Section;
 use crate::time::Stamp;
+
+#[test]
+fn the_status_ends_with_a_line_for_each_collapsed_section() {
+    let report = Report { collapsed_sections: vec![Section::Projects, Section::Agents], ..Report::default() };
+
+    let text = render(&report, None, UNIX_EPOCH);
+
+    assert!(text.ends_with("section projects  collapsed\nsection agents  collapsed\n"), "{text}");
+}
+
+#[test]
+fn the_status_says_nothing_of_sections_while_all_are_open() {
+    assert!(!render(&Report::default(), None, UNIX_EPOCH).contains("section "));
+}
 
 #[test]
 fn a_workspace_with_closed_agents_says_how_many() {

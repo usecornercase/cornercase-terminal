@@ -4,7 +4,7 @@ expression: t.backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                                                      "
 "  ╭─ Settings › Share ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮  "
-" P│ Copy your setup to send it to a colleague, or paste one they sent you. Tokens and personal settings are never shared.                    │  "
+" ▾│ Copy your setup to send it to a colleague, or paste one they sent you. Tokens and personal settings are never shared.                    │  "
 "  │                                                                                                                                          │  "
 "▌ │                                                                                                                                          │  "
 "  │  version = 1                                                                                                                             │  "

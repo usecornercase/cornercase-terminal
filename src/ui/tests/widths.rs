@@ -148,3 +148,53 @@ fn a_double_click_splits_the_lists_in_half_again() {
 fn two_columns_ignore_the_line() {
     assert_eq!(Widths::default().dragged(Border::Stack, 10, W), Widths::default());
 }
+
+mod folded_sections {
+    use super::*;
+    use crate::state::Section;
+    use crate::ui::widths::Above;
+
+    #[rstest]
+    #[case::the_top_folded(20, (true, false), 1)]
+    #[case::the_bottom_folded(20, (false, true), 19)]
+    #[case::both_folded(20, (true, true), 1)]
+    #[case::no_room(0, (true, false), 0)]
+    fn a_folded_stacked_section_is_one_row(#[case] room: u16, #[case] folded: (bool, bool), #[case] top: u16) {
+        assert_eq!(Widths::default().stack_rows(room, folded), top);
+    }
+
+    #[test]
+    fn open_stacked_sections_split_the_room_as_before() {
+        let widths = Widths { stack: Some(8), ..Widths::default() };
+
+        assert_eq!(widths.stack_rows(20, (false, false)), widths.top_rows(20));
+    }
+
+    #[rstest]
+    #[case::folded_whatever_its_saved_height(Above::Open { keep: 5 }, true, 1)]
+    #[case::folded_under_folded_lists(Above::Folded { rows: 3 }, true, 1)]
+    #[case::open_under_folded_lists(Above::Folded { rows: 3 }, false, 17)]
+    #[case::open_under_open_lists(Above::Open { keep: 5 }, false, 15)]
+    fn the_agents_section_takes_its_rows(#[case] above: Above, #[case] folded: bool, #[case] rows: u16) {
+        let widths = Widths { agents: Some(15), ..Widths::default() };
+
+        assert_eq!(widths.agents_taken(20, above, folded), rows);
+    }
+
+    #[test]
+    fn dragging_the_line_under_a_folded_agents_section_follows_the_pointer() {
+        let screen = Screen {
+            sidebar: Sidebar::ProjectsOnTop,
+            agents: true,
+            folded: Sections::of(&[Section::Agents]),
+            ..Screen::default()
+        };
+        let widths = Widths { agents: Some(15), ..Widths::default() };
+        let line = full_layout(STACKED, widths, screen).stack_border;
+        let to = Position::new(line.x + 3, line.y + 4);
+
+        let dragged = widths.stacked_dragged(Border::Stack, to, STACKED, screen);
+
+        assert_eq!(full_layout(STACKED, dragged, screen).stack_border.y, to.y);
+    }
+}

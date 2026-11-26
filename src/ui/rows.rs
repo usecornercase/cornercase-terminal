@@ -76,11 +76,17 @@ impl Rows {
     }
 
     pub(crate) fn scrolled(&self, delta: isize) -> usize {
+        if self.list.is_empty() {
+            return self.scroll;
+        }
         let max = self.fitting_before(self.heights.len());
         self.scroll.min(max).saturating_add_signed(delta).min(max)
     }
 
     pub(crate) fn reveal(&self, i: usize) -> usize {
+        if self.list.is_empty() {
+            return self.scroll;
+        }
         let first = self.first();
         if i >= self.heights.len() || (first..self.end()).contains(&i) {
             first
@@ -238,6 +244,10 @@ impl Tags {
             fitted.width = width;
         }
         fitted
+    }
+
+    pub(super) fn fit_whole(tags: Vec<Span<'static>>, room: usize) -> Self {
+        Self::fit(tags, room.saturating_add(2))
     }
 
     pub(super) fn is_empty(&self) -> bool {

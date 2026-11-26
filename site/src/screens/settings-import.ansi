@@ -1,6 +1,6 @@
 [2m [38;5;8m[48;5;236m ⌕ search projects, workspa…[39m [49m [38;5;239m│[39m web-shop ❯                                                                                                 
   [0m[38;5;8m╭─[1m[39m Settings › Import [0m[38;5;8m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮[2m[39m  
-[1m[38;5;8m P[0m[38;5;8m│[39m [38;5;8mTick the sections to import: their settings take the shared values, the rest stay as they are. Red notes are programs that will run,[39m [38;5;8m│[2m[39m  
+ [38;5;8m▾[0m[38;5;8m│[39m [38;5;8mTick the sections to import: their settings take the shared values, the rest stay as they are. Red notes are programs that will run,[39m [38;5;8m│[2m[39m  
   [0m[38;5;8m│[39m [38;5;8mor values to check.[39m                                                                                                                  [38;5;8m│[2m[39m  
 [38;5;6m  [0m[38;5;8m│[39m                                                                                                                                      [38;5;8m│[2m[39m  
 [38;5;6m[48;5;236m▌ [0m[38;5;8m│[39m [1m[x] agents · 4 changes[0m                                                                                                               [38;5;8m│[2m[39m  
@@ -12,7 +12,7 @@
   [0m[38;5;8m│[39m [1m[x] issues · 2 changes[0m                                                                                                               [38;5;8m│[2m[39m  
  [38;5;6m [0m[38;5;8m│[39m       issue branches: per tracker → {source}-{number}-{slug}                                                                         [38;5;8m│[2m[39m  
 [38;5;239m ─[0m[38;5;8m│[39m       sources shown: all, github, gitlab, shortcut, linear, jira, plane, asana → github, linear                                      [38;5;8m│[2m[39m  
-[1m[38;5;8m W[0m[38;5;8m│[39m                                                                                                                                      [38;5;8m│[2m[39m  
+ [38;5;8m▾[0m[38;5;8m│[39m                                                                                                                                      [38;5;8m│[2m[39m  
   [0m[38;5;8m│[39m [1m[x] worktrees · 1 change[0m                                                                                                             [38;5;8m│[2m[39m  
 [38;5;6m  [0m[38;5;8m│[39m       fetch branches every: 5 min → 10 min                                                                                           [38;5;8m│[2m[39m  
 [38;5;6m[48;5;236m▌ [0m[38;5;8m│[39m                                                                                                                                      [38;5;8m│[2m[39m  

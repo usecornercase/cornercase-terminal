@@ -115,6 +115,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "memory",
     "machine-auto",
     "queue-when-free",
+    "section-folds",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

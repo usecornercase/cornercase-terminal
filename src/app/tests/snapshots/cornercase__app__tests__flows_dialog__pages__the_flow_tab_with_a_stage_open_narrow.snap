@@ -4,7 +4,7 @@ expression: "shown(&mut s.app, area)"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                "
 "  ╭─ Flows › Full issue copy ──────────────────────────────────────────────────────────╮  "
-" P│  Flow   Orchestrator   coder   reviewer   security   tester   + add role           │  "
+" ▾│  Flow   Orchestrator   coder   reviewer   security   tester   + add role           │  "
 "  │                                                                                    │  "
 "  │   name            Full issue copy                                                  │  "
 "  │   description     A coder, a reviewer and a security reviewer, then a tester, the… │  "

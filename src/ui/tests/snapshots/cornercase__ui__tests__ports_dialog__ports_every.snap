@@ -4,7 +4,7 @@ expression: "snapshot(every(), BIG)"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                              "
 "  ╭─ Ports ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮  "
-" P│  this workspace   every port                                                                         3 listening │  "
+" ▾│  this workspace   every port                                                                         3 listening │  "
 "  │                                                                                                                  │  "
 "▌ │  ○ http://localhost:3000  node next dev               pid 48211    web-shop › feat/checkout · pane 12 · dev      │  "
 "  │ ▌  http://localhost:5432  postgres -D /usr/local/var  pid 812      no workspace                      copy  open  │  "

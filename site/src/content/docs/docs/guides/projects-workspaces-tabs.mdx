@@ -464,6 +464,7 @@ Closed agents are saved with the session, so they survive `kill-server` and a re
 
 - **Scroll** a column with the mouse wheel when it has more rows than fit. `↑ n more` and `↓ n more` tell you what is hidden, and the `+` buttons stay at the bottom.
 - **Resize** a column by dragging the border on its right. The panes follow live. Double-click a border to reset that column to its default width.
+- **Collapse a whole section**: click **Projects**, **Workspaces** or **Agents** at the top of its list, and the list folds under its title (`▸`); click again to open it. The other sections take the room: in the stacked layouts the open list gets the whole column, side by side folded projects leave their column to the [agents section](#the-agents-section), and a folded **Workspaces** keeps its column, blank. A folded title shows `!`, `●` or `✓` when something it hides needs you and, with **counts** on, how many rows it hides where that fits beside the title. Nothing else opens a section again (jumping to a project or an agent leaves it folded), and it is saved with your session. From a script: [`cornercase collapse --section`](../scripts-and-agents/#arrange).
 - **Pick a layout** in **settings → UI → sidebar**:
   - *projects_on_top* (the default) puts both lists in one column, the projects above the active project's workspaces, so the panes get the most room;
   - *workspaces_on_top* swaps the two;
@@ -485,6 +486,13 @@ Column widths, the line between stacked lists, the height of the [agents section
   crop={[0, 0, 60, 38]}
 />
 
+<Screen
+  name="sidebar-folded"
+  alt="The stacked sidebar with Projects collapsed to its title, which says it hides 4 projects and that one needs you (!), then the workspaces of web-shop with their tabs below the line, and the agents section at the bottom listing the running agents"
+  caption="A collapsed section leaves its room to the others."
+  crop={[0, 0, 60, 38]}
+/>
+
 ### The tree
 
 With **settings → UI → sidebar** set to *tree*, one list holds your groups, every project, their workspaces and their tabs, indented one step per level. A tab in another project is one click away, and the agents of every open project show what they are doing at once.
@@ -497,6 +505,7 @@ With **settings → UI → sidebar** set to *tree*, one list holds your groups, 
 />
 
 - Click **`▾`** to collapse a project or a workspace and **`▸`** to expand it again. A click on the rest of its row opens it and expands it. Group headers collapse as everywhere else.
+- The **Projects** title folds the whole tree.
 - A collapsed project shows how many workspaces it has, and `!` or `✓` when something inside needs you; a collapsed workspace shows the most urgent status of its agents, working ones included. Open rows leave that to their tabs.
 - The cyan bar `▌` on the left edge marks the tab on screen, or the row that hides it while collapsed. Tabs hang from their workspace's arrow on thin tree lines.
 - Each project ends with **`+ New`** (**new workspace** or **start a flow…**, for that project) and each workspace with **`+ Tab`**: adding a tab under another project switches to it.
@@ -558,6 +567,7 @@ Turn on **settings → UI → agents section** to list every Claude Code, Codex,
 - **Collapse an agent's team.** An agent that started others has a muted `▾` before its status icon: click it to fold the agents under it into its row, and `▸` to show them again (or right-click the row for **collapse** and **expand**). A click on the rest of the row still jumps to the agent. A collapsed row shows how many agents it hides (`+4`) and, when one of them needs you, its icon (`!`, `●` or `✓`; working ones say nothing), so a team you put away can still call you. A new agent started under a collapsed one stays hidden and only raises the count. Jumping to a hidden agent, with the keys menu's `a`, a notification, **go** or `cornercase focus`, opens the way to it, and collapsing the agent you are on moves the `▌` up to the row that hides it. A fold belongs to the agent you collapsed: when it exits or another conversation starts in its pane, the agent there next shows its team, and the fold comes back with that conversation, also after a restart that resumes it. opencode and custom agents keep a fold while their process runs, and not across a restart. `cornercase collapse --pane ID` and `expand --pane ID` do the same from a script.
 - **A flow's team goes by its roles.** The members of a [flow](../flows/) share its workspace, so their rows would all read the same. Each one hangs under the orchestrator and shows only its role: `coder`, `reviewer`, `security`. The orchestrator keeps its project and workspace and adds `· orchestrator` when the sidebar is wide enough. A member whose orchestrator is no longer listed shows its place and then its role, and an agent a member started looks as any other. Renaming a tab doesn't change a role.
 - **Agents on your [machines](../machines/)** are listed too, with the machine's tag, after the agents of the project they pair with. A click shows their tab, and folding one folds it on the machine: see [Its agents in the agents section](../machines/#its-agents-in-the-agents-section).
+- **Click its `Agents` title** to fold the whole section under it, and again to open it. That is not collapsing teams: each keeps its own fold.
 - **Drag the line above it** to make it taller or shorter, and double-click the line to go back to a third of the room. Its height is saved with your session.
 - In a narrow sidebar the model goes first, then the role that follows a project and workspace, then the workspace; the icon and the project stay.
 

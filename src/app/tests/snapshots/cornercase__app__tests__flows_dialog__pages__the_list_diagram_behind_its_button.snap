@@ -1,11 +1,10 @@
 ---
 source: src/app/tests/flows_dialog.rs
-assertion_line: 699
 expression: "shown(&mut s.app, NARROW)"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                "
 "  ╭─ Flows ────────────────────────────────────────────────────────────────────────────╮  "
-" P│ teams of agents that work through a plan, started from an issue or a prompt        │  "
+" ▾│ teams of agents that work through a plan, started from an issue or a prompt        │  "
 "  │                                                                                    │  "
 "  │ ╭─ Diagram ──────────────────────────────────────────────────────────────────────╮ │  "
 "  │ │                             ╭─ orchestrator ───╮                               │ │  "

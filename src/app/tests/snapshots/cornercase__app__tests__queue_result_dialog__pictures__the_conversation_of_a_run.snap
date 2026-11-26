@@ -4,7 +4,7 @@ expression: picture(&mut app)
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "              ╭─ Conversation ───────────────────────────────────────────────────────╮              "
-" Projects     │ Review the open pull requests                                        │              "
+" ▾ Projects   │ Review the open pull requests                                        │              "
 "              │ started · pane closed · fake · shop ›                                │              "
 "▌ cornercase-t│ routine/review-the-open-pull-requests                                │              "
 "              │                                                                      │              "

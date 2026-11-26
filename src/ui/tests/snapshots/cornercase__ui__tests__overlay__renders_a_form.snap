@@ -4,7 +4,7 @@ expression: "render(&with(Overlay::Form(form(None)))).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "                                                         │                                          "
-" Projects                      │ Workspaces              │                                          "
+" ▾ Projects                    │ ▾ Workspaces            │                                          "
 "                               │                         │                                          "
 "▌ cornercase (1)  ╭─ New worktree ───────────────────────────────────────────────╮                  "
 "                  │ branch                                                       │                  "

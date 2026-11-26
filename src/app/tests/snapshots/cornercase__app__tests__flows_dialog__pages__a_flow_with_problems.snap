@@ -4,7 +4,7 @@ expression: "shown(&mut s.app, WIDE)"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                                                            "
 "                                                         │                                                                                            "
-" Proj╭─ Flows › Full issue copy ────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮     "
+" ▾ Pr╭─ Flows › Full issue copy ────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮     "
 "     │  Flow   Orchestrator   coder   reviewer   security   tester   + add role                                                                 │     "
 "  + N│                                                                                                                                          │     "
 "     │   name            Full issue copy                                                         ╭─ Diagram ──────────────────────────────────╮ │     "

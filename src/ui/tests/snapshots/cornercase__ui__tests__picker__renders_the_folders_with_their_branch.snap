@@ -4,7 +4,7 @@ expression: render(&with(picker(None))).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "              ╭─ New workspace ──────────────────────────────────────────────────────╮              "
-" Projects     │ › ~/projects/                                                        │              "
+" ▾ Projects   │ › ~/projects/                                                        │              "
 "              │                                                                      │              "
 "▌ cornercase (│  ..                                                                  │              "
 "              │  cornercase                                                    main  │              "

@@ -4,7 +4,7 @@ expression: "render(&with(searching(\"def\", results()))).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "  ╭─ Settings ───────────────────────────────────────────────────────────────────────────────────╮  "
-" P│  Worktrees 0   Agents 2   Issues 0   TUI 1                                                   │  "
+" ▾│  Worktrees 0   Agents 2   Issues 0   TUI 1                                                   │  "
 "  │  ⌕ def                                                                                       │  "
 "▌ │   Agents › default agent                      claude                                         │  "
 "  │ ▌ Remote › Telegram › bot                     not set  paste its token                       │  "

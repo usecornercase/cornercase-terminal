@@ -333,7 +333,7 @@ impl TreePaint<'_> {
 
 pub(super) fn draw_tree(f: &mut Frame, view: &View, areas: &Areas) {
     draw_projects_title(f, view, areas);
-    let Some(tree) = &view.tree else { return };
+    let Some(tree) = view.tree.as_ref().filter(|_| !areas.folded.projects) else { return };
     let shape = &tree.shape;
     let rows = tree_rows(shape);
     let base = tree_layout_rows(areas.list, shape, &rows, view.projects_scroll);

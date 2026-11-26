@@ -184,7 +184,7 @@ impl App {
             }
             return ControlFlow::Break(Ok(()));
         }
-        if self.button_mouse(areas, pos, left) {
+        if self.button_mouse(areas, pos, left) || self.section_title_mouse(areas, pos, ev.kind, area) {
             return ControlFlow::Break(Ok(()));
         }
         if areas.bots.contains(pos) {

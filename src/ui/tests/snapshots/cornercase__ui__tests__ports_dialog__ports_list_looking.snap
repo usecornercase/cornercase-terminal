@@ -4,7 +4,7 @@ expression: "snapshot(p, BIG)"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                              "
 "  ╭─ Ports › feat/checkout ──────────────────────────────────────────────────────────────────────────────────────────╮  "
-" P│  this workspace   every port                                                                                     │  "
+" ▾│  this workspace   every port                                                                                     │  "
 "  │                                                                                                                  │  "
 "▌ │                                                                                                                  │  "
 "  │                                                                                                                  │  "

@@ -253,6 +253,7 @@ fn restore_brings_back_the_widths() {
         todo: false,
         files: false,
         flow: false,
+        collapsed_sections: Vec::new(),
     };
 
     app.restore(&saved, AREA);

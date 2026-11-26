@@ -4,7 +4,7 @@ expression: "snapshot(p, BIG)"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                              "
 "  ╭─ Processes ──────────────────────────────────────────────────────────────────────────────────────────────────────╮  "
-" P│ › filter                                                                                    cpu   memory   name  │  "
+" ▾│ › filter                                                                                    cpu   memory   name  │  "
 "  │  0 panes · 0 processes · cpu 0.0% · 0 MB                                                                         │  "
 "▌ │                                                                                                                  │  "
 "  │                                                                                                                  │  "

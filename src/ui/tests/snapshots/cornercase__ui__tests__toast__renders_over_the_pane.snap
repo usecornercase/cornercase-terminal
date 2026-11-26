@@ -4,7 +4,7 @@ expression: render(&v).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │ $ echo hello                             "
 "                                                         │ hello                                    "
-" Projects                      │ Workspaces              │ $                                        "
+" ▾ Projects                    │ ▾ Workspaces            │ $                                        "
 "                               │                         │                                          "
 "▌ ~ (1)                        │                         │                                          "
 "                               │                         │                                          "

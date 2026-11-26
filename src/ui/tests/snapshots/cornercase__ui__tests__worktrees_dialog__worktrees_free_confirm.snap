@@ -4,7 +4,7 @@ expression: "snapshot(Worktrees { confirm: Some(free), ..worktrees() }, BIG)"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                              "
 "  ╭─ Worktrees ──────────────────────────────────────────────────────────────────────────────────────────────────────╮  "
-" P│ web-shop › feat/gift-cards                                                                                       │  "
+" ▾│ web-shop › feat/gift-cards                                                                                       │  "
 "  │   frees 2.1 GB: node_modules 1.9 GB, packages/web/.next 180 MB                                                   │  "
 "▌ │   claude running in it; it may still use these folders                                                           │  "
 "  │   .venv/src/foo is a git checkout; its changes go too                                                            │  "

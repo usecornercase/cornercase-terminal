@@ -4,7 +4,7 @@ expression: render(&with(remote)).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "  ╭─ Settings ───────────────────────────────────────────────────────────────────────────────────╮  "
-" P│  Worktrees   Agents   Remote                                                                 │  "
+" ▾│  Worktrees   Agents   Remote                                                                 │  "
 "  │  ⌕ search settings                                                                           │  "
 "▌ │ Browser                                                                                      │  "
 "  │   remote access             [ ] off                                                          │  "

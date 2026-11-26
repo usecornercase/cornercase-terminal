@@ -81,6 +81,7 @@ fn the_strict_check_knows_every_field_of_a_request() {
         ("move", json!({"item": {"tab": 9}, "before": 1, "into": 2, "ungroup": true})),
         ("move-pane", json!({"pane": 4, "target": 7, "place": "swap"})),
         ("collapse", json!({"item": {"group": 3}})),
+        ("expand", json!({"section": "agents"})),
         ("group-new", json!({"name": "work"})),
         ("group-style", json!({"group": 3, "icon": "★", "colour": 99})),
         ("group-delete", json!({"group": 3, "close_projects": true})),

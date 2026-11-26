@@ -14,6 +14,8 @@ refuses too (`survey` in the JSON): `cornercase keys --pane N 0` dismisses it.
 is back, it takes no input and `cornercase send` refuses it (`resuming` in the JSON).
 `(role coder)` marks a flow member and the role it plays (`role` in the JSON).
 `(collapsed)` is an agent whose children are hidden in the agents section (`collapsed` in the JSON).
+A last line like `section projects  collapsed` names each sidebar section that is collapsed
+(`collapsed_sections` in the JSON, there only while one is).
 `Opus 5.5 · compacted` is an agent whose conversation was just compacted: its context is empty
 until its next reply and comes back then (`compacted` in the JSON, there only while true).
 The JSON also names the conversation a pane's agent is in (`conversation`, the id `places` gives in

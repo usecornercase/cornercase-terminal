@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use super::{Fields, Item};
 use crate::git::worktree;
 use crate::project::split;
+use crate::state::Section;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Move {
@@ -24,9 +25,12 @@ impl Move {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Fold {
-    pub(crate) item: Item,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) item: Option<Item>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) section: Option<Section>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

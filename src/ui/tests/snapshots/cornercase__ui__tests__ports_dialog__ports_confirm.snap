@@ -4,7 +4,7 @@ expression: "snapshot(Ports { confirm: Some(confirm()), ..ports() }, BIG)"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                              "
 "  ╭─ Ports › feat/checkout ──────────────────────────────────────────────────────────────────────────────────────────╮  "
-" P│                                                                                                                  │  "
+" ▾│                                                                                                                  │  "
 "  │                                                                                                                  │  "
 "▌ │ Stop these 2 programs?                                                                                           │  "
 "  │ • node vite · pid 48390 · :5173 · agent claude · pane 9 · claude                                                 │  "

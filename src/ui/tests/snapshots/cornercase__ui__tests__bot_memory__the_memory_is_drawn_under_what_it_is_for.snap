@@ -4,7 +4,7 @@ expression: "render(&shown(memory(kept, true, None))).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "          ╭─ Memory › PRs ───────────────────────────────────────────────────────────────╮          "
-" Projects │ What PRs keeps from one conversation to the next, in memory.md. A new        │          "
+" ▾ Project│ What PRs keeps from one conversation to the next, in memory.md. A new        │          "
 "          │ conversation reads its first 8 KB, and the bot keeps it up to date itself.   │          "
 "▌ ~ (1)   │                                                                              │          "
 "          │  - prefers squash merges                                                     │          "

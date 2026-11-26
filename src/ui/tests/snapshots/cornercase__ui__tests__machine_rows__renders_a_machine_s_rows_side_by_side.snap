@@ -1,11 +1,10 @@
 ---
 source: src/ui/tests/machine_rows.rs
-assertion_line: 109
 expression: "rendered(Sidebar::SideBySide, None).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "                                                         │                                          "
-" Projects                      │ Workspaces              │                                          "
+" ▾ Projects                    │ ▾ Workspaces            │                                          "
 "                               │                         │                                          "
 "▌ web-shop (3)                 │  ▾ login                │                                          "
 "  blog (1)        ⠸ ☁ vps      │▌ ├ › nvim               │                                          "

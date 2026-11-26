@@ -1,6 +1,6 @@
 [2m [38;5;8m[48;5;236m ⌕ search projects, workspa…[39m [49m [38;5;239m│[39m   1 use serde::Deserialize;                                                  
                                [38;5;239m│[39m   2                                                                          
-[1m[38;5;8m Projects[0;2m              [38;5;6m Bots › [38;5;239m│[39m   3 #[derive(Debug, Deserialize)]                                            
+ [38;5;8m▾ [1mProjects[0;2m            [38;5;6m Bots › [38;5;239m│[39m   3 #[derive(Debug, Deserialize)]                                            
                                [38;5;239m│[39m   4 pub struct Address {                                                     
 [38;5;6m  [38;5;8m▾ [1m[38;5;12m● work[0;2m                     [38;5;239m│[39m   5     pub lines: Vec<String>,                                              
 [38;5;6m[48;5;236m▌ [39m  [1mweb-shop[0;2m[38;5;8m[48;5;236m (3)[39m       [0m[38;5;8m╭─[1m[39m Usage [0m[38;5;8m──────────────────────────────────────────────────────╮[2m[39m                       
@@ -12,7 +12,7 @@
                        [0m[38;5;8m│[39m agents started                7            31           215  [38;5;8m│[2m[39m                       
  [38;5;6m + New [39m               [0m[38;5;8m│[39m prompts                      38           404          3118  [38;5;8m│[2m[39m                       
 [38;5;239m ──────────────────────[0m[38;5;8m│[39m turns                        35           377          2904  [38;5;8m│[2m[39m                       
-[1m[38;5;8m Workspaces[0;2m            [0m[38;5;8m│[39m agent time               6h 12m       43h 33m          310h  [38;5;8m│[2m[39m                       
+ [38;5;8m▾ [1mWorkspaces[0;2m          [0m[38;5;8m│[39m agent time               6h 12m       43h 33m          310h  [38;5;8m│[2m[39m                       
                        [0m[38;5;8m│[39m most at once                  5             7             9  [38;5;8m│[2m[39m                       
 [38;5;6m  [38;5;8m▾ [1m[39mmain[0;2m               [0m[38;5;8m│[39m waited for you              22m        3h 40m           28h  [38;5;8m│[2m[39m                       
 [38;5;6m[48;5;236m▌ [38;5;239m├[39m [38;5;8m▸[39m nvim             [0m[38;5;8m│[39m tokens out                 410k          3.1M           24M  [38;5;8m│[2m[39m                       
