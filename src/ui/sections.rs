@@ -73,11 +73,12 @@ fn title_line(view: &View, width: u16, (title, folded): (&str, bool), tags: Opti
     };
     let room = width.saturating_sub(1);
     let badge = tags.attention.map(|status| status_icon(view.muted, status, view.spin));
-    let marks = Tags::fit(badge.into_iter().collect(), room.saturating_sub(MIN_NAME));
+    let marks = Tags::fit_whole(badge.into_iter().collect(), room);
     let left = room.saturating_sub(marks.reserved());
     let kept = title.chars().count().clamp(MIN_NAME, NAME_BESIDE_COUNT);
     let count = count_text(view.counts, tags.count, left.saturating_sub(kept));
-    let name = cut(title, left.saturating_sub(count.chars().count()));
+    let bare = marks.is_empty() && count.is_empty();
+    let name = cut(title, if bare { width } else { left.saturating_sub(count.chars().count()) });
     let used = name.chars().count() + count.chars().count();
     line.extend([Span::styled(name, bold), Span::styled(count, Style::default().fg(view.muted))]);
     marks.push_onto(&mut line, used, room);

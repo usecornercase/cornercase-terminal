@@ -720,12 +720,13 @@ export class Painter {
     const free = Math.max(0, cells - SECTION_LEAD);
     if (!tags) return [...lead, seg(cut(free), bold)];
     const room = Math.max(0, free - 1);
-    const marks = fitTags(tags.attention ? [statusIcon(tags.attention, spinAt(this.app))] : [], room - MIN_NAME);
+    const marks = fitTags(tags.attention ? [statusIcon(tags.attention, spinAt(this.app))] : [], room + 2);
     const left = room - marks.reserved;
     const wanted = ` (${tags.count})`;
     const kept = Math.min(Math.max([...text].length, MIN_NAME), WORKSPACES_TITLE.length);
     const count = this.app.config.counts && wanted.length + kept <= left ? wanted : '';
-    const name = cut(left - count.length);
+    const bare = !marks.segs.length && !count;
+    const name = cut(bare ? free : left - count.length);
     const line = [...lead, seg(name, bold), seg(count, DARK)];
     pushTags(line, marks, [...name].length + count.length, room);
     return line;

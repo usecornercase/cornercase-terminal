@@ -314,6 +314,12 @@ fn a_folded_title_adds_its_count_only_beside_its_whole_name_and_keeps_what_needs
     assert_eq!(title_text(&view, section), expected);
 }
 
+fn compact_title(view: &View, section: Section, cols: u16) -> String {
+    let title = section_title(&full_layout(Rect::new(0, 0, cols, 30), view.widths, screen_of(view)), section);
+    let t = render_sized(view, cols, 30);
+    row_text(&t, Rect { y: title.y + 1, height: 1, ..title })
+}
+
 #[rstest]
 #[case::no_room_beside_ten_cells(33, " ▸ documentatio… ! ")]
 #[case::room_beside_ten_cells(34, " ▸ documenta… (3) ! ")]
@@ -321,9 +327,67 @@ fn a_long_project_name_gives_up_cells_to_the_count_only_down_to_ten(#[case] cols
     let folded = shown(Sidebar::SideBySide, &[Section::Workspaces]);
     let projects = view(&["cornercase", "documentation-site"]).projects;
     let view = View { nav: Some(Nav::Workspaces), projects, ..folded };
-    let title =
-        section_title(&full_layout(Rect::new(0, 0, cols, 30), view.widths, screen_of(&view)), Section::Workspaces);
-    let t = render_sized(&view, cols, 30);
 
-    assert_eq!(row_text(&t, Rect { y: title.y + 1, height: 1, ..title }), expected);
+    assert_eq!(compact_title(&view, Section::Workspaces, cols), expected);
+}
+
+fn compact_menu(section: Section) -> View<'static> {
+    let nav = match section {
+        Section::Projects => Nav::Projects,
+        Section::Workspaces => Nav::Workspaces,
+        Section::Agents => Nav::Agents,
+    };
+    with_bots(View { nav: Some(nav), ..shown(Sidebar::SideBySide, &[section]) })
+}
+
+#[rstest]
+#[case::only_the_icon_fits(26, " ▸ ! ")]
+#[case::one_cell_short_of_a_name(28, " ▸   ! ")]
+#[case::the_name_cut_beside_the_icon(29, " ▸ P… ! ")]
+fn a_narrow_compact_menu_cuts_the_name_before_what_needs_you(#[case] cols: u16, #[case] expected: &str) {
+    assert_eq!(compact_title(&compact_menu(Section::Projects), Section::Projects, cols), expected);
+}
+
+#[rstest]
+#[case::projects(Section::Projects)]
+#[case::workspaces(Section::Workspaces)]
+#[case::agents(Section::Agents)]
+fn what_needs_you_shows_at_every_compact_width_with_a_cell_to_spare_after_it(#[case] section: Section) {
+    let view = compact_menu(section);
+
+    for cols in 18..=60 {
+        let title = compact_title(&view, section, cols);
+        assert_eq!(title.contains('!'), title.chars().count() >= 5, "{cols}: {title:?}");
+    }
+}
+
+#[rstest]
+#[case::projects(Section::Projects)]
+#[case::workspaces(Section::Workspaces)]
+#[case::agents(Section::Agents)]
+fn a_folded_title_with_nothing_waiting_is_never_cut_shorter_than_the_open_one(#[case] section: Section) {
+    for width in 16..=32 {
+        let widths = Widths { projects: width, workspaces: width, ..NARROW_COLUMN };
+        let open = with_bots(View { widths, ..shown(Sidebar::SideBySide, &[]) });
+        let quiet = vec![(section, SectionTags { count: 3, attention: None })];
+        let folded = with_bots(View { widths, section_tags: quiet, ..shown(Sidebar::SideBySide, &[section]) });
+        let open = title_text(&open, section).trim_end().replace('▾', "▸");
+
+        assert!(title_text(&folded, section).starts_with(&open), "{width}: {open:?}");
+    }
+}
+
+#[rstest]
+#[case::projects(Section::Projects)]
+#[case::workspaces(Section::Workspaces)]
+#[case::agents(Section::Agents)]
+fn a_folded_compact_title_with_nothing_waiting_is_never_cut_shorter_than_the_open_one(#[case] section: Section) {
+    let open = View { folded: Sections::default(), section_tags: Vec::new(), ..compact_menu(section) };
+    let quiet = vec![(section, SectionTags { count: 3, attention: None })];
+    let folded = View { section_tags: quiet, ..compact_menu(section) };
+
+    for cols in 18..=60 {
+        let open = compact_title(&open, section, cols).trim_end().replace('▾', "▸");
+        assert!(compact_title(&folded, section, cols).starts_with(&open), "{cols}: {open:?}");
+    }
 }

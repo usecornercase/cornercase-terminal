@@ -246,6 +246,10 @@ impl Tags {
         fitted
     }
 
+    pub(super) fn fit_whole(tags: Vec<Span<'static>>, room: usize) -> Self {
+        Self::fit(tags, room.saturating_add(2))
+    }
+
     pub(super) fn is_empty(&self) -> bool {
         self.spans.is_empty()
     }

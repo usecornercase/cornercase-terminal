@@ -146,6 +146,40 @@ for (const [section, name] of [
   });
 }
 
+for (const section of ['projects', 'workspaces'] as const) {
+  test(`a folded ${section} title with nothing waiting is never cut shorter than the open one`, () => {
+    const app = demo('side_by_side');
+
+    for (let width = 16; width <= 32; width++) {
+      app.widths = { ...app.widths, [section]: width };
+      app.render();
+      const open = titleRow(app, section).trimEnd().replace('▾', '▸');
+      app.toggleSection(section);
+      app.render();
+      assert.ok(titleRow(app, section).startsWith(open), `${width}: ${titleRow(app, section)} against ${open}`);
+      app.toggleSection(section);
+    }
+    app.destroy();
+  });
+}
+
+for (const nav of ['projects', 'workspaces', 'agents'] as const) {
+  test(`a narrow compact ${nav} menu keeps what needs you wherever it fits`, () => {
+    const app = demo('side_by_side', 60, 30);
+    app.sectionTags = () => ({ count: 3, attention: 'waiting' });
+    app.toggleSection(nav);
+
+    for (let cols = 18; cols <= 60; cols++) {
+      app.resize(cols, 30);
+      app.navTo(nav);
+      app.render();
+      const row = titleRow(app, nav);
+      assert.equal(row.includes('!'), sectionTitle(app.areas(), nav).w >= 5, `${cols}: ${row}`);
+    }
+    app.destroy();
+  });
+}
+
 test('the tree folds whole under the Projects title and has no Workspaces title', () => {
   const app = demo('tree');
 
