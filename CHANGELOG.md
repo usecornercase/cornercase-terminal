@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.14.3
+
+- **Watch a tab from another screen without resizing it.** `cornercase view --no-claim` opens a view that shows a tab, and streams it at its own size with `surface --view`, but never resizes its terminals: they keep the size of the window, or of the view that took the tab last, so a phone looking at a tab no longer shrinks the terminal at the computer. The tab still counts as seen, so an agent there loses its `✓` and does not notify. `view-set --claim` makes such a view size its tab after all, and `view-set --no-claim` gives the tab back.
+- **Take only the `✓` off.** `cornercase mark --seen` takes off the done mark of an agent that finished, as looking at its tab does, and leaves a blue `●` (pending review) as it is.
+- **For programs**: `no_claim` in the `view` and `view-set` requests, `claims` in a view's lines, `seen` in `mark`, and the features `view-no-claim` and `mark-seen` in `cornercase contract`.
+
 ## 0.14.2
 
 - **Read what a waiting agent asks, as data.** `cornercase read --pending --pane 7` prints what Claude Code waits for you to answer, from its own record instead of its screen: each question with its numbered options, or the tool and the command of a permission. `--json` gives it as data for a phone app, a board or a script, with each option's label and description apart and whether several can be chosen, and `null` when nothing is pending. Repeat `--pane` or `--tab` to read several agents at once. Other agents answer that their records do not say it.
