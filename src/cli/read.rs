@@ -55,6 +55,9 @@ fn several(read: &ReadArgs, targets: &[LastMessage]) -> Result<bool> {
 }
 
 fn targets(read: &ReadArgs) -> Result<Vec<LastMessage>> {
+    if read.messages && read.panes.len() + read.tabs.len() > 1 {
+        return Err(Error::WrongUsage("--messages reads one pane or tab".into()));
+    }
     if !read.last_message && !read.pending && read.panes.len() + read.tabs.len() > 1 {
         return Err(Error::WrongUsage("reading several panes needs --last-message or --pending".into()));
     }
