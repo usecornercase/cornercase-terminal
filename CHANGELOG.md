@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.14.6
+
+- **Know when an agent's last message changes.** `cornercase events` prints `pane 7  claude  last message changed` when the agent in a pane writes a new message or adds to its newest one, at most once every half second per pane, so a phone app, a chat or a script that shows an agent's answer reads it once with `cornercase read --last-message` instead of asking again and again. `--pane` keeps only those panes' lines, and nothing is printed while the agent writes nothing new.
+- **For programs**: the `last-message` event (`agent` and the pane's ids, no text) and the feature `last-message-events` in `cornercase contract`.
+
 ## 0.14.5
 
 - **Read an agent's conversation.** `cornercase read --messages --pane 7` prints what you and the agent in the pane wrote in its current conversation, oldest first, from its own record instead of its screen: each message under its id, its role (`user` or `assistant`) and when it was written. Tool calls, their results and thinking are left out, and each text comes whole. It shows the newest 20; `--last 5` the newest five, `--before 41` the ones just before message 41, to page back, and `--after 42` everything written after message 42. `--json` gives it as data for a phone app, a chat or a script.
