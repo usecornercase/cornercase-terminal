@@ -36,6 +36,11 @@ mod describing {
     }
 
     #[test]
+    fn reading_what_a_waiting_agent_asks_is_a_feature() {
+        assert!(FEATURES.contains(&"pending-question"));
+    }
+
+    #[test]
     fn cli_endpoint_is_a_feature() {
         assert!(FEATURES.contains(&"cli-endpoint"));
     }

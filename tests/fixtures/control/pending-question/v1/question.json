@@ -1,0 +1,30 @@
+{
+  "pane": 7,
+  "agent": "claude",
+  "source": "question",
+  "tool": null,
+  "command": null,
+  "questions": [
+    {
+      "header": "Database",
+      "question": "Which database should the service use?",
+      "multi_select": false,
+      "free_text": true,
+      "options": [
+        {
+          "number": 1,
+          "label": "Postgres",
+          "description": "What the other services use",
+          "selected": null
+        },
+        {
+          "number": 2,
+          "label": "SQLite",
+          "description": "One file, no server",
+          "selected": null
+        }
+      ]
+    }
+  ],
+  "open": null
+}

@@ -252,6 +252,10 @@ pub(crate) fn use_section_folds() -> Result<()> {
     require("section-folds", "cannot collapse or expand a sidebar section")
 }
 
+pub(crate) fn use_pending_question() -> Result<()> {
+    require("pending-question", "cannot read what a waiting agent asks")
+}
+
 pub(crate) fn use_accounts() -> Result<()> {
     require("accounts", "has no account profiles")
 }

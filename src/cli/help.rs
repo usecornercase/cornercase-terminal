@@ -30,7 +30,7 @@ shows. Where a command takes --workspace ID, --worktree BRANCH names the workspa
 instead, in that same project. Only `focus`, `go` and `--focus` change what the window shows, or with --view ID what that view shows (see `cornercase view`). The
 commands exit with 1 on errors and timeouts, 2 on wrong usage, a branch no workspace is on
 included, or one several are on (both list the workspaces to pick from), and 3 when a command that
-asks several sources (usage, issue list, files list, read --last-message with several panes) printed its whole
+asks several sources (usage, issue list, files list, read --last-message or read --pending with several panes) printed its whole
 answer but some of them failed, input --follow could not send some lines, or a line of requests --follow failed: each failed entry says
 why, in its error with --json.
 A command given --boot (", boot_commands!(), ") exits with 4 when it names another run
@@ -140,6 +140,14 @@ and it exits 3 after reading them all if any failed; with no server it prints no
 One target keeps the output above. Reading the screen takes only one target. With --boot, a server that
 restarted since ends it with 4 before anything is printed, with several targets too.
 
+With --pending it prints what the agent in the pane waits for you to answer, from its own record:
+each question with its numbered options, or the tool and command of a permission. --json gives it as
+data (questions, options with label and description, multi_select, free_text), and null when nothing
+is pending. selected and open are null: only the screen knows the chosen option and the open
+question. Only Claude Code's records say it; another agent or a shell fails with the reason. Repeat
+--pane or --tab as with --last-message; a target with nothing pending is {\"pane\": N, \"source\": null}.
+Answer with `cornercase keys`.
+
 Claude Code's feedback survey (`How is Claude doing this session? (optional)`, then
 `1: Bad  2: Fine  3: Good  0: Dismiss`) may show above its input box: it is Claude Code asking you,
 not the agent's output. `cornercase keys --pane N 0` dismisses it.
@@ -150,7 +158,9 @@ Examples:
   cornercase read --pane 12 --last-message
   cornercase --remote vps read --pane 9 --last-message --boot 4242-1700000000
   cornercase read --tab 4 --last-message --json
-  cornercase read --last-message --pane 12 --pane 15 --json";
+  cornercase read --last-message --pane 12 --pane 15 --json
+  cornercase read --pane 12 --pending --json
+  cornercase read --pending --pane 12 --pane 15 --json";
 pub(super) const WAIT_HELP: &str =
     "By default it waits until the agent stops working: idle, done, failed, pending (marked for review) or
 waiting. A Claude Code agent whose turn is over while a background shell it started still runs

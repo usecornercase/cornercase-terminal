@@ -6,12 +6,14 @@ use crate::agents::breakdown::Target;
 use crate::agents::{self, Known, claude, codex, copilot, cursor, gemini, grok, opencode, vibe};
 use crate::error::Result;
 
+pub(in crate::agents) mod awaited;
 pub(in crate::agents) mod counting;
 pub(in crate::agents) mod discovery;
 pub(in crate::agents) mod jsonl;
 pub(in crate::agents) mod message;
 mod pointer;
 
+pub(crate) use awaited::{Awaited, Choice, Question};
 pub(crate) use message::{Role, Said, Spoken};
 pub(crate) use pointer::Pointer;
 
@@ -86,6 +88,19 @@ impl Record {
             Self::Cursor(path) => cursor::store::said_all(path, each),
             Self::Copilot(path) => copilot::message::said_all(path, each),
             Self::Vibe(path) => vibe::message::said_all(path, each),
+        }
+    }
+
+    pub(crate) fn awaited(&self) -> Result<Option<Awaited>> {
+        match self {
+            Self::Claude(path) => claude::awaited::awaited(path),
+            Self::Codex(_)
+            | Self::Gemini(_)
+            | Self::Opencode { .. }
+            | Self::Grok(_)
+            | Self::Cursor(_)
+            | Self::Copilot(_)
+            | Self::Vibe(_) => Ok(None),
         }
     }
 

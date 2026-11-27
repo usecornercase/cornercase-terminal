@@ -433,7 +433,7 @@ fn several_agents_messages_are_read_in_order_and_failures_leave_the_others_visib
     assert!(refused(&screens, 2, "needs --last-message"), "{screens:?}");
 }
 
-fn agent_app() -> Harness {
+pub(super) fn agent_app() -> Harness {
     let session = agent_session();
     let mut app = Harness::open(Arc::clone(&session), ROWS, COLS);
     app.wait_for("app starts with one terminal", |s| s.contains(&first_entry()));

@@ -1,0 +1,9 @@
+{
+  "pane": 7,
+  "agent": "claude",
+  "source": "permission",
+  "tool": "Bash",
+  "command": "cargo test --locked",
+  "questions": [],
+  "open": null
+}

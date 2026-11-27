@@ -1,0 +1,36 @@
+{
+  "pane": 7,
+  "agent": "claude",
+  "source": "question",
+  "tool": null,
+  "command": null,
+  "questions": [
+    {
+      "header": "Checks",
+      "question": "Which checks should run on every push?",
+      "multi_select": true,
+      "free_text": true,
+      "options": [
+        {
+          "number": 1,
+          "label": "Lint",
+          "description": "clippy and fmt",
+          "selected": null
+        },
+        {
+          "number": 2,
+          "label": "Tests",
+          "description": "The whole suite",
+          "selected": null
+        },
+        {
+          "number": 3,
+          "label": "Audit",
+          "description": "Known advisories",
+          "selected": null
+        }
+      ]
+    }
+  ],
+  "open": null
+}
