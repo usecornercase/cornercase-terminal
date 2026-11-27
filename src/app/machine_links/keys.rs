@@ -35,7 +35,7 @@ impl App {
         true
     }
 
-    fn live_pane(&self) -> Option<(&RemoteScreen, u64)> {
+    pub(super) fn live_pane(&self) -> Option<(&RemoteScreen, u64)> {
         let (_, screen) = self.watched().filter(|watched| !watched.moving()).and_then(Watched::live)?;
         Some((screen, screen.panes.iter().find(|pane| pane.active)?.pane))
     }

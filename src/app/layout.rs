@@ -12,6 +12,12 @@ pub(super) struct Focus {
     pub(super) tab: Option<u64>,
 }
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub(super) struct BarShown {
+    pub(super) workspace: Option<(Option<u64>, u64)>,
+    pub(super) tab: Option<u64>,
+}
+
 #[derive(Default)]
 pub(super) struct Scrolls {
     projects: usize,
@@ -20,6 +26,8 @@ pub(super) struct Scrolls {
     bots: usize,
     tab_bar: usize,
     followed: Focus,
+    followed_bar: BarShown,
+    followed_lead: Vec<u16>,
     followed_pane: Option<u64>,
     pane_followed: bool,
     again: bool,
@@ -191,6 +199,7 @@ impl App {
             || areas.tab_bar.is_empty() != self.screen.drawn.tab_bar.is_empty();
         self.screen.drawn = areas;
         self.follow_pane();
+        self.follow_bar(&areas, relayout);
         let focus = self.focus();
         let before = std::mem::replace(&mut self.scroll.followed, focus);
         if focus == before && !relayout {
@@ -199,7 +208,6 @@ impl App {
         if before.project.is_some() && (focus.project, focus.workspace) != (before.project, before.workspace) {
             self.unfold_focus();
         }
-        self.reveal_in_tab_bar(&areas, focus.workspace != before.workspace);
         if areas.tree {
             self.reveal_in_tree(areas.list);
             return;
@@ -208,6 +216,17 @@ impl App {
             self.reveal_project_row(&areas);
         }
         self.reveal_workspace_rows(&areas);
+    }
+
+    fn follow_bar(&mut self, areas: &ui::Areas, relayout: bool) {
+        let now = self.bar_shown();
+        let before = std::mem::replace(&mut self.scroll.followed_bar, now);
+        let lead = self.bar_lead();
+        let shifted = lead != self.scroll.followed_lead;
+        self.scroll.followed_lead = lead;
+        if now != before || shifted || relayout {
+            self.reveal_in_tab_bar(areas, now.workspace != before.workspace);
+        }
     }
 
     fn reveal_project_row(&mut self, areas: &ui::Areas) {

@@ -37,7 +37,7 @@ impl RemoteAt {
 }
 
 #[derive(Clone, Copy)]
-enum Button {
+pub(super) enum Button {
     Close,
     Menu,
     NewTab,
@@ -124,7 +124,12 @@ impl App {
         matches!(hit, WorkspaceHit::NewTab(_)) || self.press_remote_button(at, Some(Button::Menu), (pos, false))
     }
 
-    fn press_remote_button(&mut self, at: RemoteAt, button: Option<Button>, (pos, compact): (Position, bool)) -> bool {
+    pub(super) fn press_remote_button(
+        &mut self,
+        at: RemoteAt,
+        button: Option<Button>,
+        (pos, compact): (Position, bool),
+    ) -> bool {
         if self.waits_there(at) {
             return true;
         }

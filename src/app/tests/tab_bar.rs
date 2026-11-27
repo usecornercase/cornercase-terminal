@@ -127,6 +127,22 @@ fn the_active_tab_is_scrolled_into_view() {
 }
 
 #[test]
+fn the_active_tab_comes_back_into_view_when_a_tab_before_it_grows() {
+    let (mut app, _rx, _dirs) = on_top(12);
+    app.projects[0].workspaces[0].tabs[10].name = Some("a much longer tab name".into());
+    drawn_in(&mut app, AREA);
+    assert!(!strip(&app).item(11).is_empty());
+}
+
+#[test]
+fn the_wheel_s_offset_holds_while_no_tab_up_to_the_active_one_changes() {
+    let (mut app, _rx, _dirs) = on_top(12);
+    app.scroll.set(List::TabBar, 0);
+    drawn_in(&mut app, AREA);
+    assert_eq!(app.scroll.of(List::TabBar), 0);
+}
+
+#[test]
 fn a_shell_tab_has_no_details() {
     let (app, _rx, _dirs) = on_top(1);
     assert_eq!(app.tab_bar_view().details, ui::Details::default());

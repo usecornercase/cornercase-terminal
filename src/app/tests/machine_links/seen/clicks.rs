@@ -188,3 +188,54 @@ fn a_local_row_clicked_takes_the_selection_back() {
 
     assert_eq!((picked(&rig.app), marked(&rig.app).0), (None, 0));
 }
+
+mod the_tab_bar {
+    use super::*;
+    use crate::app::machine_links::RemoteItem;
+    use crate::config;
+
+    fn on_top(rig: &mut Rig) {
+        rig.app.config.tabs = config::Tabs::Top.id().into();
+        render(&mut rig.app, AREA);
+    }
+
+    fn tab_ids(app: &App) -> Vec<u64> {
+        app.projects[0].workspaces[0].tabs.iter().map(|tab| tab.id).collect()
+    }
+
+    #[test]
+    fn goes_back_to_this_computer_s_tabs() {
+        let Seeing { mut rig, .. } = seeing_two();
+        on_top(&mut rig);
+        let w = theirs_at(&rig.app);
+        click_row(&mut rig.app, WorkspaceRow::Workspace(w));
+        render(&mut rig.app, AREA);
+        assert_eq!(rig.app.tab_bar_view().machine.map(|machine| machine.name), Some("vps".into()));
+
+        click_row(&mut rig.app, WorkspaceRow::Workspace(0));
+        render(&mut rig.app, AREA);
+
+        let bar = rig.app.tab_bar_view();
+        assert_eq!((bar.machine, bar.tabs.len(), rig.app.scroll.of(List::TabBar)), (None, 1, 0));
+    }
+
+    #[test]
+    fn never_moves_a_tab_of_ours_into_a_machine_s_strip() {
+        let Seeing { mut rig, .. } = seeing_two();
+        for _ in 0..2 {
+            rig.app.add_tab(workspace_at(&rig.app, 0, 0), AREA).expect("add a tab");
+        }
+        on_top(&mut rig);
+        let before = tab_ids(&rig.app);
+        let from = rig.app.tab_strip(&rig.app.layout(AREA)).item(0).as_position();
+        press(&mut rig.app, from);
+
+        assert!(rig.app.select_remote("vps", RemoteItem::Workspace(10)));
+        render(&mut rig.app, AREA);
+        let to = rig.app.tab_strip(&rig.app.layout(AREA)).item(1).as_position();
+        mouse(&mut rig.app, MouseEventKind::Drag(MouseButton::Left), to);
+        mouse(&mut rig.app, MouseEventKind::Up(MouseButton::Left), to);
+
+        assert_eq!(tab_ids(&rig.app), before);
+    }
+}

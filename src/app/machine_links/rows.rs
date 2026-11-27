@@ -60,7 +60,7 @@ impl App {
         unpaired(remote).map(|r| workspaces_of(r).map(|(r, workspace)| self.remote_workspace(r, workspace)).collect())
     }
 
-    fn remote_tab(&self, link: u64, tab: &TabInfo) -> ui::TabEntry {
+    pub(super) fn remote_tab(&self, link: u64, tab: &TabInfo) -> ui::TabEntry {
         let known = |pane: &&PaneInfo| pane.model.is_some() || pane.compacted;
         let shown = tab.panes.iter().find(|pane| pane.active).filter(known).or_else(|| tab.panes.iter().find(known));
         let memory = tab.panes.iter().filter_map(|pane| pane.memory).reduce(u64::saturating_add);

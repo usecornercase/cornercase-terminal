@@ -6,6 +6,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
+use super::workspaces::{CLOSING_LABEL, MachineTag, dim_row, seen_note, spin};
 use super::{
     DetailLine, Details, Drag, ICON_WIDTH, ROW_MENU_ICON, TabEntry, View, button_style, centered, draw_band,
     draw_details, hovered,
@@ -26,6 +27,7 @@ pub(crate) struct TabBar {
     pub(crate) active: Option<usize>,
     pub(crate) details: Details,
     pub(crate) scroll: usize,
+    pub(crate) machine: Option<MachineTag>,
 }
 
 impl TabBar {
@@ -41,6 +43,9 @@ pub(crate) fn width(tab: &TabEntry) -> u16 {
 }
 
 fn others(tab: &TabEntry) -> Option<String> {
+    if tab.closing {
+        return Some(CLOSING_LABEL.to_string());
+    }
     (tab.others > 0).then(|| format!("+{}", tab.others))
 }
 
@@ -239,20 +244,7 @@ pub(crate) fn draw(f: &mut Frame, view: &View, bar: &TabBar, r: Rect) {
         Some(Drag::Bar(t, landing)) => Some((t, landing)),
         _ => None,
     };
-    for i in 0..bar.tabs.len() {
-        let item = strip.item(i);
-        if item.is_empty() {
-            continue;
-        }
-        let active = bar.active == Some(i);
-        let lifted = dragged.is_some_and(|(t, _)| t == i);
-        let marked = active || lifted;
-        let bg = view.row_background(item, marked);
-        draw_tab(f, view, &bar.tabs[i], (item, bg), marked);
-        if view.row_hovered(item) {
-            draw_tab_buttons(f, view, (strip.menu(i), strip.close(i)), bg);
-        }
-    }
+    draw_tabs(f, view, bar, &strip, dragged.map(|(t, _)| t));
     let (before, after) = strip.hidden();
     draw_button(f, view, strip.left(), LEFT_LABEL, before);
     draw_button(f, view, strip.right(), RIGHT_LABEL, after);
@@ -269,17 +261,46 @@ pub(crate) fn draw(f: &mut Frame, view: &View, bar: &TabBar, r: Rect) {
             f.buffer_mut().set_string(line.x, line.y, "│", style);
         }
     }
-    if bar.details.lines() > 1 {
-        let line = DetailLine { row: r, buttons: Rect::default(), details: &bar.details, agent: None, indent: 1 };
-        draw_details(f, view.muted, line);
+    draw_bar_details(f, view, bar, r);
+    dim_row(f, r, bar.machine.as_ref());
+}
+
+fn draw_tabs(f: &mut Frame, view: &View, bar: &TabBar, strip: &Strip, lifted: Option<usize>) {
+    let frame = spin(bar.machine.as_ref(), view.spin);
+    for (i, tab) in bar.tabs.iter().enumerate() {
+        let item = strip.item(i);
+        if item.is_empty() {
+            continue;
+        }
+        let marked = bar.active == Some(i) || lifted == Some(i);
+        let bg = view.row_background(item, marked);
+        draw_tab(f, view, tab, (item, bg, frame), marked);
+        if view.row_hovered(item) && !tab.closing {
+            draw_tab_buttons(f, view, (strip.menu(i), strip.close(i)), bg);
+        }
     }
 }
 
-fn draw_tab(f: &mut Frame, view: &View, tab: &TabEntry, (r, bg): (Rect, Style), marked: bool) {
-    let style = if marked { bg.fg(Color::Reset).add_modifier(Modifier::BOLD) } else { bg.fg(view.soft) };
+fn draw_bar_details(f: &mut Frame, view: &View, bar: &TabBar, r: Rect) {
+    let shown = bar.active.and_then(|i| bar.tabs.get(i));
+    let note = shown.and_then(|tab| seen_note(tab.status, bar.machine.as_ref()));
+    if note.is_none() && bar.details.lines() <= 1 {
+        return;
+    }
+    let details = if note.is_some() { &Details::default() } else { &bar.details };
+    let line = DetailLine { row: r, buttons: Rect::default(), details, agent: note.as_deref(), indent: 1 };
+    draw_details(f, view.muted, line);
+}
+
+fn draw_tab(f: &mut Frame, view: &View, tab: &TabEntry, (r, bg, frame): (Rect, Style, Option<u8>), marked: bool) {
+    let style = match (tab.closing, marked) {
+        (true, _) => bg.fg(view.muted),
+        (false, true) => bg.fg(Color::Reset).add_modifier(Modifier::BOLD),
+        (false, false) => bg.fg(view.soft),
+    };
     let mut line = vec![Span::styled(" ", bg)];
     let mut used = 1;
-    line.extend(tab.prefix(view.muted, bg, view.spin));
+    line.extend(tab.prefix(view.muted, bg, frame));
     used += ICON_WIDTH;
     let others = others(tab);
     let reserved = others.as_ref().map_or(0, |n| 1 + n.chars().count());

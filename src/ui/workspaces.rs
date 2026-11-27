@@ -41,7 +41,7 @@ const BEHIND_ICON: &str = "↓";
 const SHARED_ICON: &str = "⇄";
 
 const REMOVING_LABEL: &str = "removing…";
-const CLOSING_LABEL: &str = "closing…";
+pub(super) const CLOSING_LABEL: &str = "closing…";
 const SETTING_UP_LABEL: &str = "setting up…";
 
 const CONTEXT_SEPARATOR: &str = " · ";
