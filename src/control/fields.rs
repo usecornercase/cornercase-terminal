@@ -41,6 +41,7 @@ impl Command {
             Self::LastMessage(last) => {
                 fields.maybe("pane", last.pane).maybe("tab", last.tab);
             }
+            Self::PendingQuestion(pending) => pending.fields(fields),
             Self::Wait(wait) => wait.fields(fields, false),
             Self::WaitSeveral(wait) => wait.fields(fields, true),
             Self::Mark(mark) => mark.fields(fields),

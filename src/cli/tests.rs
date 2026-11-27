@@ -233,6 +233,8 @@ mod parsing {
     #[case::any_and_all(&["wait", "--any", "--all", "--pane", "1", "--pane", "2"])]
     #[case::no_lines(&["read", "--lines", "0"])]
     #[case::lines_of_the_last_message(&["read", "--last-message", "--lines", "5"])]
+    #[case::lines_of_what_is_pending(&["read", "--pending", "--lines", "5"])]
+    #[case::the_last_message_and_what_is_pending(&["read", "--pending", "--last-message"])]
     #[case::an_unknown_key(&["keys", "hello"])]
     #[case::two_prompts(&["start", "--prompt", "a", "--prompt-file", "b"])]
     #[case::a_worktree_and_a_workspace(&["start", "--worktree", "x", "--workspace", "1"])]
@@ -370,6 +372,14 @@ mod parsing {
 
         let Some(Command::Control(Control::Read(read))) = cli.command else { panic!("not read") };
         assert_eq!((read.tabs, read.last_message, read.print.json), (vec![4], true, true));
+    }
+
+    #[test]
+    fn what_is_pending_is_read_from_a_pane() {
+        let cli = parse(&["read", "--pane", "7", "--pending", "--json"]).expect("parse");
+
+        let Some(Command::Control(Control::Read(read))) = cli.command else { panic!("not read") };
+        assert_eq!((read.panes, read.pending, read.print.json), (vec![7], true, true));
     }
 
     #[test]

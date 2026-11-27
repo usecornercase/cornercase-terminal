@@ -2,9 +2,14 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.14.2
+## 0.14.3
 
 - **A machine's tabs in the tabs above the pane.** With **settings → UI → tabs** set to *top*, the bar above the pane shows the tabs of the machine's workspace you are on, instead of this computer's: click one to show it, **`+`** opens a tab there, and each tab has its **`⋯`** (or a right-click) to rename or close it and its **`×`**, as the machine's rows in the sidebar. A tab with an agent asks before closing, a closing tab reads `closing…`, and while the machine is down the bar is dimmed and says why nothing was sent. The line under the tabs shows the model and context of the pane you are in there.
+
+## 0.14.2
+
+- **Read what a waiting agent asks, as data.** `cornercase read --pending --pane 7` prints what Claude Code waits for you to answer, from its own record instead of its screen: each question with its numbered options, or the tool and the command of a permission. `--json` gives it as data for a phone app, a board or a script, with each option's label and description apart and whether several can be chosen, and `null` when nothing is pending. Repeat `--pane` or `--tab` to read several agents at once. Other agents answer that their records do not say it.
+- **For programs**: the request `pending-question` and the feature `pending-question` in `cornercase contract`.
 
 ## 0.14.1
 

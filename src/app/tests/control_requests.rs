@@ -681,6 +681,8 @@ mod pane_moves;
 mod parents;
 #[cfg(unix)]
 mod pasting;
+#[cfg(unix)]
+mod pending;
 mod personas;
 #[cfg(unix)]
 mod placed;

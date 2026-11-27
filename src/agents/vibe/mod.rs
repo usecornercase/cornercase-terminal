@@ -10,6 +10,7 @@ pub(in crate::agents) const NAME: &str = "vibe";
 pub(in crate::agents) const TITLE: &str = "Vibe CLI";
 pub(in crate::agents) const COMMAND: &str = "vibe";
 pub(in crate::agents) const UNFOUND: &str = "Vibe CLI has no conversation for this pane yet";
+pub(in crate::agents) const TELLS_AWAITED: bool = false;
 pub(in crate::agents) const ACCOUNT: Option<crate::agents::AccountHome> = None;
 pub(in crate::agents) const MODEL_FLAG: Option<&str> = None;
 pub(in crate::agents) const MODEL_ALIAS: Option<&str> = None;

@@ -27,7 +27,18 @@ fn not_reading(pane: u64) -> String {
     )
 }
 
-fn unfound(pane: u64, agent: agents::Known) -> String {
+#[derive(Clone, Copy)]
+pub(super) struct Reading {
+    pub(super) client: u64,
+    pub(super) pane: u64,
+    pub(super) agent: agents::Known,
+}
+
+pub(super) fn cannot_read(pane: u64, runs: &str, why: &str) -> Refusal {
+    format!("pane {pane} {runs}, and {why}; `cornercase read --pane {pane}` prints its screen").into()
+}
+
+pub(super) fn unfound(pane: u64, agent: agents::Known) -> String {
     let why = agent.unfound();
     let agent = agent.name();
     format!(
@@ -205,27 +216,32 @@ impl App {
 
     pub(super) fn last_message_request(&mut self, client: u64, asker: Asker, last: &control::LastMessage) -> Handled {
         let pane = self.target(asker, last.pane, last.tab)?;
-        let term = self.projects.pane_by(pane).ok_or_else(|| none("pane", pane))?;
-        let running = term.agent.agent().map(str::to_string);
-        let running = running.or_else(|| agents::detect(&self.config, &term.foreground_args()));
-        let Some(agent) = running.as_deref().and_then(agents::Known::of) else {
-            let runs = running.map_or_else(|| "runs no agent".to_string(), |agent| format!("runs {agent}"));
-            return Err(format!(
-                "pane {pane} {runs}, and {CANNOT_READ}; `cornercase read --pane {pane}` prints its screen"
-            )
-            .into());
-        };
+        let (term, agent) = self.reading_agent(pane, CANNOT_READ)?;
         let record = term.context.record_for(agent).ok_or_else(|| unfound(pane, agent))?;
-        let key = self.clients.requests.key();
-        let job = Job::new(Level::Debug, "control", "last message").with("pane", pane).with("agent", agent.name());
-        self.spawn_job(
-            job,
+        let reading = Reading { client, pane, agent };
+        self.read_record(
+            reading,
+            "last message",
             move || record.last_message(),
-            move |result, job| {
-                job.note("found", result.as_ref().is_ok_and(Option::is_some));
-                Some(AppEvent::LastMessage { request: key, result })
-            },
+            |request, result| AppEvent::LastMessage { request, result },
         );
+        Ok(None)
+    }
+
+    pub(super) fn read_record<T: Send + 'static>(
+        &mut self,
+        reading: Reading,
+        what: &'static str,
+        read: impl FnOnce() -> error::Result<Option<T>> + Send + 'static,
+        event: fn(u64, error::Result<Option<T>>) -> AppEvent,
+    ) {
+        let Reading { client, pane, agent } = reading;
+        let key = self.clients.requests.key();
+        let job = Job::new(Level::Debug, "control", what).with("pane", pane).with("agent", agent.name());
+        self.spawn_job(job, read, move |result, job| {
+            job.note("found", result.as_ref().is_ok_and(Option::is_some));
+            Some(event(key, result))
+        });
         let done = Done { agent: Some(agent.name().to_string()), ..pane_ids(pane) };
         self.clients.requests.pending.push(Pending {
             client: Some(client),
@@ -234,7 +250,17 @@ impl App {
             done,
             stage: Stage::Reading,
         });
-        Ok(None)
+    }
+
+    pub(super) fn reading_agent(&self, pane: u64, why: &str) -> Result<(&term::Term, agents::Known), Refusal> {
+        let term = self.projects.pane_by(pane).ok_or_else(|| none("pane", pane))?;
+        let running = term.agent.agent().map(str::to_string);
+        let running = running.or_else(|| agents::detect(&self.config, &term.foreground_args()));
+        let Some(agent) = running.as_deref().and_then(agents::Known::of) else {
+            let runs = running.map_or_else(|| "runs no agent".to_string(), |agent| format!("runs {agent}"));
+            return Err(cannot_read(pane, &runs, why));
+        };
+        Ok((term, agent))
     }
 
     pub(in crate::app) fn message_read(&mut self, key: u64, result: error::Result<Option<context::Said>>) {

@@ -52,6 +52,7 @@ const BOT: crate::agents::headless::BotSupport = crate::agents::headless::BotSup
 };
 pub(in crate::agents) const BREAKDOWN: Option<crate::agents::breakdown::Spec> = None;
 pub(in crate::agents) const UNFOUND: &str = "Cursor CLI has no conversation for this pane yet";
+pub(in crate::agents) const TELLS_AWAITED: bool = false;
 
 #[expect(clippy::unnecessary_wraps, reason = "Known dispatch shares an optional resume signature across agents")]
 pub(in crate::agents) fn resume(args: Vec<String>, conversation: String) -> Option<Vec<String>> {

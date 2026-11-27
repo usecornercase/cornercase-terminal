@@ -78,6 +78,7 @@ pub(in crate::agents) const USAGE: Option<crate::agents::usage::Spec> = Some(cra
 });
 pub(in crate::agents) const UNFOUND: &str =
     "Codex writes its rollout from its first turn on, and two Codex in one folder hide each other";
+pub(in crate::agents) const TELLS_AWAITED: bool = false;
 
 pub(in crate::agents) fn login(text: &str) -> Login {
     let line =

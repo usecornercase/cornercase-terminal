@@ -77,3 +77,22 @@ mod a_target_that_fails {
         assert!(matches!(kept, Err(Error::NoServer | Error::ServerGone | Error::OldServer(_))));
     }
 }
+
+mod pending {
+    use super::*;
+
+    #[rstest]
+    #[case::panes(&["--pending", "--pane", "4", "--pane", "5"], 2)]
+    #[case::tabs(&["--pending", "--tab", "4", "--pane", "5"], 2)]
+    #[case::one(&["--pending", "--pane", "4"], 1)]
+    fn reads_several_targets(#[case] args: &[&str], #[case] count: usize) {
+        assert_eq!(targets(&read(args)).expect("targets").len(), count);
+    }
+
+    #[rstest]
+    #[case::pane(LastMessage { pane: Some(6), tab: None }, json!({ "pane": 6, "source": null }))]
+    #[case::tab(LastMessage { pane: None, tab: Some(8) }, json!({ "tab": 8, "source": null }))]
+    fn nothing_pending_keeps_its_id(#[case] target: LastMessage, #[case] expected: Value) {
+        assert_eq!(nothing(&target), expected);
+    }
+}
