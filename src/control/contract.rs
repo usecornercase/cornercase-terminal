@@ -117,6 +117,8 @@ pub(crate) const FEATURES: &[&str] = &[
     "queue-when-free",
     "section-folds",
     "pending-question",
+    "view-no-claim",
+    "mark-seen",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

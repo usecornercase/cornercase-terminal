@@ -33,6 +33,7 @@ fn log_opened(view: &View) {
         rows = view.size.map_or(0, |s| s.1),
         active = view.active,
         visible = view.visible,
+        claims = view.claims,
         bot = view.bot.as_deref().unwrap_or("")
     );
 }
@@ -44,6 +45,7 @@ fn log_changed(id: u64, set: &SetView, bot: Option<&str>) {
         view = id,
         active = set.active.unwrap_or(false),
         claim = set.claim,
+        no_claim = set.no_claim,
         visible = set.visible.unwrap_or(true),
         bot = bot.unwrap_or("")
     );
@@ -55,6 +57,7 @@ pub(super) struct View {
     pub(super) size: Option<(u16, u16)>,
     pub(super) active: bool,
     visible: bool,
+    claims: bool,
     bot: Option<String>,
     pub(super) shown: Shown,
     pub(super) projection: u64,
@@ -89,6 +92,22 @@ impl View {
         let back = visible && !self.visible;
         self.visible = visible;
         back
+    }
+
+    fn apply(&mut self, size: Option<(u16, u16)>, active: bool, claiming: Option<bool>) {
+        if (size, active) != (self.size, self.active) {
+            self.projection += 1;
+        }
+        (self.size, self.active) = (size, active);
+        self.set_claims(claiming);
+    }
+
+    fn set_claims(&mut self, claiming: Option<bool>) {
+        match claiming {
+            Some(false) => (self.claims, self.claimed) = (false, 0),
+            Some(true) => self.claims = true,
+            None => {}
+        }
     }
 }
 
@@ -158,6 +177,9 @@ impl Views {
     }
 
     fn claim(&mut self, id: u64) {
+        if !self.get(id).is_some_and(|view| view.claims) {
+            return;
+        }
         self.seq += 1;
         let seq = self.seq;
         if let Some(view) = self.get_mut(id) {
@@ -251,6 +273,7 @@ impl App {
             shown: self.tab_ids(&view.shown),
             controls,
             visible: view.visible,
+            claims: view.claims,
             bot: view.bot.clone(),
         }
     }
@@ -277,9 +300,21 @@ impl App {
         let bot = self.view_bot(open.bot.as_deref().unwrap_or_default())?;
         let id = self.take_id();
         let active = open.active.unwrap_or(true);
-        let visible = open.visible.unwrap_or(true);
-        let view =
-            View { id, client, size, active, visible, bot, shown, projection: 1, claimed: 0, revision: 0, sent: None };
+        let (visible, claims) = (open.visible.unwrap_or(true), !open.no_claim);
+        let view = View {
+            id,
+            client,
+            size,
+            active,
+            visible,
+            claims,
+            bot,
+            shown,
+            projection: 1,
+            claimed: 0,
+            revision: 0,
+            sent: None,
+        };
         let eligible = view.eligible().is_some();
         log_opened(&view);
         self.clients.views.list.push(view);
@@ -316,6 +351,7 @@ impl App {
         now: Instant,
     ) -> Handled {
         let size = control::view::size(set.cols, set.rows).map_err(|message| Refusal::new(Code::Malformed, message))?;
+        let claiming = set.claiming().map_err(|message| Refusal::new(Code::Malformed, message))?;
         let Some(current) = self.clients.views.get(id).map(|view| view.bot.clone()) else {
             return Err(none("view", id));
         };
@@ -328,10 +364,7 @@ impl App {
             let why = cannot_size(new_active, new_size);
             return Err(Refusal::from(format!("view {id} cannot size a tab now: {why}")));
         }
-        if (new_size, new_active) != (view.size, view.active) {
-            view.projection += 1;
-        }
-        (view.size, view.active) = (new_size, new_active);
+        view.apply(new_size, new_active, claiming);
         view.bot.clone_from(&bot);
         let back = view.set_visible(set.visible);
         if eligible && (!was || set.claim) {

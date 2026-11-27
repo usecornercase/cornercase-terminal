@@ -184,6 +184,9 @@ fn unreachable_tab() -> Tab {
 #[case::a_later_view_beats_the_window(Some((5, 4)), &[(1, 5, 2), (2, 5, 7)], Some(2))]
 #[case::a_window_claim_elsewhere_does_not_count(Some((6, 99)), &[(1, 5, 2)], Some(1))]
 #[case::no_claim_is_the_window(Some((5, 0)), &[(1, 5, 0)], None)]
+#[case::a_view_that_never_claims_leaves_the_window(None, &[(1, 5, 0)], None)]
+#[case::a_view_that_never_claims_leaves_the_latest_claiming_view(None, &[(1, 5, 0), (2, 5, 3)], Some(2))]
+#[case::a_view_that_never_claims_beside_a_window_claim(Some((5, 4)), &[(1, 5, 0)], None)]
 fn one_controller_per_tab(
     #[case] window: Option<(u64, u64)>,
     #[case] claims: &[(u64, u64, u64)],

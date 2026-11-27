@@ -35,6 +35,7 @@ mod boot {
     #[case::mark_what_runs_here(&["mark"])]
     #[case::mark_a_pane(&["mark", "--pane", "4"])]
     #[case::mark_a_tab_reviewed(&["mark", "--tab", "4", "--reviewed"])]
+    #[case::mark_a_pane_seen(&["mark", "--pane", "4", "--seen"])]
     #[case::move_a_pane(&["move-pane", "--pane", "4", "--target", "5", "--place", "left", "--json"])]
     #[case::restart_every_pane(&["account", "restart", "claude"])]
     #[case::restart_a_pane_on_an_account(&["account", "restart", "claude", "work", "--pane", "4", "--json"])]
@@ -88,6 +89,7 @@ mod boot {
     #[case::redraw_a_surface(&["redraw", "--surface", "4"])]
     #[case::set_a_views_size(&["view-set", "--view", "7", "--cols", "80", "--rows", "24"])]
     #[case::claim_a_view(&["view-set", "--view", "7", "--claim"])]
+    #[case::stop_claiming(&["view-set", "--view", "7", "--no-claim"])]
     #[case::show_a_bot(&["view-set", "--view", "7", "--bot", "prs"])]
     #[case::show_no_bot(&["view-set", "--view", "7", "--bot", ""])]
     #[case::open_on_a_bot(&["view", "--bot", "prs"])]
@@ -143,6 +145,8 @@ mod boot {
     #[case::open_a_view(&["view"])]
     #[case::open_a_view_on_a_tab(&["view", "--tab", "4", "--cols", "80", "--rows", "24"])]
     #[case::open_a_view_on_a_project(&["view", "--project", "4", "--hidden"])]
+    #[case::open_a_view_that_does_not_claim(&["view", "--tab", "4", "--cols", "40", "--rows", "30", "--no-claim"])]
+    #[case::open_a_sizeless_view_that_does_not_claim(&["view", "--no-claim"])]
     #[case::list_processes(&["processes"])]
     #[case::list_the_processes_of_a_workspace(&["processes", "--workspace", "4", "--interval", "200"])]
     #[case::list_the_processes_of_a_branch(&["processes", "--worktree", "x"])]
@@ -338,4 +342,11 @@ mod boot {
         assert_eq!(boot_of_run(&["plugin", "run", "p", "a", "--pane", "4", "--boot", "1-2"]).as_deref(), Some("1-2"));
         assert_eq!(boot_of_run(&["plugin", "run", "p", "a", "--pane", "4"]), None);
     }
+}
+
+#[rstest]
+#[case::seen_and_reviewed(&["mark", "--pane", "4", "--seen", "--reviewed"])]
+#[case::claim_and_no_claim(&["view-set", "--view", "7", "--claim", "--no-claim"])]
+fn a_mark_or_a_claim_cannot_say_both(#[case] args: &[&str]) {
+    assert!(parsed(args).is_err());
 }

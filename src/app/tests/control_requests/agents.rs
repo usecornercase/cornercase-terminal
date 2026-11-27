@@ -570,7 +570,7 @@ mod pending_review {
     use super::*;
 
     fn mark(pane: u64, reviewed: bool) -> Command {
-        Command::Mark(wire::Mark { pane: Some(pane), tab: None, reviewed })
+        Command::Mark(wire::Mark { pane: Some(pane), tab: None, reviewed, seen: false })
     }
 
     fn reported(agent: &mut Agent, id: u64) -> Option<String> {
@@ -612,8 +612,11 @@ mod pending_review {
         let shell = done(now(&mut agent.app, None, new_tab(None))).ids.pane.expect("the shell's pane");
 
         let message = error(now(&mut agent.app, None, mark(shell, false)));
+        let seen = Command::Mark(wire::Mark { pane: Some(shell), seen: true, ..wire::Mark::default() });
+        let unseen = error(now(&mut agent.app, None, seen));
 
         assert!(message.contains("nothing to mark"), "{message}");
+        assert!(unseen.contains("nothing to mark"), "{unseen}");
     }
 
     #[test]

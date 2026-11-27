@@ -36,6 +36,15 @@ fn code(value: &Value) -> Value {
 
 fn open(app: &mut App, client: u64, size: Option<(u16, u16)>, tab: Option<u64>) -> ViewInfo {
     let open = OpenView { cols: size.map(|s| s.0), rows: size.map(|s| s.1), tab, ..OpenView::default() };
+    open_with(app, client, open)
+}
+
+fn watching(app: &mut App, client: u64, (cols, rows): (u16, u16), tab: u64) -> ViewInfo {
+    let open = OpenView { cols: Some(cols), rows: Some(rows), tab: Some(tab), no_claim: true, ..OpenView::default() };
+    open_with(app, client, open)
+}
+
+fn open_with(app: &mut App, client: u64, open: OpenView) -> ViewInfo {
     let answer = ok(call(app, client, None, Command::View(open), false));
     assert_eq!(answer["revision"], 1);
     serde_json::from_value(answer["view"].clone()).expect("a view")
@@ -410,6 +419,7 @@ fn closing_the_views_tab_settles_it_on_a_neighbour_without_resizing_for_it() {
 #[case::takes_no_view(Command::Stats(wire::Stats::default()), Some(1), Code::Malformed)]
 #[case::view_in_a_view(Command::View(OpenView::default()), Some(1), Code::Malformed)]
 #[case::half_a_size(Command::View(OpenView { cols: Some(10), ..OpenView::default() }), None, Code::Malformed)]
+#[case::claim_and_no_claim(Command::ViewSet(SetView { claim: true, no_claim: true, ..SetView::default() }), Some(1), Code::Malformed)]
 #[case::too_big(Command::View(OpenView { cols: Some(5000), rows: Some(10), ..OpenView::default() }), None, Code::Malformed)]
 fn a_view_request_is_refused(#[case] command: Command, #[case] view: Option<u64>, #[case] expected: Code) {
     let (mut app, _rx, _dirs) = app_with(1);
@@ -544,4 +554,99 @@ fn go_through_the_socket_answers_a_projection_and_refuses_an_unknown_token() {
 
     assert_eq!(code(&refused), "not-found");
     assert!(error_of(&refused).contains("there is no notice cc-nope-1"), "{refused}");
+}
+
+mod without_claiming {
+    use super::*;
+
+    fn controller(app: &mut App, tab: u64) -> Option<u64> {
+        let report = report(app);
+        report.projects[0].workspaces[0].tabs.iter().find(|t| t.id == tab).and_then(|t| t.controller)
+    }
+
+    #[test]
+    fn a_view_sees_its_tab_and_leaves_the_window_its_size() {
+        let (mut app, _rx, _dirs) = app_with(1);
+        let tab = tabs(&mut app, 2)[1];
+
+        let view = watching(&mut app, A, (40, 12), tab);
+        app.resize(AREA);
+
+        assert_eq!((view.claims, view.controls), (false, false));
+        assert_eq!(controller(&mut app, tab), None);
+        assert_eq!(size_of(&app, tab), window_pane(&app));
+        assert_eq!(app.seen_tabs(), vec![tab]);
+    }
+
+    #[test]
+    fn a_view_leaves_the_size_of_the_view_that_claimed_last() {
+        let (mut app, _rx, _dirs) = app_with(1);
+        let tab = tabs(&mut app, 2)[1];
+        let claiming = open(&mut app, B, Some((100, 30)), Some(tab));
+
+        watching(&mut app, A, (40, 12), tab);
+
+        assert_eq!(controller(&mut app, tab), Some(claiming.id));
+        assert_eq!(size_of(&app, tab), (100, 30));
+    }
+
+    #[test]
+    fn moving_resizing_or_turning_active_claims_nothing() {
+        let (mut app, _rx, _dirs) = app_with(1);
+        let ids = tabs(&mut app, 3);
+        let view = watching(&mut app, A, (40, 12), ids[1]);
+
+        ok(focus(&mut app, view.id, A, ids[2]));
+        set(&mut app, view.id, A, SetView { active: Some(false), ..SetView::default() });
+        set(&mut app, view.id, A, SetView { active: Some(true), ..SetView::default() });
+        let resized = ok(set(&mut app, view.id, A, SetView { cols: Some(50), rows: Some(14), ..SetView::default() }));
+
+        assert_eq!((resized["claims"].clone(), resized["controls"].clone()), (false.into(), false.into()));
+        assert_eq!(controller(&mut app, ids[2]), None);
+        assert_eq!(size_of(&app, ids[2]), window_pane(&app));
+    }
+
+    #[test]
+    fn its_surface_is_laid_out_at_its_own_size() {
+        let (mut app, _rx, _dirs) = app_with(1);
+        let tab = tabs(&mut app, 2)[1];
+        let view = watching(&mut app, A, (40, 12), tab);
+
+        let first: Frame = serde_json::from_value(ok(surface(&mut app, 80, view.id))).expect("a frame");
+
+        assert_eq!((first.tab, first.view), (tab, Some(view.id)));
+        assert_eq!((first.cols, first.rows), (40, 12));
+        assert_eq!(size_of(&app, tab), window_pane(&app));
+    }
+
+    #[test]
+    fn claim_takes_the_tab_and_no_claim_gives_it_back() {
+        let (mut app, _rx, _dirs) = app_with(1);
+        let tab = tabs(&mut app, 2)[1];
+        let view = watching(&mut app, A, (40, 12), tab);
+
+        let claimed = ok(set(&mut app, view.id, A, SetView { claim: true, ..SetView::default() }));
+        let sized = size_of(&app, tab);
+        let released = ok(set(&mut app, view.id, A, SetView { no_claim: true, ..SetView::default() }));
+
+        assert_eq!((claimed["claims"].clone(), claimed["controls"].clone()), (true.into(), true.into()));
+        assert_eq!(sized, (40, 12));
+        assert_eq!((released["claims"].clone(), released["controls"].clone()), (false.into(), false.into()));
+        assert_eq!(released["projection"], view.projection);
+        assert_eq!(size_of(&app, tab), window_pane(&app));
+        assert_eq!(controller(&mut app, tab), None);
+    }
+
+    #[test]
+    fn a_claim_it_cannot_make_is_refused_and_changes_nothing() {
+        let (mut app, _rx, _dirs) = app_with(1);
+        let tab = tabs(&mut app, 2)[1];
+        let view = watching(&mut app, A, (40, 12), tab);
+
+        let refused = set(&mut app, view.id, A, SetView { claim: true, active: Some(false), ..SetView::default() });
+
+        assert_eq!(code(&refused), "failed");
+        let after = info(&mut app, view.id);
+        assert_eq!((after.claims, after.active, after.projection), (false, true, view.projection));
+    }
 }

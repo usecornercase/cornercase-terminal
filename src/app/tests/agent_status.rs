@@ -18,6 +18,7 @@ mod agents_section;
 mod copilot;
 mod flows;
 mod journal;
+mod marks;
 mod notifications;
 mod osc;
 mod resuming;

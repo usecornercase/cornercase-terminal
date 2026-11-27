@@ -161,6 +161,24 @@ mod machines {
     }
 
     #[test]
+    fn a_view_that_does_not_claim_says_so() {
+        let tab = control::Ids { tab: Some(7), ..control::Ids::default() };
+        let view = |claims| control::ViewInfo {
+            id: 41,
+            active: true,
+            cols: Some(40),
+            rows: Some(30),
+            shown: tab,
+            visible: true,
+            claims,
+            ..Default::default()
+        };
+
+        assert_eq!(crate::cli::view::describe(&view(false)), "view 41  tab 7  40×30  does not size its tab  no claim");
+        assert_eq!(crate::cli::view::describe(&view(true)), "view 41  tab 7  40×30  does not size its tab");
+    }
+
+    #[test]
     fn one_that_is_down_says_when_it_was_seen() {
         let pi = seen("pi", State::Unreachable, Vec::new());
 

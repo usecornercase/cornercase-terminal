@@ -256,6 +256,14 @@ pub(crate) fn use_pending_question() -> Result<()> {
     require("pending-question", "cannot read what a waiting agent asks")
 }
 
+pub(crate) fn use_view_no_claim() -> Result<()> {
+    require("view-no-claim", "cannot open a view that leaves its tab's size alone: the view would resize the tab")
+}
+
+pub(crate) fn use_mark_seen() -> Result<()> {
+    require("mark-seen", "cannot take only the done mark off: it would mark the agent as pending review")
+}
+
 pub(crate) fn use_accounts() -> Result<()> {
     require("accounts", "has no account profiles")
 }
