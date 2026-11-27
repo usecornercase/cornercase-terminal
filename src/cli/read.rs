@@ -7,10 +7,14 @@ use crate::control::pending::PendingQuestion;
 use crate::control::{self, LastMessage};
 use crate::error::{Error, Result};
 
+mod messages;
 mod pending;
 
 pub(super) fn run(read: &ReadArgs) -> Result<bool> {
     let targets = targets(read)?;
+    if read.messages {
+        return messages::run(read, targets);
+    }
     if read.pending {
         client::use_pending_question()?;
     }
@@ -51,6 +55,9 @@ fn several(read: &ReadArgs, targets: &[LastMessage]) -> Result<bool> {
 }
 
 fn targets(read: &ReadArgs) -> Result<Vec<LastMessage>> {
+    if read.messages && read.panes.len() + read.tabs.len() > 1 {
+        return Err(Error::WrongUsage("--messages reads one pane or tab".into()));
+    }
     if !read.last_message && !read.pending && read.panes.len() + read.tabs.len() > 1 {
         return Err(Error::WrongUsage("reading several panes needs --last-message or --pending".into()));
     }

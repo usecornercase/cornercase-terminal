@@ -36,6 +36,7 @@ mod stats;
 mod status;
 mod talk;
 mod terminal;
+mod thread;
 mod tour;
 mod tunnels;
 mod updates;

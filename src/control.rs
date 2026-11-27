@@ -24,6 +24,7 @@ mod flow;
 mod held;
 pub(crate) mod issues;
 pub(crate) mod machines;
+pub(crate) mod messages;
 pub(crate) mod pair;
 mod panes;
 pub(crate) mod pending;
@@ -306,6 +307,7 @@ pub(crate) enum Command {
     PersonaSave(persona::PersonaSave),
     PersonaShow(persona::PersonaShow),
     PendingQuestion(pending::PendingQuestion),
+    ReadMessages(messages::ReadMessages),
 }
 
 impl Command {
@@ -338,6 +340,7 @@ impl Command {
             Self::Read(_) => 8,
             Self::LastMessage(_) => 17,
             Self::PendingQuestion(_) => 144,
+            Self::ReadMessages(_) => 145,
             Self::Wait(_) => 9,
             Self::WaitSeveral(_) => 15,
             Self::Mark(_) => 21,
@@ -682,6 +685,7 @@ impl Command {
         "persona-save",
         "persona-show",
         "pending-question",
+        "read-messages",
     ];
 
     pub(crate) fn unreported_request(text: &str) -> bool {

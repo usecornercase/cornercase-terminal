@@ -122,45 +122,6 @@ Examples:
 pub(super) const UNTIL_AFTER: &str = "Wait until the pane is in this state instead";
 pub(super) const KEY_NAMES: &str = "enter, esc, tab, backspace, space, up, down, left, right, home, end, pageup,
 pagedown, delete, insert, f1 to f12 or one character, each after any of ctrl+, alt+ and shift+";
-pub(super) const READ_HELP: &str =
-    "Lines the terminal wrapped come back joined, and empty lines at the end are left out.
-
-With --last-message it prints the last message the agent in the pane wrote, as plain text, from
-its own record (Claude Code's transcript, Codex's rollout, Gemini's session file, opencode's
-database, Grok Build's session, Cursor CLI's chat store, GitHub Copilot CLI's session events, Vibe CLI's unified session store) instead of the
-screen, so it comes whole even once it scrolled off, without the input box or status lines. While the agent works
-it is the newest one so far. --json adds when it was written and whether the agent's turn is over. It fails on a
-pane without Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI, Vibe CLI or GitHub Copilot CLI, and before
-the agent wrote anything.
-
-With --last-message, repeat --pane or --tab to read several agents at once. Each message has a
-header with its pane, agent, turn_over and written time; --json gives {\"panes\": [...]}. Panes come
-first, then tabs, in the order given, and a repeated id is read once. Errors stay with their target,
-and it exits 3 after reading them all if any failed; with no server it prints nothing and exits 1.
-One target keeps the output above. Reading the screen takes only one target. With --boot, a server that
-restarted since ends it with 4 before anything is printed, with several targets too.
-
-With --pending it prints what the agent in the pane waits for you to answer, from its own record:
-each question with its numbered options, or the tool and command of a permission. --json gives it as
-data (questions, options with label and description, multi_select, free_text), and null when nothing
-is pending. selected and open are null: only the screen knows the chosen option and the open
-question. Only Claude Code's records say it; another agent or a shell fails with the reason. Repeat
---pane or --tab as with --last-message; a target with nothing pending is {\"pane\": N, \"source\": null}.
-Answer with `cornercase keys`.
-
-Claude Code's feedback survey (`How is Claude doing this session? (optional)`, then
-`1: Bad  2: Fine  3: Good  0: Dismiss`) may show above its input box: it is Claude Code asking you,
-not the agent's output. `cornercase keys --pane N 0` dismisses it.
-
-Examples:
-  cornercase read --pane 12
-  cornercase read --pane 7 --lines 200 > build.log
-  cornercase read --pane 12 --last-message
-  cornercase --remote vps read --pane 9 --last-message --boot 4242-1700000000
-  cornercase read --tab 4 --last-message --json
-  cornercase read --last-message --pane 12 --pane 15 --json
-  cornercase read --pane 12 --pending --json
-  cornercase read --pending --pane 12 --pane 15 --json";
 pub(super) const WAIT_HELP: &str =
     "By default it waits until the agent stops working: idle, done, failed, pending (marked for review) or
 waiting. A Claude Code agent whose turn is over while a background shell it started still runs
@@ -775,6 +736,7 @@ mod plugin_windows;
 mod ports;
 mod processes;
 mod pull_request;
+mod read;
 mod recap;
 mod requests;
 mod setup;
@@ -811,6 +773,7 @@ pub(in crate::cli) use plugin_windows::PLUGIN_WINDOWS_HELP;
 pub(in crate::cli) use ports::{PORTS_HELP, PORTS_STOP_ABOUT, PORTS_STOP_HELP};
 pub(in crate::cli) use processes::{PROCESSES_HELP, PROCESSES_STOP_ABOUT, PROCESSES_STOP_HELP};
 pub(in crate::cli) use pull_request::PULL_REQUEST_HELP;
+pub(in crate::cli) use read::READ_HELP;
 pub(in crate::cli) use recap::RECAP_HELP;
 pub(in crate::cli) use requests::REQUESTS_HELP;
 pub(in crate::cli) use setup::SETUP_HELP;

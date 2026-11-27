@@ -46,6 +46,7 @@ mod issues;
 mod machine_actions;
 mod machine_panels;
 mod machines;
+mod messages;
 mod opening;
 mod pair;
 mod panels;

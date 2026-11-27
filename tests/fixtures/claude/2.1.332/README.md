@@ -9,3 +9,4 @@ Transcripts of a turn that calls a tool, written to the envelope and field names
 - `ask-rejected.jsonl`: the same question rejected (`is_error`, `toolDenialKind: user-rejected`).
 - `permission-bash.jsonl`: a `Bash` call with no result yet; the transcript reads the same whether it waits for a permission or runs.
 - `parallel.jsonl`: two calls of one answer (`Read`, then `Bash`, the same `message.id`), with the `Read`'s result between them, so only the `Bash` is left.
+- `thread.jsonl`: two turns for `read --messages`: a prompt, a thinking line, a text, a `Read` call and its result, a sidechain text, a second text, then a second prompt, a `queued_command` prompt typed while it worked, and a last text.

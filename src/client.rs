@@ -55,7 +55,7 @@ pub(crate) use requests::{
 };
 pub(crate) use requests::{
     check_boot, use_boot, use_machine_auto, use_machine_boot, use_mark_seen, use_pending_question, use_queue_when_free,
-    use_section_folds, use_view_no_claim,
+    use_read_messages, use_section_folds, use_view_no_claim,
 };
 pub(crate) use requests::{hinted, input_ended, reader_gone_within, use_remote, used_remote, watched};
 pub(crate) use requests::{line_done, share, unshare};

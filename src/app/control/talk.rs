@@ -4,7 +4,7 @@ use crossterm::event::KeyCode;
 
 use super::held::Held;
 use super::wait::{Condition, turn_ended};
-use super::{Asker, Handled, Pending, Stage, Waits, conflict, deadline, json, none, pane_ids};
+use super::{Asker, Handled, Pending, Reply, Stage, Waits, conflict, deadline, json, none, pane_ids};
 use crate::agents;
 use crate::agents::activity::{self, Status};
 use crate::agents::context;
@@ -18,7 +18,7 @@ use crate::project::Hierarchy;
 use crate::term;
 use crate::term::keys;
 
-const CANNOT_READ: &str = "cornercase only reads the messages of Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI, Vibe CLI and GitHub Copilot CLI";
+pub(super) const CANNOT_READ: &str = "cornercase only reads the messages of Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI, Vibe CLI and GitHub Copilot CLI";
 
 fn not_reading(pane: u64) -> String {
     format!(
@@ -250,6 +250,18 @@ impl App {
             done,
             stage: Stage::Reading,
         });
+    }
+
+    pub(super) fn read_answered<T>(
+        &mut self,
+        key: u64,
+        result: error::Result<Option<T>>,
+        reply: impl FnOnce(u64, String, error::Result<Option<T>>) -> Reply,
+    ) {
+        let Some(pending) = self.clients.requests.take(key) else { return };
+        let pane = pending.done.ids.pane.unwrap_or_default();
+        let agent = pending.done.agent.unwrap_or_default();
+        self.answer(pending.client, reply(pane, agent, result));
     }
 
     pub(super) fn reading_agent(&self, pane: u64, why: &str) -> Result<(&term::Term, agents::Known), Refusal> {

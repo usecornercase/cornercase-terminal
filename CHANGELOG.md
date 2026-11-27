@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.14.5
+
+- **Read an agent's conversation.** `cornercase read --messages --pane 7` prints what you and the agent in the pane wrote in its current conversation, oldest first, from its own record instead of its screen: each message under its id, its role (`user` or `assistant`) and when it was written. Tool calls, their results and thinking are left out, and each text comes whole. It shows the newest 20; `--last 5` the newest five, `--before 41` the ones just before message 41, to page back, and `--after 42` everything written after message 42. `--json` gives it as data for a phone app, a chat or a script.
+- **For programs**: the request `read-messages` and the feature `read-messages` in `cornercase contract`.
+
 ## 0.14.4
 
 - **A machine's tabs in the tabs above the pane.** With **settings → UI → tabs** set to *top*, the bar above the pane shows the tabs of the machine's workspace you are on, instead of this computer's: click one to show it, **`+`** opens a tab there, and each tab has its **`⋯`** (or a right-click) to rename or close it and its **`×`**, as the machine's rows in the sidebar. A tab with an agent asks before closing, a closing tab reads `closing…`, and while the machine is down the bar is dimmed and says why nothing was sent. The line under the tabs shows the model and context of the pane you are in there.

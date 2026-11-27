@@ -393,6 +393,18 @@ mod streams {
         assert!(!seen.iter().any(|text| text.contains(request)), "{seen:?}");
     }
 
+    const READ_MESSAGES: &str = r#"{"args": ["read", "--pane", "4", "--messages", "--json"]}"#;
+
+    #[test]
+    fn reading_a_conversation_is_refused_up_front_by_a_server_without_read_messages() {
+        let (answer, seen) = in_a_view_on(READ_MESSAGES, lacking("read-messages"));
+
+        assert_eq!(answer.status, 1, "{answer:?}");
+        let error = answer.error.expect("an error");
+        assert!(error.contains("an agent's conversation") && error.contains("update cornercase"), "{error}");
+        assert!(!seen.iter().any(|text| text.contains("\"read-messages\"")), "{seen:?}");
+    }
+
     #[test]
     fn a_plain_machine_needs_no_feature() {
         let (answer, _) = in_a_view_on(PLAIN_ADD, lacking("machine-shown"));
@@ -494,6 +506,7 @@ mod streams {
     #[case::read(&["read", "--pane", "4"], None)]
     #[case::read_last_messages(&["read", "--pane", "4", "--pane", "5", "--last-message"], None)]
     #[case::read_pending(&["read", "--pane", "4", "--pending"], None)]
+    #[case::read_messages(&["read", "--pane", "4", "--messages"], None)]
     #[case::wait(&["wait", "--pane", "4", "--quiet", "1"], None)]
     #[case::wait_for_several(&["wait", "--pane", "4", "--pane", "5", "--any"], None)]
     #[case::link(&["link", "--pane", "4", "--cell", "0,0"], None)]

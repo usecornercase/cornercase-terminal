@@ -28,6 +28,13 @@ impl Role {
             Self::Reply => "reply",
         }
     }
+
+    pub(crate) fn speaker(self) -> &'static str {
+        match self {
+            Self::Prompt => "user",
+            Self::Reply => "assistant",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

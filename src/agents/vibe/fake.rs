@@ -135,6 +135,21 @@ impl FakeVibe {
         std::fs::write(file, text).expect("write the journal");
     }
 
+    pub(crate) fn answered(&self) {
+        self.journal(&[
+            json!({"type": "command_reserved", "payload": {
+                "method": "turn/start",
+                "params": {"injected": false, "message": [{"type": "text", "text": "fix the login"}]},
+            }}),
+            json!({"type": "action_result", "payload": {"result": {"result": {
+                "parts": [{"type": "reasoning", "text": "thinking"}, {"type": "text", "text": "first"}],
+            }}}}),
+            json!({"type": "action_result", "payload": {"result": {"result": {
+                "parts": [{"type": "tool_call"}, {"type": "text", "text": "done"}],
+            }}}}),
+        ]);
+    }
+
     pub(crate) fn lease(&self, pid: i32) {
         let active = self.home.path().join("logs/session/active");
         std::fs::create_dir_all(&active).expect("create the lease folder");

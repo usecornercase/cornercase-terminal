@@ -66,6 +66,13 @@ mod forget {
 
         assert_eq!(left, (0, Vec::new()));
     }
+
+    #[test]
+    fn a_conversation_read_goes_with_its_client() {
+        let left = read_after_its_client_left(|app| app.thread_read(1, Ok(Some(context::Page::default()))));
+
+        assert_eq!(left, (0, Vec::new()));
+    }
 }
 
 mod checks {

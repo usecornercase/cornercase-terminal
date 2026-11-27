@@ -620,6 +620,30 @@ pub(crate) struct ReadArgs {
         help = "What the agent in the pane waits for you to answer, from its own record"
     )]
     pub(crate) pending: bool,
+    #[arg(
+        long,
+        conflicts_with_all = ["lines", "last_message", "pending"],
+        help = "The conversation of the agent in the pane, oldest first, from its own record"
+    )]
+    pub(crate) messages: bool,
+    #[arg(
+        long,
+        value_name = "N",
+        requires = "messages",
+        value_parser = clap::value_parser!(u64).range(1..),
+        help = "With --messages, only the newest N [default: 20; with --after, all of them]"
+    )]
+    pub(crate) last: Option<u64>,
+    #[arg(
+        long,
+        value_name = "ID",
+        requires = "messages",
+        conflicts_with = "after",
+        help = "With --messages, the messages before this id"
+    )]
+    pub(crate) before: Option<u64>,
+    #[arg(long, value_name = "ID", requires = "messages", help = "With --messages, the messages after this id")]
+    pub(crate) after: Option<u64>,
     #[command(flatten)]
     pub(crate) view: ViewArg,
     #[command(flatten)]
