@@ -27,6 +27,7 @@ pub(super) struct Scrolls {
     tab_bar: usize,
     followed: Focus,
     followed_bar: BarShown,
+    followed_lead: Vec<u16>,
     followed_pane: Option<u64>,
     pane_followed: bool,
     again: bool,
@@ -220,7 +221,10 @@ impl App {
     fn follow_bar(&mut self, areas: &ui::Areas, relayout: bool) {
         let now = self.bar_shown();
         let before = std::mem::replace(&mut self.scroll.followed_bar, now);
-        if now != before || relayout {
+        let lead = self.bar_lead();
+        let shifted = lead != self.scroll.followed_lead;
+        self.scroll.followed_lead = lead;
+        if now != before || shifted || relayout {
             self.reveal_in_tab_bar(areas, now.workspace != before.workspace);
         }
     }

@@ -24,6 +24,11 @@ impl App {
         self.project().and_then(Project::workspace).filter(|w| !w.tabs.is_empty()).map(|w| w.active)
     }
 
+    pub(super) fn bar_lead(&self) -> Vec<u16> {
+        let Some(active) = self.bar_active() else { return Vec::new() };
+        self.bar_tabs().iter().take(active + 1).map(ui::tab_bar::width).collect()
+    }
+
     pub(super) fn bar_shown(&self) -> BarShown {
         if let Some(shown) = self.shown_remote() {
             return BarShown { workspace: Some((Some(shown.link), shown.workspace)), tab: shown.tab };
