@@ -2,7 +2,7 @@
 
 Claude Code 2.1.332, macOS, 2026-11-27.
 
-Transcripts of a turn that calls a tool, cut down from real ones to the lines `read --pending` looks at and their envelope (`parentUuid`, `isSidechain`, `type`, `uuid`, `timestamp`, `sessionId`, `version`, `message.{model,id,role,content,stop_reason}`), with every text, id, path and name replaced. Each tool call is an `assistant` line of its own; the `hook_success` attachment that follows names the call's id and is not its result; only a `user` line's `tool_result` block is.
+Transcripts of a turn that calls a tool, written to the envelope and field names of real 2.1.332 transcripts (a question answered, one rejected, `hook_success` lines), with invented texts, ids, paths and names; not cut from one file. They hold only the lines `read --pending` looks at and their envelope (`parentUuid`, `isSidechain`, `type`, `uuid`, `timestamp`, `sessionId`, `version`, `message.{model,id,role,content,stop_reason}`). Each tool call is an `assistant` line of its own; the `hook_success` attachment that follows names the call's id and is not its result; only a `user` line's `tool_result` block is.
 
 - `ask-one.jsonl`, `ask-several.jsonl`, `ask-multi-select.jsonl`: an `AskUserQuestion` still waiting for its answer, with one question, two (an option without a description among them), and one that takes several options.
 - `ask-answered.jsonl`: the same question answered (`permissionDecision`, `toolUseResult` with the answers).
