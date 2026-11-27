@@ -331,9 +331,13 @@ fn breadcrumb(view: &View, room: usize) -> Vec<Span<'static>> {
     vec![Span::styled(head, bold), Span::styled(rest, Style::default().fg(view.soft))]
 }
 
-pub(super) fn draw_back(f: &mut Frame, view: &View, areas: &Areas, name: &str) {
+pub(super) fn draw_back_button(f: &mut Frame, view: &View, areas: &Areas) {
     let style = button_style(view, areas.back, Style::default().fg(Color::Cyan), Color::Cyan);
     draw_button(f, areas.back, "", BACK_LABEL, style);
+}
+
+pub(super) fn draw_back(f: &mut Frame, view: &View, areas: &Areas, name: &str) {
+    draw_back_button(f, view, areas);
     let rest =
         Rect { x: areas.back.right(), width: areas.bar.right().saturating_sub(areas.back.right()), ..areas.back };
     let max = usize::from(rest.width).saturating_sub(1);

@@ -4,7 +4,7 @@ expression: every_state().shown(WIDE)
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                                                      "
 "  ╭─ Settings ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮  "
-" P│  Worktrees   Agents   Accounts   Flows   Issues   UI   Remote   Plugins   Machines                                                       │  "
+" ▾│  Worktrees   Agents   Accounts   Flows   Issues   UI   Remote   Plugins   Machines                                                       │  "
 "  │  ⌕ search settings                                                                                                                       │  "
 "  │ ▌   ▭ this computer         <version>    · 6 GB free of 16 GB                                                                            │  "
 "  │   ● ☁ vps                   miguel@vps.example.com   ~/code     linked · 0.12.200                                         show here ✓    │  "

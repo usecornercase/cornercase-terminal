@@ -117,6 +117,7 @@ impl App {
             shown_bot: self.shown_bot_id(),
             tunnels: self.tunnel_infos(),
             machine_tunnels: self.there_tunnel_infos(),
+            collapsed_sections: self.screen.sections.listed(),
         }
     }
 

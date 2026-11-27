@@ -3,6 +3,7 @@ use clap::{ArgGroup, Args, Subcommand, ValueEnum};
 use super::{BootArg, Print, branch};
 use crate::cli::help::BY_BRANCH;
 use crate::control::arrange::Place;
+use crate::state::Section;
 
 #[derive(Debug, Args)]
 #[command(
@@ -46,7 +47,12 @@ pub(crate) struct MoveArgs {
 }
 
 #[derive(Debug, Args)]
-#[command(group(ArgGroup::new("row").required(true).multiple(false).args(["group", "project", "workspace", "worktree", "pane"])))]
+#[command(group(
+    ArgGroup::new("row")
+        .required(true)
+        .multiple(false)
+        .args(["group", "project", "workspace", "worktree", "pane", "section"])
+))]
 pub(crate) struct FoldArgs {
     #[arg(long, value_name = "ID", help = "A group and its projects")]
     pub(crate) group: Option<u64>,
@@ -58,8 +64,27 @@ pub(crate) struct FoldArgs {
     pub(crate) worktree: Option<String>,
     #[arg(long, value_name = "ID", help = "An agent's pane and the agents it started, in the agents section")]
     pub(crate) pane: Option<u64>,
+    #[arg(long, value_enum, help = "A whole section of the sidebar: its rows hide under its title")]
+    pub(crate) section: Option<SectionArg>,
     #[command(flatten)]
     pub(crate) boot: BootArg,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub(crate) enum SectionArg {
+    Projects,
+    Workspaces,
+    Agents,
+}
+
+impl From<SectionArg> for Section {
+    fn from(section: SectionArg) -> Self {
+        match section {
+            SectionArg::Projects => Self::Projects,
+            SectionArg::Workspaces => Self::Workspaces,
+            SectionArg::Agents => Self::Agents,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]

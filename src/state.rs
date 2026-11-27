@@ -18,6 +18,63 @@ use crate::term::Term;
 pub(crate) const VERSION: u32 = 5;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum Section {
+    Projects,
+    Workspaces,
+    Agents,
+}
+
+impl Section {
+    pub(crate) const ALL: [Self; 3] = [Self::Projects, Self::Workspaces, Self::Agents];
+
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Self::Projects => "projects",
+            Self::Workspaces => "workspaces",
+            Self::Agents => "agents",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct Sections {
+    pub(crate) projects: bool,
+    pub(crate) workspaces: bool,
+    pub(crate) agents: bool,
+}
+
+impl Sections {
+    pub(crate) fn folded(self, section: Section) -> bool {
+        match section {
+            Section::Projects => self.projects,
+            Section::Workspaces => self.workspaces,
+            Section::Agents => self.agents,
+        }
+    }
+
+    pub(crate) fn set(&mut self, section: Section, folded: bool) {
+        match section {
+            Section::Projects => self.projects = folded,
+            Section::Workspaces => self.workspaces = folded,
+            Section::Agents => self.agents = folded,
+        }
+    }
+
+    pub(crate) fn listed(self) -> Vec<Section> {
+        Section::ALL.into_iter().filter(|section| self.folded(*section)).collect()
+    }
+
+    pub(crate) fn of(folded: &[Section]) -> Self {
+        let mut sections = Self::default();
+        for section in folded {
+            sections.set(*section, true);
+        }
+        sections
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Widths {
     pub(crate) projects: u16,
     pub(crate) workspaces: u16,
@@ -48,6 +105,8 @@ pub(crate) struct State {
     pub(crate) files: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub(crate) flow: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) collapsed_sections: Vec<Section>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -493,6 +552,7 @@ impl From<V2State> for State {
             todo: false,
             files: false,
             flow: false,
+            collapsed_sections: Vec::new(),
         }
     }
 }

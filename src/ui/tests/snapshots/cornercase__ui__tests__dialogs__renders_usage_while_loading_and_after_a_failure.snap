@@ -4,7 +4,7 @@ expression: "render(&with(Overlay::Usage(usage))).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "                                                         │                                          "
-" Projects                      │ Workspaces              │                                          "
+" ▾ Projects                    │ ▾ Workspaces            │                                          "
 "                  ╭─ Usage ──────────────────────────────────────────────────────╮                  "
 "▌ cornercase (1)  │  Limits   Stats                                              │                  "
 "                  │                                                              │                  "

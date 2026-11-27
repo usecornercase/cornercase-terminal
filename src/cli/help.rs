@@ -692,7 +692,8 @@ Examples:
 pub(super) const FOLD_HELP: &str =
     "Sets it, whatever it was: a group shows or hides its projects, a project its workspaces and a
 workspace its tabs; an agent's pane (--pane) hides the agents it started in the agents section
-for as long as the agent running there now keeps running (another conversation there starts expanded).
+for as long as the agent running there now keeps running (another conversation there starts expanded);
+a section (--section) hides its whole list in the sidebar of every window, and is kept across restarts.
 Its shells keep running.
 
 --boot BOOT says which run of the server the id is from: `boot` in `status --json`, or in a machine's
@@ -702,6 +703,7 @@ unfolded, and the command prints why and exits with 4.
 Examples:
   cornercase collapse --group 12
   cornercase collapse --pane 12
+  cornercase collapse --section agents
   cornercase expand --worktree fix/login
   cornercase --remote vps collapse --pane 9 --boot 4242-1700000000";
 pub(super) const GROUP_HELP: &str =

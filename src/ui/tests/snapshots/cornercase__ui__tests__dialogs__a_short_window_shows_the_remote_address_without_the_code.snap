@@ -4,7 +4,7 @@ expression: "render(&with(Overlay::Remote(remote_access(Some(PAIR_URL))))).backe
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "                                                         │                                          "
-" Projects                      │ Workspaces              │                                          "
+" ▾ Projects                    │ ▾ Workspaces            │                                          "
 "                  ╭─ Remote ─────────────────────────────────────────────────────╮                  "
 "▌ cornercase (1)  │ make this window larger to show the code                     │                  "
 "                  │                                                              │                  "

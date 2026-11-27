@@ -4,7 +4,7 @@ expression: "shown(form(\"Fix the login form\", None), 100, 24).backend()"
 ---
 "  ⌕ search pro╭─ Schedule an agent ──────────────────────────────────────────────────╮              "
 "              │ Prompt                                                               │              "
-" Projects     │ Fix the login form                                                   │              "
+" ▾ Projects   │ Fix the login form                                                   │              "
 "              │                                                                      │              "
 "▌ shop (1)    │                                                                      │              "
 "              │                                                                      │              "

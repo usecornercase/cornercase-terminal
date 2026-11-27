@@ -4,7 +4,7 @@ expression: "format!(\"{}\", render(&mut s.app, SIZE).backend())"
 ---
 "  ⌕ search╭─ Project settings › web-shop ────────────────────────────────────────────────╮          "
 "          │ setup                                                                        │          "
-" Projects │  npm ci                                                                      │          "
+" ▾ Project│  npm ci                                                                      │          "
 "          │  cp .env .env                                                                │          "
 "▌ web-shop│                                                                              │          "
 "          │                                                                              │          "

@@ -1,6 +1,5 @@
 ---
 source: src/ui/tests/machine_rows.rs
-assertion_line: 124
 expression: "rendered(Sidebar::SideBySide, Some(Nav::Workspaces)).backend()"
 ---
 "                                                                                "
@@ -8,7 +7,7 @@ expression: "rendered(Sidebar::SideBySide, Some(Nav::Workspaces)).backend()"
 "                                                                                "
 "                                                                                "
 "                                                                                "
-" ‹ Projects    web-shop                                                         "
+" ‹ Projects    ▾ web-shop                                                       "
 "                                                                                "
 "                                                                                "
 "                                                                                "

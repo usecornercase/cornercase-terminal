@@ -4,7 +4,7 @@ expression: t.backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "                                                         │                                          "
-" Projects                      │ Workspaces              │                                          "
+" ▾ Projects                    │ ▾ Workspaces            │                                          "
 "                               │                         │                                          "
 "  cornercase (1)               │  ▾ default              │                                          "
 "▌ website (1)                  │▌ ├ › codex              │                                          "
@@ -21,7 +21,7 @@ expression: t.backend()
 "                               │                         │                                          "
 "                               │                         │                                          "
 " ───────────────────────────── │                         │                                          "
-" Agents                        │                         │                                          "
+" ▾ Agents                      │                         │                                          "
 "                               │                         │                                          "
 "  ! cornercase › issue-98-…    │                         │                                          "
 "    claude · Opu… · work · 23% │                         │                                          "

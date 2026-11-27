@@ -29,6 +29,7 @@ pub(super) struct Scrolls {
     followed_bar: BarShown,
     followed_pane: Option<u64>,
     pane_followed: bool,
+    again: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -64,6 +65,10 @@ impl Scrolls {
     pub(super) fn follow_again(&mut self) {
         self.followed = Focus::default();
         self.followed_bar = BarShown::default();
+    }
+
+    pub(super) fn reveal_again(&mut self) {
+        self.again = true;
     }
 
     #[cfg(test)]
@@ -111,6 +116,7 @@ impl App {
             plugins: self.has_plugin_buttons(),
             machine: self.machine_label().is_some(),
             bots: self.bots_shape(),
+            folded: self.screen.sections,
         }
     }
 
@@ -188,8 +194,9 @@ impl App {
             self.set_file_full_screen(false);
         }
         let areas = self.layout(area);
-        let relayout =
-            areas.tree != self.screen.drawn.tree || areas.tab_bar.is_empty() != self.screen.drawn.tab_bar.is_empty();
+        let relayout = std::mem::take(&mut self.scroll.again)
+            || areas.tree != self.screen.drawn.tree
+            || areas.tab_bar.is_empty() != self.screen.drawn.tab_bar.is_empty();
         self.screen.drawn = areas;
         self.follow_pane();
         self.follow_bar(&areas, relayout);

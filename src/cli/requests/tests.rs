@@ -327,6 +327,27 @@ mod streams {
         assert!(!seen.iter().any(|text| text.contains("\"hide\"")), "{seen:?}");
     }
 
+    const FOLD_SECTION: &str = r#"{"args": ["collapse", "--section", "agents"]}"#;
+
+    #[test]
+    fn folding_a_section_is_refused_up_front_by_a_server_without_section_folds() {
+        let (answer, seen) = in_a_view_on(FOLD_SECTION, lacking("section-folds"));
+
+        assert_eq!(answer.status, 1, "{answer:?}");
+        let error = answer.error.expect("an error");
+        assert!(error.contains("sidebar section") && error.contains("update cornercase"), "{error}");
+        assert!(!seen.iter().any(|text| text.contains("\"collapse\"")), "{seen:?}");
+    }
+
+    #[test]
+    fn folding_a_section_sends_it_without_an_item() {
+        let (answer, seen) = in_a_view_on(FOLD_SECTION, control::contract::describe("boot", &[]));
+
+        assert_eq!(answer.status, 0, "{answer:?}");
+        let fold = seen.iter().find(|text| text.contains("\"collapse\"")).expect("the request");
+        assert!(fold.contains("\"section\":\"agents\"") && !fold.contains("\"item\""), "{fold}");
+    }
+
     #[test]
     fn a_plain_machine_needs_no_feature() {
         let (answer, _) = in_a_view_on(PLAIN_ADD, lacking("machine-shown"));

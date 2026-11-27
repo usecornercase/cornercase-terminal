@@ -7,11 +7,12 @@ use super::bots::{BOTS_LABEL, BOTS_SHORT};
 use super::chrome::{BACK_LABEL, TODO_LABEL};
 use super::files;
 use super::rows::GAP;
+use super::sections;
 use super::tab_bar;
 use super::widgets::button_width;
-use super::widths::{MIN_STACK_SECTION, PANE_PADDING};
+use super::widths::{Above, MIN_STACK_SECTION, PANE_PADDING};
 use crate::config::Sidebar;
-use crate::state::Widths;
+use crate::state::{Sections, Widths};
 
 pub const COMPACT_WIDTH: u16 = 90;
 
@@ -38,9 +39,11 @@ pub enum Border {
 
 pub(super) const STACKED_KEEP: u16 = 2 * MIN_STACK_SECTION + 1;
 
-pub(super) fn split_agents(r: Rect, widths: Widths, keep: u16) -> [Rect; 3] {
+const FOLDED_STACK_ROWS: u16 = 3;
+
+pub(super) fn split_agents(r: Rect, widths: Widths, above: Above, folded: bool) -> [Rect; 3] {
     let room = r.height.saturating_sub(1);
-    let rows = widths.agents_rows(room, keep);
+    let rows = widths.agents_taken(room, above, folded);
     let rest = Rect { height: room - rows, ..r };
     let line = Rect { y: rest.bottom(), height: r.height.min(1), ..r };
     let agents = Rect { y: line.bottom(), height: rows, ..r };
@@ -105,10 +108,12 @@ pub struct Areas {
     pub pane: Rect,
     pub projects_border: Rect,
     pub(crate) workspaces_border: Rect,
+    pub(crate) stack_line: Rect,
     pub(crate) stack_border: Rect,
     pub(crate) agents: Rect,
     pub(crate) agents_title: Rect,
     pub(crate) agents_list: Rect,
+    pub(crate) agents_line: Rect,
     pub(crate) agents_border: Rect,
     pub(crate) agents_button: Rect,
     pub(crate) bots: Rect,
@@ -121,6 +126,7 @@ pub struct Areas {
     pub todo_button: Rect,
     pub(crate) files_button: Rect,
     pub(crate) tab_bar: Rect,
+    pub(crate) folded: Sections,
 }
 
 impl Areas {
@@ -251,13 +257,9 @@ pub(super) fn bots_pad(compact: bool) -> u16 {
     if compact { COMPACT_BOTS_PAD } else { 0 }
 }
 
-pub(super) fn projects_title_room(title: Rect, bots_button: Rect) -> u16 {
-    if bots_button.is_empty() { title.width } else { bots_button.x.saturating_sub(title.x).min(title.width) }
-}
-
 fn bots_button(title: Rect, marks: u16, pad: u16, taken: u16) -> Rect {
     let room = title.width.saturating_sub(taken);
-    let beside = room.saturating_sub(button_width(PROJECTS_TITLE) - 1);
+    let beside = room.saturating_sub(sections::title_width(PROJECTS_TITLE));
     let (full, short) = (button_width(BOTS_LABEL) + pad, button_width(BOTS_SHORT) + pad);
     let width = [full + marks, full, short].into_iter().find(|width| *width <= beside).unwrap_or(short).min(room);
     Rect { x: title.right().saturating_sub(taken + width), width, ..title }
@@ -331,11 +333,24 @@ pub(crate) struct Screen {
     pub(crate) plugins: bool,
     pub(crate) machine: bool,
     pub(crate) bots: BotsShape,
+    pub(crate) folded: Sections,
 }
 
 impl Screen {
     pub(crate) fn wide(self) -> Self {
-        Self { agents: self.agents && !self.bots.page, ..self }
+        if !self.bots.page {
+            return self;
+        }
+        let folded = Sections { agents: self.folded.agents, ..Sections::default() };
+        Self { agents: false, folded, ..self }
+    }
+
+    fn folds_drawn(self, workspaces: bool) -> Sections {
+        Sections {
+            workspaces: self.folded.workspaces && workspaces,
+            agents: self.folded.agents && self.agents,
+            ..self.folded
+        }
     }
 }
 
@@ -376,14 +391,43 @@ fn search_area(header: Rect) -> Rect {
     Rect { height: header.height.min(1), ..header }.inner(Margin::new(1, 0))
 }
 
-fn agents_section(r: Rect, widths: Widths, keep: u16, agents: bool) -> (Rect, Areas) {
-    if !agents {
+fn agents_section(r: Rect, widths: Widths, above: Above, screen: Screen) -> (Rect, Areas) {
+    if !screen.agents {
         return (r, Areas::default());
     }
-    let [rest, line, section_rect] = split_agents(r, widths, keep);
-    let [agents_title, agents_list] = section(section_rect);
-    let areas = Areas { agents: section_rect, agents_title, agents_list, agents_border: line, ..Areas::default() };
+    let folded = screen.folded.agents;
+    let [rest, line, section_rect] = split_agents(r, widths, above, folded);
+    let [agents_title, agents_list] = section(section_rect, folded);
+    let dragged = !folded && matches!(above, Above::Open { .. });
+    let areas = Areas {
+        agents: section_rect,
+        agents_title,
+        agents_list,
+        agents_line: line,
+        agents_border: line_if(dragged, line),
+        ..Areas::default()
+    };
     (rest, areas)
+}
+
+fn line_if(dragged: bool, line: Rect) -> Rect {
+    if dragged { line } else { Rect::default() }
+}
+
+fn open_list(list: Rect, folded: bool) -> Rect {
+    if folded { Rect::default() } else { list }
+}
+
+fn above_projects(folded: Sections) -> Above {
+    if folded.projects { Above::Folded { rows: 1 } } else { Above::Open { keep: MIN_STACK_SECTION } }
+}
+
+fn above_stacked(folded: Sections) -> Above {
+    match (folded.projects, folded.workspaces) {
+        (false, false) => Above::Open { keep: STACKED_KEEP },
+        (true, true) => Above::Folded { rows: FOLDED_STACK_ROWS },
+        _ => Above::Open { keep: MIN_STACK_SECTION + 2 },
+    }
 }
 
 fn wide_columns(area: Rect, projects: u16, workspaces: u16) -> [Rect; 4] {
@@ -398,17 +442,22 @@ fn wide_columns(area: Rect, projects: u16, workspaces: u16) -> [Rect; 4] {
     [columns, left, workspaces, pane]
 }
 
+fn projects_side(r: Rect, widths: Widths, screen: Screen) -> Areas {
+    let folded = screen.folded;
+    let [title, list, separator, plugins, worktrees, machine, more] = projects_column(r, screen);
+    let lists = Rect { height: list.bottom().saturating_sub(title.y), ..title };
+    let (lists, agents_areas) = agents_section(lists, widths, above_projects(folded), screen);
+    let [title, list] =
+        if screen.agents { section(lists, folded.projects) } else { [title, open_list(list, folded.projects)] };
+    Areas { title, list, separator, plugins, worktrees, machine, more, ..agents_areas }
+}
+
 fn wide_layout(area: Rect, widths: Widths, screen: Screen) -> Areas {
-    let agents = screen.agents;
     let Widths { projects, workspaces, .. } = widths.fit(area.width);
     let [columns, left, workspaces, pane] = wide_columns(area, projects, workspaces);
     let (search, results) = search_and_results(Rect { width: columns.width.saturating_sub(1), ..columns });
     let sidebar = below_header(left);
-    let [title, list, separator, plugins, worktrees, machine, more] =
-        projects_column(sidebar_block().inner(sidebar), screen);
-    let lists = Rect { height: list.bottom().saturating_sub(title.y), ..title };
-    let (lists, agents_areas) = agents_section(lists, widths, MIN_STACK_SECTION, agents);
-    let [title, list] = if agents { section(lists) } else { [title, list] };
+    let projects = projects_side(sidebar_block().inner(sidebar), widths, screen);
     let [workspaces_title, workspaces_list, workspaces_separator, issues, todo] =
         workspaces_column(below_header(sidebar_block().inner(workspaces)), screen);
     Areas {
@@ -416,16 +465,9 @@ fn wide_layout(area: Rect, widths: Widths, screen: Screen) -> Areas {
         search,
         search_button: search,
         sidebar,
-        title,
-        list,
-        separator,
-        plugins,
-        worktrees,
-        machine,
-        more,
         workspaces,
         workspaces_title,
-        workspaces_list,
+        workspaces_list: open_list(workspaces_list, screen.folded.workspaces),
         workspaces_separator,
         issues,
         results,
@@ -434,7 +476,8 @@ fn wide_layout(area: Rect, widths: Widths, screen: Screen) -> Areas {
         workspaces_border: right_edge(workspaces),
         todo_button: changes_button(todo, TODO_LABEL),
         files_button: files_button(todo),
-        ..agents_areas
+        folded: screen.folds_drawn(true),
+        ..projects
     }
 }
 
@@ -443,13 +486,13 @@ fn search_and_results(r: Rect) -> (Rect, Rect) {
     (search_area(header), results)
 }
 
-fn section(r: Rect) -> [Rect; 2] {
+fn section(r: Rect, folded: bool) -> [Rect; 2] {
     let [title, _, list] =
         Layout::vertical([Constraint::Length(1), Constraint::Length(GAP), Constraint::Min(0)]).areas(r);
-    [title, list]
+    [title, open_list(list, folded)]
 }
 
-fn one_column(area: Rect, widths: Widths, keep: u16, screen: Screen) -> (Areas, Rect) {
+fn one_column(area: Rect, widths: Widths, above: Above, screen: Screen) -> (Areas, Rect) {
     let column = Rect { width: widths.stacked_width(area.width), ..area };
     let pane_x = column.right().saturating_add(PANE_PADDING).min(area.right());
     let pane = Rect { x: pane_x, width: area.right() - pane_x, ..area };
@@ -479,11 +522,12 @@ fn one_column(area: Rect, widths: Widths, keep: u16, screen: Screen) -> (Areas, 
         files_button: files_button(todo),
         ..Areas::default()
     };
-    let (sections, section) = agents_section(Rect { height: footer_y - room.y, ..room }, widths, keep, screen.agents);
+    let (sections, section) = agents_section(Rect { height: footer_y - room.y, ..room }, widths, above, screen);
     let frame = Areas {
         agents: Rect { x: column.x, width: column.width, ..section.agents },
         agents_title: section.agents_title,
         agents_list: section.agents_list,
+        agents_line: section.agents_line,
         agents_border: section.agents_border,
         ..frame
     };
@@ -502,17 +546,25 @@ fn stack_footer_rows(footer: Rect, screen: Screen) -> [Rect; 8] {
     [separator, issues, todo, worktrees, machine, plugins, more_separator, more]
 }
 
-fn stacked_layout(area: Rect, widths: Widths, screen: Screen) -> Areas {
-    let sidebar = screen.sidebar;
-    let (frame, sections) = one_column(area, widths, STACKED_KEEP, screen);
+fn stack_split(sections: Rect, widths: Widths, folded: (bool, bool)) -> [Rect; 3] {
     let room = Rect { height: sections.height.saturating_sub(1), ..sections };
-    let top_rows = widths.top_rows(room.height);
+    let top_rows = widths.stack_rows(room.height, folded);
     let top = Rect { height: top_rows, ..room }.intersection(sections);
     let line = Rect { y: room.y + top_rows, height: 1, ..room }.intersection(sections);
     let under = Rect { y: room.y + top_rows + 1, height: room.height - top_rows, ..room }.intersection(sections);
-    let (projects, workspaces) = if sidebar == Sidebar::WorkspacesOnTop { (under, top) } else { (top, under) };
-    let [title, list] = section(projects);
-    let [workspaces_title, workspaces_list] = section(workspaces);
+    [top, line, under]
+}
+
+fn stacked_layout(area: Rect, widths: Widths, screen: Screen) -> Areas {
+    let folded = screen.folded;
+    let workspaces_on_top = screen.sidebar == Sidebar::WorkspacesOnTop;
+    let (frame, sections) = one_column(area, widths, above_stacked(folded), screen);
+    let order =
+        if workspaces_on_top { (folded.workspaces, folded.projects) } else { (folded.projects, folded.workspaces) };
+    let [top, line, under] = stack_split(sections, widths, order);
+    let (projects, workspaces) = if workspaces_on_top { (under, top) } else { (top, under) };
+    let [title, list] = section(projects, folded.projects);
+    let [workspaces_title, workspaces_list] = section(workspaces, folded.workspaces);
     let widen = |r: Rect| Rect { x: frame.sidebar.x, width: frame.sidebar.width, ..r };
     Areas {
         sidebar: widen(projects),
@@ -521,19 +573,22 @@ fn stacked_layout(area: Rect, widths: Widths, screen: Screen) -> Areas {
         workspaces: widen(workspaces),
         workspaces_title,
         workspaces_list,
-        stack_border: line,
+        stack_line: line,
+        stack_border: line_if(!folded.projects && !folded.workspaces, line),
+        folded: screen.folds_drawn(true),
         ..frame
     }
 }
 
 fn tree_layout(area: Rect, widths: Widths, screen: Screen) -> Areas {
-    let (frame, sections) = one_column(area, widths, MIN_STACK_SECTION, screen);
-    let [title, list] = section(sections);
+    let (frame, sections) = one_column(area, widths, above_projects(screen.folded), screen);
+    let [title, list] = section(sections, screen.folded.projects);
     Areas {
         tree: true,
         sidebar: Rect { x: frame.sidebar.x, width: frame.sidebar.width, ..sections },
         title,
         list,
+        folded: screen.folds_drawn(false),
         ..frame
     }
 }
@@ -571,7 +626,7 @@ fn compact_sections(menu: Rect, title: Rect, screen: Screen) -> Areas {
     Areas {
         agents,
         agents_title,
-        agents_list,
+        agents_list: open_list(agents_list, screen.folded.agents),
         agents_button,
         bots,
         bots_title,
@@ -619,7 +674,7 @@ fn compact_layout(area: Rect, screen: Screen) -> Areas {
         back,
         sidebar: below,
         title,
-        list,
+        list: open_list(list, screen.folded.projects),
         separator,
         plugins,
         worktrees,
@@ -627,7 +682,7 @@ fn compact_layout(area: Rect, screen: Screen) -> Areas {
         more,
         workspaces: below,
         workspaces_title,
-        workspaces_list,
+        workspaces_list: open_list(workspaces_list, screen.folded.workspaces),
         workspaces_separator,
         issues,
         results: below,
@@ -636,6 +691,7 @@ fn compact_layout(area: Rect, screen: Screen) -> Areas {
         changes_button,
         todo_button,
         files_button,
+        folded: screen.folds_drawn(true),
         ..compact_sections(menu, title, screen)
     }
 }

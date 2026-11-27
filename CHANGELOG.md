@@ -2,9 +2,14 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
-## 0.14.1
+## 0.14.2
 
 - **A machine's tabs in the tabs above the pane.** With **settings → UI → tabs** set to *top*, the bar above the pane shows the tabs of the machine's workspace you are on, instead of this computer's: click one to show it, **`+`** opens a tab there, and each tab has its **`⋯`** (or a right-click) to rename or close it and its **`×`**, as the machine's rows in the sidebar. A tab with an agent asks before closing, a closing tab reads `closing…`, and while the machine is down the bar is dimmed and says why nothing was sent. The line under the tabs shows the model and context of the pane you are in there.
+
+## 0.14.1
+
+- **Collapse a whole sidebar section.** Click a section's title (**Projects**, **Workspaces** or **Agents**; in compact mode the workspaces menu is titled with the project's name) to fold the section under it (`▸`), and click it again to open it. It works in every sidebar layout and in compact mode. Where sections share a column, the others take its room; side by side, a folded **Workspaces** keeps its column. A folded title shows whether something it hides needs you and, where it fits, how many rows it hides. It is kept across restarts and is the same in every window. An open title shows `▾`, so in the narrowest projects column **Projects** is now cut to fit beside **Bots**.
+- **For programs**: `cornercase collapse` and `expand` take `--section projects|workspaces|agents` (the `section` field of the requests), `status`, `watch` and `view` list the collapsed ones in `collapsed_sections`, and `cornercase contract` has the feature `section-folds`.
 
 ## 0.14.0
 

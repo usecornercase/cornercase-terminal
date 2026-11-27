@@ -17,6 +17,7 @@ cc_reset() {
   CC_ISSUE_482=0
   CC_WINDOW="'$CC_BIN'"
   CC_HOMES=1
+  CC_FLAT=
   export CC_ISSUE_482
 }
 
@@ -63,7 +64,9 @@ cc_home_fresh() {
 
 cc_session() {
   mkdir -p "$CC_HOME/.local/state/cornercase"
-  sed "s|__HOME__|$CC_HOME|g" "$1" > "$CC_RUN/server.json"
+  flat=
+  [ -z "$CC_FLAT" ] || flat='s/, "parent_conversation": {[^}]*}//'
+  sed "s|__HOME__|$CC_HOME|g" "$1" | sed -e "$flat" > "$CC_RUN/server.json"
 }
 
 cc_config() {
@@ -149,6 +152,11 @@ cc_rclick() {
 cc_hover() {
   cc_find "$1" "${2:-0}" "${3:-1}" "${4:-0}"
   tmux -L "$CC_TMUX" send-keys -t 0 -l "$(printf '\033[<35;%s;%sM' "$col" "$row")"
+  sleep 0.3
+}
+
+cc_park() {
+  tmux -L "$CC_TMUX" send-keys -t 0 -l "$(printf '\033[<35;10;2M')"
   sleep 0.3
 }
 

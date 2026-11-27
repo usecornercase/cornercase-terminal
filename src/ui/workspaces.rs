@@ -7,25 +7,29 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
 use super::View;
-use super::chrome::draw_back;
+use super::chrome::draw_back_button;
 use super::drop::landed;
 use super::layout::Areas;
 use super::rows::{
     Band, GAP, RowButton, Rows, Tags, arrow, draw_hidden, draw_landing, draw_rail, draw_row_buttons, marker, room,
     row_button, row_close_button, row_menu_button, row_rect,
 };
+use super::sections::draw_section_title;
 use super::sidebar::NEW_BUTTON;
 use super::theme::{pull_tag, reopen_mark, severity_color, stack_tag, status_icon};
-use super::widgets::{button_style, dim, draw_band, draw_button, draw_title, middle, sidebar_hovered};
+use super::widgets::{button_style, dim, draw_band, draw_button, middle, sidebar_hovered};
 use crate::agents::activity::{self, Status};
 use crate::agents::usage::Severity;
 use crate::pull_request::Mark;
+use crate::state::Section;
 use crate::text::{cells, clip_cells, truncate_cells, truncate_right};
 
 mod machine;
 
 pub(crate) use machine::MachineTag;
 pub(super) use machine::{dim_row, machine_span, seen_note, spin};
+
+pub(super) const WORKSPACES_TITLE: &str = "Workspaces";
 
 const SHELL_ICON: &str = "›";
 
@@ -306,6 +310,16 @@ impl From<String> for TabEntry {
     }
 }
 
+fn draw_workspaces_title(f: &mut Frame, view: &View, areas: &Areas) {
+    if areas.back.is_empty() {
+        draw_section_title(f, view, areas, Section::Workspaces, WORKSPACES_TITLE);
+        return;
+    }
+    draw_back_button(f, view, areas);
+    let name = view.shown_project().and_then(|p| view.projects.get(p)).map(|p| p.name.as_str());
+    draw_section_title(f, view, areas, Section::Workspaces, name.unwrap_or(WORKSPACES_TITLE));
+}
+
 pub(super) fn draw_workspaces(f: &mut Frame, view: &View, areas: &Areas) {
     if let Some(card) = &view.bot_card {
         super::bots::card::draw_card(f, view, card, areas);
@@ -314,13 +328,8 @@ pub(super) fn draw_workspaces(f: &mut Frame, view: &View, areas: &Areas) {
     if view.bots_page() && !areas.compact() {
         return;
     }
-    if areas.back.is_empty() {
-        draw_title(f, view.muted, areas.workspaces_title, "Workspaces");
-    } else {
-        let name = view.shown_project().and_then(|p| view.projects.get(p)).map(|p| p.name.as_str());
-        draw_back(f, view, areas, name.unwrap_or_default());
-    }
-    if view.shown_project().is_none() {
+    draw_workspaces_title(f, view, areas);
+    if view.shown_project().is_none() || areas.folded.workspaces {
         return;
     }
 

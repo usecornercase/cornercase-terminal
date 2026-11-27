@@ -4,7 +4,7 @@ expression: t.backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                              "
 "                                                         │                                                              "
-" Projects                      │ Workspaces              │                                                              "
+" ▾ Projects                    │ ▾ Workspaces            │                                                              "
 "          ╭─ Routines › prs ─────────────────────────────────────────────────────────────────────────────────╮          "
 "▌ web-shop│  prs has no routines yet. + routine schedules one, or ask prs in its chat, such as "Every        │          "
 "          │  weekday at 9, tell me which of my PRs are blocked."                                             │          "

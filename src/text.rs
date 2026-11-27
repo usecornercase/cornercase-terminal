@@ -3,7 +3,8 @@ use std::ops::Range;
 use std::path::Path;
 
 use regex::{Regex, RegexBuilder};
-use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+use unicode_segmentation::UnicodeSegmentation;
+use unicode_width::UnicodeWidthStr;
 
 pub(crate) mod stretch;
 
@@ -52,19 +53,15 @@ pub(crate) fn cells(s: &str) -> usize {
     s.width()
 }
 
+fn grapheme_cells(grapheme: &str) -> usize {
+    if grapheme.contains(char::is_control) { 0 } else { cells(grapheme) }
+}
+
 pub(crate) fn truncate_cells(s: &str, max: usize) -> String {
     if cells(s) <= max || max < 2 {
         return s.to_string();
     }
-    let mut used = 0;
-    let head: String = s
-        .chars()
-        .take_while(|ch| {
-            used += ch.width().unwrap_or(0);
-            used < max
-        })
-        .collect();
-    format!("{}…", head.trim_end_matches('…'))
+    format!("{}…", clip_cells(s, max - 1).trim_end_matches('…'))
 }
 
 pub(crate) fn truncate_cells_left(s: &str, max: usize) -> String {
@@ -72,17 +69,16 @@ pub(crate) fn truncate_cells_left(s: &str, max: usize) -> String {
         return s.to_string();
     }
     let mut used = 0;
-    let mut tail: Vec<char> = s
-        .chars()
+    let mut tail: Vec<&str> = s
+        .graphemes(true)
         .rev()
-        .take_while(|ch| {
-            used += ch.width().unwrap_or(0);
+        .take_while(|grapheme| {
+            used += grapheme_cells(grapheme);
             used < max
         })
         .collect();
     tail.reverse();
-    let tail: String = tail.into_iter().collect();
-    format!("…{}", tail.trim_start_matches('…'))
+    format!("…{}", tail.concat().trim_start_matches('…'))
 }
 
 pub(crate) fn pad_cells(s: &str, width: usize) -> String {
@@ -91,9 +87,9 @@ pub(crate) fn pad_cells(s: &str, width: usize) -> String {
 
 pub(crate) fn clip_cells(s: &str, max: usize) -> String {
     let mut used = 0;
-    s.chars()
-        .take_while(|ch| {
-            used += ch.width().unwrap_or(0);
+    s.graphemes(true)
+        .take_while(|grapheme| {
+            used += grapheme_cells(grapheme);
             used <= max
         })
         .collect()
@@ -101,14 +97,14 @@ pub(crate) fn clip_cells(s: &str, max: usize) -> String {
 
 pub(crate) fn wrap_cells(s: &str, max: usize) -> Vec<String> {
     let (mut rows, mut row, mut used) = (Vec::new(), String::new(), 0);
-    for ch in s.chars() {
-        let width = ch.width().unwrap_or(0);
+    for grapheme in s.graphemes(true) {
+        let width = grapheme_cells(grapheme);
         if max > 0 && used > 0 && used + width > max {
             rows.push(std::mem::take(&mut row));
             used = 0;
         }
         used += width;
-        row.push(ch);
+        row.push_str(grapheme);
     }
     rows.push(row);
     rows

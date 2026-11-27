@@ -15,7 +15,10 @@ use crate::ui::{self, SidebarHit, SidebarRow, WorkspaceHit, WorkspaceRow};
 
 mod agents;
 mod drag;
+mod sections;
 mod tree;
+
+pub(in crate::app) use sections::section_tags;
 
 impl App {
     pub(super) fn sidebar_rows(&self) -> Vec<SidebarRow> {

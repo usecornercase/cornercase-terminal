@@ -1,11 +1,10 @@
 ---
 source: src/app/tests/flows_dialog.rs
-assertion_line: 639
 expression: "shown(&mut s.app, area)"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                "
 "  ╭─ Flows ────────────────────────────────────────────────────────────────────────────╮  "
-" P│ teams of agents that work through a plan, started from an issue or a prompt        │  "
+" ▾│ teams of agents that work through a plan, started from an issue or a prompt        │  "
 "  │                                                                                    │  "
 "  │ ▌ Arena                     6 …  coder A + coder B → judge → integrator → reviewer │  "
 "  │   Bug, test first           4 agents  reproducer → coder → tester                  │  "

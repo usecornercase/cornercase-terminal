@@ -4,7 +4,7 @@ expression: "format!(\"{}\", render(&mut s.app, WIDE).backend())"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                                                            "
 "                                                         │                                                                                            "
-" Proj╭─ Start a flow ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮     "
+" ▾ Pr╭─ Start a flow ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮     "
 "     │ Full issue in web-shop, in a worktree of its own                                                                                         │     "
 "▌ web│                                                                                                                                          │     "
 "     │ Flow templates                                                                            ╭─ Diagram ──────────────────────────────────╮ │     "

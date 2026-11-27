@@ -4,7 +4,7 @@ expression: "render_sized(&shown(Sidebar::SideBySide, quiet, false), W,\nTALL.he
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "                                                         │                                          "
-" Projects               Bots › │ Workspaces              │                                          "
+" ▾ Projects             Bots › │ ▾ Workspaces            │                                          "
 "                               │                         │                                          "
 "▌ cornercase (1)               │  + New                  │                                          "
 "  website (1)                  │                         │                                          "

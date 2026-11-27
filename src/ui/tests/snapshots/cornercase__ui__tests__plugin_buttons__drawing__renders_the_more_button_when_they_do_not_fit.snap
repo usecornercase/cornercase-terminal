@@ -4,7 +4,7 @@ expression: "render_sized(&v, W, H).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "                                                         │                                          "
-" Projects                      │ Workspaces              │                                          "
+" ▾ Projects                    │ ▾ Workspaces            │                                          "
 "                               │                         │                                          "
 "▌ ~ (1)                        │                         │                                          "
 "  shop (1)                     │                         │                                          "

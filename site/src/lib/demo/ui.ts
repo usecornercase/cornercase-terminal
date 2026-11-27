@@ -89,7 +89,9 @@ import {
   FILES_LABEL,
   todoWithDot,
   PROJECTS_TITLE,
-  projectsTitleRoom,
+  type Section,
+  SECTION_LEAD,
+  sectionTitle,
 } from './layout';
 import { USAGE, STATS, type UsageWindow } from './data';
 import { render as markdown } from './markdown';
@@ -166,6 +168,8 @@ const SESSIONS_PITCH = 2;
 const MODE_WIDTH = 3;
 const NO_TAB = 'no tab open';
 const AGENTS_TITLE = 'Agents';
+const WORKSPACES_TITLE = 'Workspaces';
+const MIN_NAME = 2;
 const NO_AGENTS = 'no agents running';
 const MIN_WORKSPACE_WIDTH = 4;
 const MIN_ROLE_WIDTH = 4;
@@ -609,10 +613,16 @@ export class Painter {
       for (let y = r.y; y < bottom(r); y++) this.g.put(r.x, y, '│', { fg: lit(border, r) ? 6 : this.lineColour });
       this.region({ r, drag: { kind: 'border', border }, double: () => app.resetBorder(border), cursor: 'col-resize' });
     }
-    const line = areas.stackBorder;
+    this.divider(areas.stackLine, areas.stackBorder, 'stack');
+  }
+
+  private divider(line: Rect, border: Rect, which: 'stack' | 'agents'): void {
     if (isEmpty(line)) return;
-    this.line(line, [seg(` ${'─'.repeat(Math.max(0, line.w - 2))}`, { fg: lit('stack', line) ? 6 : this.lineColour })]);
-    this.region({ r: line, drag: { kind: 'border', border: 'stack' }, double: () => app.resetBorder('stack'), cursor: 'row-resize' });
+    const app = this.app;
+    const moves = !isEmpty(border);
+    const lit = moves && ((app.dragging?.kind === 'border' && app.dragging.border === which) || this.sidebarHovered(line));
+    this.line(line, [seg(` ${'─'.repeat(Math.max(0, line.w - 2))}`, { fg: lit ? 6 : this.lineColour })]);
+    if (moves) this.region({ r: line, drag: { kind: 'border', border: which }, double: () => app.resetBorder(which), cursor: 'row-resize' });
   }
 
 
@@ -694,9 +704,32 @@ export class Painter {
     this.line(middle(r), [seg(` ${text}`, { fg: 8, add: BOLD })]);
   }
 
-  private projectsTitle(areas: Areas): void {
-    const room = projectsTitleRoom(areas.title, areas.botsButton);
-    this.title(rect(areas.title.x, areas.title.y, room, areas.title.h), truncateRight(PROJECTS_TITLE, Math.max(0, room - 1)));
+  private sectionHeader(areas: Areas, section: Section, text: string): void {
+    const target = sectionTitle(areas, section);
+    if (isEmpty(target)) return;
+    const folded = areas.folded[section];
+    const app = this.app;
+    this.band(target, this.titleLine(target.w, text, folded, folded ? app.sectionTags(section) : null), this.rowBackground(target, false));
+    this.region({ r: target, hold: true, click: () => app.toggleSection(section), cursor: 'pointer' });
+  }
+
+  private titleLine(cells: number, text: string, folded: boolean, tags: { count: number; attention: Status | null } | null): Line {
+    const bold: Style = { fg: 8, add: BOLD };
+    const cut = (max: number) => (max < MIN_NAME ? '' : truncateRight(text, max));
+    const lead = [seg(' '), arrow(folded)];
+    const free = Math.max(0, cells - SECTION_LEAD);
+    if (!tags) return [...lead, seg(cut(free), bold)];
+    const room = Math.max(0, free - 1);
+    const marks = fitTags(tags.attention ? [statusIcon(tags.attention, spinAt(this.app))] : [], room + 2);
+    const left = room - marks.reserved;
+    const wanted = ` (${tags.count})`;
+    const kept = Math.min(Math.max([...text].length, MIN_NAME), WORKSPACES_TITLE.length);
+    const count = this.app.config.counts && wanted.length + kept <= left ? wanted : '';
+    const bare = !marks.segs.length && !count;
+    const name = cut(bare ? free : left - count.length);
+    const line = [...lead, seg(name, bold), seg(count, DARK)];
+    pushTags(line, marks, [...name].length + count.length, room);
+    return line;
   }
 
   more<R>(list: Rect, rows: Rows, specs: R[], named: (r: R) => boolean): void {
@@ -860,7 +893,8 @@ export class Painter {
 
   private sidebar(areas: Areas): void {
     const app = this.app;
-    this.projectsTitle(areas);
+    this.sectionHeader(areas, 'projects', PROJECTS_TITLE);
+    if (areas.folded.projects) return;
     const all = app.sidebarRows();
     const base = sidebarLayout(areas.list, areas.pitch, all, app.projectsScroll);
     const drag = app.rowDragView();
@@ -893,7 +927,8 @@ export class Painter {
 
   private tree(areas: Areas): void {
     const app = this.app;
-    this.projectsTitle(areas);
+    this.sectionHeader(areas, 'projects', PROJECTS_TITLE);
+    if (areas.folded.projects) return;
     const shape = app.treeShape();
     const base = treeLayout(areas.list, shape, treeRows(shape), app.projectsScroll);
     const drag = app.rowDragView();
@@ -952,14 +987,10 @@ export class Painter {
       this.region({ r: b, click: () => app.navTo('agents'), cursor: 'pointer' });
       return;
     }
-    const line = areas.agentsBorder;
-    if (!isEmpty(line)) {
-      const lit = (app.dragging?.kind === 'border' && app.dragging.border === 'agents') || this.sidebarHovered(line);
-      this.line(line, [seg(` ${'─'.repeat(Math.max(0, line.w - 2))}`, { fg: lit ? 6 : this.lineColour })]);
-      this.region({ r: line, drag: { kind: 'border', border: 'agents' }, double: () => app.resetBorder('agents'), cursor: 'row-resize' });
-    }
-    if (areas.compact) this.back(areas, AGENTS_TITLE);
-    else this.title(areas.agentsTitle, AGENTS_TITLE);
+    this.divider(areas.agentsLine, areas.agentsBorder, 'agents');
+    if (areas.compact) this.backButton(areas);
+    this.sectionHeader(areas, 'agents', AGENTS_TITLE);
+    if (areas.folded.agents) return;
     const list = areas.agentsList;
     const entries = shapeTree(app.agentShown(), list.w < MIN_MENU_ROW_WIDTH ? NARROW_AGENT_DEPTH : MAX_AGENT_DEPTH);
     const rows = agentLayout(list, areas.pitch, entries.length, app.agentsScroll);
@@ -1013,10 +1044,14 @@ export class Painter {
     this.band(close, [seg(centered('×', close.w))], style);
   }
 
-  back(areas: Areas, name: string): void {
+  private backButton(areas: Areas): void {
     const style = this.buttonStyle(areas.back, CYAN, 6);
     this.button(areas.back, '', '‹ Projects', style);
     this.region({ r: areas.back, click: () => this.app.pressBack(), cursor: 'pointer' });
+  }
+
+  back(areas: Areas, name: string): void {
+    this.backButton(areas);
     const restX = right(areas.back);
     const m = middle(areas.back);
     this.span(restX, m.y, ` ${truncateRight(name, Math.max(0, right(areas.bar) - restX - 1))}`, { fg: 8, add: BOLD });
@@ -1058,10 +1093,10 @@ export class Painter {
     const app = this.app;
     if (app.bots.current() && !areas.compact) return drawCard(this, areas);
     if (app.bots.page && !areas.compact) return;
-    if (isEmpty(areas.back)) this.title(areas.workspacesTitle, 'Workspaces');
-    else this.back(areas, app.project() ? projectLabel(app.project()!) : '');
     const p = app.project();
-    if (!p) return;
+    if (!isEmpty(areas.back)) this.backButton(areas);
+    this.sectionHeader(areas, 'workspaces', !isEmpty(areas.back) && p ? projectLabel(p) : WORKSPACES_TITLE);
+    if (!p || areas.folded.workspaces) return;
     const list = areas.workspacesList;
     const tabs = app.tabLines();
     const listed = app.tabsListed();

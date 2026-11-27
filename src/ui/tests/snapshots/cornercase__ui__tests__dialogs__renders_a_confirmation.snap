@@ -4,7 +4,7 @@ expression: "render(&with(Overlay::Confirm(confirm))).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "                                                         │                                          "
-" Projects                      │ Workspaces              │                                          "
+" ▾ Projects                    │ ▾ Workspaces            │                                          "
 "                               │                         │                                          "
 "▌ cornercase (1)  ╭─ Remove workspace ───────────────────────────────────────────╮                  "
 "                  │ Remove the workspace login and delete its worktree folder    │                  "

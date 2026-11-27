@@ -4,7 +4,7 @@ expression: dialog(AREA)
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "                                                         │                                          "
-" Projects                      │ Workspaces              │                                          "
+" ▾ Projects                    │ ▾ Workspaces            │                                          "
 "                               │                         │                                          "
 "  + New                        │                         │                  █████████               "
 "                               │                         │               ▄▄▄▀▀▀▀▀▀▀▀▀               "

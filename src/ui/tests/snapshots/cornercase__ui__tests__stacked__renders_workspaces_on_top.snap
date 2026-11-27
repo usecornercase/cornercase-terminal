@@ -4,7 +4,7 @@ expression: "render_sized(&with_lists(Sidebar::WorkspacesOnTop), W, TALL.height)
 ---
 "  ⌕ search projects, workspa…  │                                                                    "
 "                               │                                                                    "
-" Workspaces                    │                                                                    "
+" ▾ Workspaces                  │                                                                    "
 "                               │                                                                    "
 "  ▾ login                      │                                                                    "
 "▌ ├ › claude                   │                                                                    "
@@ -15,7 +15,7 @@ expression: "render_sized(&with_lists(Sidebar::WorkspacesOnTop), W, TALL.height)
 "  ↓ 1 more                     │                                                                    "
 "  + New                        │                                                                    "
 " ───────────────────────────── │                                                                    "
-" Projects                      │                                                                    "
+" ▾ Projects                    │                                                                    "
 "                               │                             no tab open                            "
 "▌ tmp (1)                      │                      + Tab opens a shell here                      "
 "  cornercase (1)               │                                                                    "

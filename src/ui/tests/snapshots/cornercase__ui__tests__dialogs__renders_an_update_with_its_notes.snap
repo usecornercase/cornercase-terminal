@@ -4,7 +4,7 @@ expression: "render(&with(Overlay::Update(update))).backend()"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "              ╭─ Update ─────────────────────────────────────────────────────────────╮              "
-" Projects     │ cornercase 9.0.0 is out (you have 0.1.0). Updating replaces          │              "
+" ▾ Projects   │ cornercase 9.0.0 is out (you have 0.1.0). Updating replaces          │              "
 "              │ ~/.local/bin/cornercase; your terminals keep running until you       │              "
 "▌ cornercase (│ restart.                                                             │              "
 "              │                                                                      │              "

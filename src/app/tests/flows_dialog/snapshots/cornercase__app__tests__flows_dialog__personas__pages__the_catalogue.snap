@@ -1,11 +1,10 @@
 ---
 source: src/app/tests/flows_dialog/personas.rs
-assertion_line: 215
 expression: "shown(&mut s.app, WIDE).replace(&server.url(), \"SERVER\")"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                                                            "
 "                                                         │                                                                                            "
-" Proj╭─ Flows › personas › import ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮     "
+" ▾ Pr╭─ Flows › personas › import ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮     "
 "     │ 2 personas in octo/agents: check the ones to import                                                                                      │     "
 "  + N│                                                                                                                                          │     "
 "     │ ▌ [ ] Engineering           1 persona  check all                                                                                         │     "

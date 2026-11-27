@@ -4,7 +4,7 @@ expression: "snapshot(Processes { confirm: Some(confirm()), ..processes() }, BIG
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                              "
 "  ╭─ Processes ──────────────────────────────────────────────────────────────────────────────────────────────────────╮  "
-" P│ › filter                                                                                    cpu   memory   name  │  "
+" ▾│ › filter                                                                                    cpu   memory   name  │  "
 "  │  3 panes · 7 processes · cpu 136.0% · 1.9 GB                                                                     │  "
 "▌ │ Stop this program and the programs it started?                                                                   │  "
 "  │ • node vite --port 5173 · pid 4211 · web-shop › fix/login › dev                                                  │  "

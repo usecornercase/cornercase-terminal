@@ -4,7 +4,7 @@ expression: render(&shown(refused)).backend()
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                          "
 "  ╭─ Campus asks for a secret ───────────────────────────────────────────────────────────────────╮  "
-" P│ Claude Code · through cornercase                                                             │  "
+" ▾│ Claude Code · through cornercase                                                             │  "
 "  │                                                                                              │  "
 "▌ │ It says:                                                                                     │  "
 "  │ │ to read your grades on the campus site, which needs your university login                  │  "

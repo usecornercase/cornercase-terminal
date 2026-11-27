@@ -83,6 +83,7 @@ fn report() -> Report {
         shown_bot: None,
         tunnels: Vec::new(),
         machine_tunnels: Vec::new(),
+        collapsed_sections: Vec::new(),
     }
 }
 

@@ -53,9 +53,10 @@ fi
 pct=${CC_AGENT_PERCENT:-7}
 model=${CC_AGENT_MODEL:-claude-opus-5-5}
 read_tokens=$((pct * 10000 - 15657))
-printf '{"type":"assistant","message":{"model":"%s","usage":{"input_tokens":2,"cache_creation_input_tokens":15655,"cache_read_input_tokens":%s}}}\n' "$model" "$read_tokens" > "$dir/projects/$slug/s$$.jsonl"
+session=${CC_AGENT_SESSION:-s$$}
+printf '{"type":"assistant","message":{"model":"%s","usage":{"input_tokens":2,"cache_creation_input_tokens":15655,"cache_read_input_tokens":%s}}}\n' "$model" "$read_tokens" > "$dir/projects/$slug/$session.jsonl"
 state() {
-  printf '{"pid":%s,"sessionId":"s%s","cwd":"%s","status":"%s"}' $$ $$ "$PWD" "$1" > "$dir/sessions/$$.json"
+  printf '{"pid":%s,"sessionId":"%s","cwd":"%s","status":"%s"}' $$ "$session" "$PWD" "$1" > "$dir/sessions/$$.json"
 }
 trap 'rm -f "$dir/sessions/$$.json"; exit 0' INT TERM HUP
 m=$(printf '\033[35m'); b=$(printf '\033[1m'); d=$(printf '\033[2m'); r=$(printf '\033[0m')
@@ -102,7 +103,9 @@ answer_file() {
   printf '# %s, answer %s\n\n%s\n' "$1" "$n" "$2" > "$CORNERCASE_RUN_DIR/$1-$n.md"
 }
 member() {
+  state busy
   role=$(drain "$1" | sed -n 's/.*You are `\([^`]*\)` in this team.*/\1/p' | head -n 1)
+  state idle
   fresh
   printf '> You are %s in a team of coding agents\n\n' "$role"
   said 'Waiting for the orchestrator'

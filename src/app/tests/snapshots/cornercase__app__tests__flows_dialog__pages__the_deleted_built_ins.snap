@@ -1,11 +1,10 @@
 ---
 source: src/app/tests/flows_dialog.rs
-assertion_line: 658
 expression: "shown(&mut s.app, WIDE)"
 ---
 "  ⌕ search projects, workspaces, tabs                    │                                                                                            "
 "                                                         │                                                                                            "
-" Proj╭─ Settings ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮     "
+" ▾ Pr╭─ Settings ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮     "
 "     │  Worktrees   Agents   Accounts   Flows   Issues   UI   Remote   Plugins   Machines                                                       │     "
 "  + N│  ⌕ search settings                                                                                                                       │     "
 "     │   Bug, test first           4 agents  reproducer → coder → tester                         ╭─ Diagram ──────────────────────────────────╮ │     "

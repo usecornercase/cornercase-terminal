@@ -16,6 +16,12 @@ pub(crate) const MIN_PANE_WIDTH: u16 = 20;
 
 pub(crate) const MIN_STACK_SECTION: u16 = 5;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Above {
+    Open { keep: u16 },
+    Folded { rows: u16 },
+}
+
 impl Default for Widths {
     fn default() -> Self {
         Self { projects: SIDEBAR_WIDTH, workspaces: WORKSPACES_WIDTH, changes: None, stack: None, agents: None }
@@ -89,6 +95,14 @@ impl Widths {
         self.stack.unwrap_or(room / 2).clamp(MIN_STACK_SECTION, room - MIN_STACK_SECTION)
     }
 
+    pub(crate) fn stack_rows(self, room: u16, (top, bottom): (bool, bool)) -> u16 {
+        match (top, bottom) {
+            (true, _) => room.min(1),
+            (false, true) => room.saturating_sub(1),
+            (false, false) => self.top_rows(room),
+        }
+    }
+
     pub(crate) fn agents_rows(self, room: u16, keep: u16) -> u16 {
         if room < keep + MIN_STACK_SECTION {
             return room / 3;
@@ -96,9 +110,17 @@ impl Widths {
         self.agents.unwrap_or(room / 3).clamp(MIN_STACK_SECTION, room - keep)
     }
 
-    fn above_agents(self, room: Rect) -> u16 {
+    pub(crate) fn agents_taken(self, room: u16, above: Above, folded: bool) -> u16 {
+        match above {
+            _ if folded => room.min(1),
+            Above::Folded { rows } => room.saturating_sub(rows),
+            Above::Open { keep } => self.agents_rows(room, keep),
+        }
+    }
+
+    fn above_agents(self, room: Rect, folded: bool) -> u16 {
         let full = Rect { height: room.height + 1, ..room };
-        split_agents(full, self, STACKED_KEEP)[0].height
+        split_agents(full, self, Above::Open { keep: STACKED_KEEP }, folded)[0].height
     }
 
     #[must_use]
@@ -110,8 +132,9 @@ impl Widths {
             }
             Border::Stack => {
                 let mut room = stack_room(area, screen);
-                if screen.wide().agents {
-                    room.height = self.above_agents(room).saturating_sub(1);
+                let shown = screen.wide();
+                if shown.agents {
+                    room.height = self.above_agents(room, shown.folded.agents).saturating_sub(1);
                 }
                 let wanted = Self { stack: Some(pos.y.saturating_sub(room.y)), ..self };
                 Self { stack: Some(wanted.top_rows(room.height)), ..self }

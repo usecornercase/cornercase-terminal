@@ -1,4 +1,5 @@
 use crate::issues::Secret;
+use crate::state::Section;
 use serde_json::{Value, json};
 
 use super::contract::unknown_fields;
@@ -92,6 +93,21 @@ fn first_commands() -> Vec<Command> {
     ]
 }
 
+#[test]
+fn a_fold_sends_only_the_half_it_names() {
+    let row = Command::Collapse(Fold { item: Some(Item::Group(3)), section: None });
+    let section = Command::Expand(Fold { item: None, section: Some(Section::Agents) });
+
+    assert_eq!(
+        serde_json::to_value(row).expect("json"),
+        json!({"command": "collapse", "args": {"item": {"group": 3}}})
+    );
+    assert_eq!(
+        serde_json::to_value(section).expect("json"),
+        json!({"command": "expand", "args": {"section": "agents"}})
+    );
+}
+
 fn middle_commands() -> Vec<Command> {
     vec![
         Command::StartServer(StartServer::default()),
@@ -112,8 +128,8 @@ fn middle_commands() -> Vec<Command> {
         Command::Config(Configure::default()),
         Command::Move(Move { item: Item::Tab(1), before: None, into: None, ungroup: false }),
         Command::MovePane(MovePane::default()),
-        Command::Collapse(Fold { item: Item::Group(1) }),
-        Command::Expand(Fold { item: Item::Group(1) }),
+        Command::Collapse(Fold { item: Some(Item::Group(1)), section: None }),
+        Command::Expand(Fold { item: None, section: Some(Section::Agents) }),
         Command::GroupNew(GroupNew::default()),
         Command::GroupStyle(GroupStyle::default()),
         Command::GroupDelete(GroupDelete::default()),

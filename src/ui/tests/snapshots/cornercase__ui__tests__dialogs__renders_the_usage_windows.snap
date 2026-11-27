@@ -4,7 +4,7 @@ expression: "render(&with(Overlay::Usage(usage()))).backend()"
 ---
 "  ⌕ search project╭─ Usage ──────────────────────────────────────────────────────╮                  "
 "                  │  Limits   Stats                                              │                  "
-" Projects         │                                                              │                  "
+" ▾ Projects       │                                                              │                  "
 "                  │ Claude Code · max plan                        updated 2m ago │                  "
 "▌ cornercase (1)  │                                                              │                  "
 "                  │ session (5h)                           7% · resets in 2h 13m │                  "
