@@ -64,7 +64,6 @@ impl Scrolls {
 
     pub(super) fn follow_again(&mut self) {
         self.followed = Focus::default();
-        self.followed_bar = BarShown::default();
     }
 
     pub(super) fn reveal_again(&mut self) {
