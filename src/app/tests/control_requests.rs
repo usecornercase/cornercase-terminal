@@ -707,6 +707,7 @@ mod surfaces;
 mod talking;
 mod telegram;
 mod theme;
+mod thread;
 mod todo_sending;
 mod todos;
 mod tours;

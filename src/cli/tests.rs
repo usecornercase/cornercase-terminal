@@ -235,6 +235,14 @@ mod parsing {
     #[case::lines_of_the_last_message(&["read", "--last-message", "--lines", "5"])]
     #[case::lines_of_what_is_pending(&["read", "--pending", "--lines", "5"])]
     #[case::the_last_message_and_what_is_pending(&["read", "--pending", "--last-message"])]
+    #[case::lines_of_the_conversation(&["read", "--messages", "--lines", "5"])]
+    #[case::the_conversation_and_the_last_message(&["read", "--messages", "--last-message"])]
+    #[case::the_conversation_and_what_is_pending(&["read", "--messages", "--pending"])]
+    #[case::before_and_after(&["read", "--messages", "--before", "3", "--after", "4"])]
+    #[case::last_without_messages(&["read", "--last", "5"])]
+    #[case::before_without_messages(&["read", "--before", "3"])]
+    #[case::after_without_messages(&["read", "--after", "3"])]
+    #[case::no_last_messages(&["read", "--messages", "--last", "0"])]
     #[case::an_unknown_key(&["keys", "hello"])]
     #[case::two_prompts(&["start", "--prompt", "a", "--prompt-file", "b"])]
     #[case::a_worktree_and_a_workspace(&["start", "--worktree", "x", "--workspace", "1"])]
@@ -372,6 +380,15 @@ mod parsing {
 
         let Some(Command::Control(Control::Read(read))) = cli.command else { panic!("not read") };
         assert_eq!((read.tabs, read.last_message, read.print.json), (vec![4], true, true));
+    }
+
+    #[test]
+    fn a_conversation_is_read_from_a_pane_a_page_at_a_time() {
+        let cli = parse(&["read", "--pane", "7", "--messages", "--last", "5", "--before", "41", "--json"]);
+
+        let Some(Command::Control(Control::Read(read))) = cli.expect("parse").command else { panic!("not read") };
+        assert_eq!((read.panes, read.messages, read.print.json), (vec![7], true, true));
+        assert_eq!((read.last, read.before, read.after), (Some(5), Some(41), None));
     }
 
     #[test]

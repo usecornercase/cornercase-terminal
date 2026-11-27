@@ -119,6 +119,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "pending-question",
     "view-no-claim",
     "mark-seen",
+    "read-messages",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

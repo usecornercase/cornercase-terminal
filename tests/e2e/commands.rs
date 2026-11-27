@@ -445,7 +445,13 @@ fn let_agent_finish(session: &Session) {
     std::fs::write(session.claude_dir().join("finish"), "").expect("let the agent finish");
 }
 
-fn send_and_finish(session: &Session, pane: &str, until: &[&str], text: &str) -> String {
+pub(super) fn start_and_finish(session: &Session, prompt: &str) -> String {
+    let start = session.spawn(&["start", "claude", "--prompt", prompt, "--wait", "--timeout", "30"]);
+    let_agent_finish(session);
+    Session::output(start)
+}
+
+pub(super) fn send_and_finish(session: &Session, pane: &str, until: &[&str], text: &str) -> String {
     let args = [&["send", "--pane", pane, "--enter", "--wait"][..], until, &[text]].concat();
     let send = session.spawn(&args);
     let_agent_finish(session);
@@ -457,9 +463,7 @@ fn an_agent_started_from_the_command_line_takes_its_prompts_is_waited_for_and_re
     let app = agent_app();
     let session = &app.session;
 
-    let start = session.spawn(&["start", "claude", "--prompt", "fix the login", "--wait", "--timeout", "30"]);
-    let_agent_finish(session);
-    let started = Session::output(start);
+    let started = start_and_finish(session, "fix the login");
     let lines: Vec<&str> = started.lines().collect();
     let [pane, ended] = lines[..] else { panic!("not a pane and an ending: {started}") };
     let first = session.says(&["read", "--pane", pane, "--last-message"]);

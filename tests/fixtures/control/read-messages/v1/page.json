@@ -1,0 +1,20 @@
+{
+  "pane": 7,
+  "agent": "claude",
+  "conversation": "3f2a9c1e-4b7d-4e2a-9f10-6c8d2b4a1e37",
+  "messages": [
+    {
+      "id": 41,
+      "role": "user",
+      "text": "Add the login page",
+      "written": "2026-11-10T09:12:03Z"
+    },
+    {
+      "id": 42,
+      "role": "assistant",
+      "text": "Done. The page is in src/login.rs.",
+      "written": null
+    }
+  ],
+  "more_before": true
+}

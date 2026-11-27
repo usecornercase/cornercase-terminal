@@ -50,18 +50,7 @@ mod messages {
 
     fn journal() -> FakeVibe {
         let fake = FakeVibe::new();
-        fake.journal(&[
-            json!({"type": "command_reserved", "payload": {
-                "method": "turn/start",
-                "params": {"injected": false, "message": [{"type": "text", "text": "fix the login"}]},
-            }}),
-            json!({"type": "action_result", "payload": {"result": {"result": {
-                "parts": [{"type": "reasoning", "text": "thinking"}, {"type": "text", "text": "first"}],
-            }}}}),
-            json!({"type": "action_result", "payload": {"result": {"result": {
-                "parts": [{"type": "tool_call"}, {"type": "text", "text": "done"}],
-            }}}}),
-        ]);
+        fake.answered();
         fake
     }
 

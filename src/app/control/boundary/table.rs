@@ -94,6 +94,7 @@ pub(super) const OPEN: &[&str] = &[
     "events",
     "last-message",
     "pending-question",
+    "read-messages",
     "stats",
     "away",
     "mark",

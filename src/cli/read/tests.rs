@@ -96,3 +96,14 @@ mod pending {
         assert_eq!(nothing(&target), expected);
     }
 }
+
+mod messages {
+    use super::*;
+
+    #[rstest]
+    #[case::panes(&["--messages", "--pane", "4", "--pane", "5"])]
+    #[case::tabs(&["--messages", "--tab", "4", "--pane", "5"])]
+    fn reads_one_target(#[case] args: &[&str]) {
+        assert!(matches!(targets(&read(args)), Err(Error::WrongUsage(_))));
+    }
+}

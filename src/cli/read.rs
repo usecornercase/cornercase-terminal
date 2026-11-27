@@ -7,10 +7,14 @@ use crate::control::pending::PendingQuestion;
 use crate::control::{self, LastMessage};
 use crate::error::{Error, Result};
 
+mod messages;
 mod pending;
 
 pub(super) fn run(read: &ReadArgs) -> Result<bool> {
     let targets = targets(read)?;
+    if read.messages {
+        return messages::run(read, targets);
+    }
     if read.pending {
         client::use_pending_question()?;
     }

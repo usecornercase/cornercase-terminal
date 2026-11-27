@@ -252,7 +252,10 @@ fn persona_commands() -> Vec<Command> {
 }
 
 fn reading_commands() -> Vec<Command> {
-    vec![Command::PendingQuestion(pending::PendingQuestion::default())]
+    vec![
+        Command::PendingQuestion(pending::PendingQuestion::default()),
+        Command::ReadMessages(messages::ReadMessages::default()),
+    ]
 }
 
 pub(crate) fn every_command() -> Vec<Command> {

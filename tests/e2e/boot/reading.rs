@@ -13,6 +13,7 @@ fn reading_forms<'a>(aims: &'a Aims, other: &'a str) -> Vec<Vec<&'a str>> {
         vec!["read", "--pane", pane],
         vec!["read", "--tab", tab, "--last-message"],
         vec!["read", "--pane", pane, "--pending"],
+        vec!["read", "--pane", pane, "--messages"],
         vec!["read", "--pane", pane, "--pane", other, "--last-message", "--json"],
         vec!["wait", "--pane", pane, "--until", "turn-over", "--timeout", "5"],
         vec!["wait", "--pane", pane, "--pane", other, "--any", "--timeout", "5"],

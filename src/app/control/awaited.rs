@@ -37,14 +37,10 @@ impl App {
     }
 
     pub(in crate::app) fn awaited_read(&mut self, key: u64, result: error::Result<Option<context::Awaited>>) {
-        let Some(pending) = self.clients.requests.take(key) else { return };
-        let pane = pending.done.ids.pane.unwrap_or_default();
-        let agent = pending.done.agent.unwrap_or_default();
-        let reply = match result {
+        self.read_answered(key, result, |pane, agent, result| match result {
             Ok(Some(awaited)) => Ok(json(&Asking { pane, agent, awaited })),
             Ok(None) => Ok(Value::Null),
             Err(e) => Err(format!("cannot read what the {agent} agent in pane {pane} asks: {e}")),
-        };
-        self.answer(pending.client, reply);
+        });
     }
 }

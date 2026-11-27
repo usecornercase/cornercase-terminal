@@ -256,6 +256,10 @@ pub(crate) fn use_pending_question() -> Result<()> {
     require("pending-question", "cannot read what a waiting agent asks")
 }
 
+pub(crate) fn use_read_messages() -> Result<()> {
+    require("read-messages", "cannot read an agent's conversation")
+}
+
 pub(crate) fn use_view_no_claim() -> Result<()> {
     require("view-no-claim", "cannot open a view that leaves its tab's size alone: the view would resize the tab")
 }

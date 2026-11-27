@@ -679,6 +679,7 @@ impl App {
             AppEvent::PersonasFetched(source, result) => self.personas_fetched(&source, result),
             AppEvent::LastMessage { request, result } => self.message_read(request, result),
             AppEvent::Awaited { request, result } => self.awaited_read(request, result),
+            AppEvent::Thread { request, result } => self.thread_read(request, result),
             AppEvent::Ports(event) => self.ports_answered(event),
             AppEvent::Processes(event) => self.processes_answered(event, area),
             AppEvent::Encoded { key, result } => self.encoded(key, result),
