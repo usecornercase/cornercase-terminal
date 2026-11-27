@@ -274,10 +274,18 @@ impl App {
     }
 
     pub(super) fn mark(&mut self, marked: Marked, pending: bool) -> usize {
+        self.each_marked(marked, |agent| agent.mark(pending))
+    }
+
+    pub(super) fn see_marked(&mut self, marked: Marked) -> usize {
+        self.each_marked(marked, activity::Pane::see)
+    }
+
+    fn each_marked(&mut self, marked: Marked, change: impl Fn(&mut activity::Pane)) -> usize {
         let panes: Vec<u64> = self.marked_panes(marked).iter().map(|term| term.id).collect();
         for &pane in &panes {
             if let Some(term) = self.projects.pane_by_mut(pane) {
-                term.agent.mark(pending);
+                change(&mut term.agent);
             }
         }
         panes.len()

@@ -266,7 +266,7 @@ mod streams {
         assert!(run.contains("\"close_when_merged\":true"), "{run}");
     }
 
-    #[rstest::rstest]
+    #[rstest]
     #[case::run(
         r#"{"args": ["flow", "run", "Pair", "--prompt", "x", "--close-when-merged", "--free-builds", "--json"]}"#,
         "flow-run"
@@ -284,7 +284,7 @@ mod streams {
         assert!(!seen.iter().any(|text| text.contains(request)), "{seen:?}");
     }
 
-    #[rstest::rstest]
+    #[rstest]
     #[case::run(
         r#"{"args": ["flow", "run", "Pair", "--prompt", "x", "--close-when-merged", "--free-builds", "--json"]}"#,
         "flow-run"
@@ -358,6 +358,39 @@ mod streams {
         let error = answer.error.expect("an error");
         assert!(error.contains("what a waiting agent asks") && error.contains("update cornercase"), "{error}");
         assert!(!seen.iter().any(|text| text.contains("\"pending-question\"")), "{seen:?}");
+    }
+
+    #[rstest]
+    #[case::a_view_that_does_not_claim(
+        r#"{"args": ["view", "--cols", "40", "--rows", "30", "--no-claim"]}"#,
+        "view-no-claim",
+        "\"command\":\"view\"",
+        "leaves its tab's size alone"
+    )]
+    #[case::a_view_that_stops_claiming(
+        r#"{"args": ["view-set", "--view", "7", "--no-claim"]}"#,
+        "view-no-claim",
+        "\"command\":\"view-set\"",
+        "leaves its tab's size alone"
+    )]
+    #[case::a_seen_mark(
+        r#"{"args": ["mark", "--pane", "4", "--seen"]}"#,
+        "mark-seen",
+        "\"command\":\"mark\"",
+        "only the done mark"
+    )]
+    fn a_flag_an_older_server_would_ignore_is_refused_up_front(
+        #[case] line: &str,
+        #[case] feature: &str,
+        #[case] request: &str,
+        #[case] said: &str,
+    ) {
+        let (answer, seen) = in_a_view_on(line, lacking(feature));
+
+        assert_eq!(answer.status, 1, "{answer:?}");
+        let error = answer.error.expect("an error");
+        assert!(error.contains(said) && error.contains("update cornercase"), "{error}");
+        assert!(!seen.iter().any(|text| text.contains(request)), "{seen:?}");
     }
 
     #[test]

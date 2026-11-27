@@ -449,7 +449,10 @@ fn run_keys(keys: args::KeysArgs) -> Result<()> {
 
 fn run_mark(mark: &args::MarkArgs) -> Result<()> {
     let Target { pane, tab, .. } = mark.target;
-    let request = control::Mark { pane, tab, reviewed: mark.reviewed };
+    if mark.seen {
+        client::use_mark_seen()?;
+    }
+    let request = control::Mark { pane, tab, reviewed: mark.reviewed, seen: mark.seen };
     warn(&ask("mark", control::Command::Mark(request))?);
     Ok(())
 }

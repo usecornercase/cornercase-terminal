@@ -14,6 +14,8 @@ pub(crate) struct OpenView {
     pub(crate) workspace: Option<u64>,
     pub(crate) project: Option<u64>,
     pub(crate) visible: Option<bool>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) no_claim: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) bot: Option<String>,
 }
@@ -26,12 +28,15 @@ pub(crate) struct SetView {
     pub(crate) active: Option<bool>,
     pub(crate) claim: bool,
     pub(crate) visible: Option<bool>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) no_claim: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) bot: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
+#[expect(clippy::struct_excessive_bools, reason = "each flag is its own key in a view's JSON")]
 pub(crate) struct ViewInfo {
     pub(crate) id: u64,
     pub(crate) projection: u64,
@@ -40,13 +45,15 @@ pub(crate) struct ViewInfo {
     pub(crate) rows: Option<u16>,
     pub(crate) shown: Ids,
     pub(crate) controls: bool,
-    #[serde(default = "on_screen")]
+    #[serde(default = "yes")]
     pub(crate) visible: bool,
+    #[serde(default = "yes")]
+    pub(crate) claims: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) bot: Option<String>,
 }
 
-fn on_screen() -> bool {
+fn yes() -> bool {
     true
 }
 
@@ -66,14 +73,24 @@ impl OpenView {
     pub(super) fn fields(&self, fields: &mut Fields) {
         fields.maybe("cols", self.cols).maybe("rows", self.rows).maybe("active", self.active);
         fields.maybe("tab", self.tab).maybe("workspace", self.workspace).maybe("project", self.project);
-        fields.maybe("visible", self.visible).maybe("bot", self.bot.as_deref());
+        fields.maybe("visible", self.visible).add("no_claim", self.no_claim).maybe("bot", self.bot.as_deref());
     }
 }
 
 impl SetView {
     pub(super) fn fields(&self, fields: &mut Fields) {
         fields.maybe("cols", self.cols).maybe("rows", self.rows).maybe("active", self.active);
-        fields.add("claim", self.claim).maybe("visible", self.visible).maybe("bot", self.bot.as_deref());
+        fields.add("claim", self.claim).add("no_claim", self.no_claim).maybe("visible", self.visible);
+        fields.maybe("bot", self.bot.as_deref());
+    }
+
+    pub(crate) fn claiming(&self) -> Result<Option<bool>, String> {
+        match (self.claim, self.no_claim) {
+            (true, true) => Err("`view-set` takes `claim` or `no_claim`, not both".to_string()),
+            (true, false) => Ok(Some(true)),
+            (false, true) => Ok(Some(false)),
+            (false, false) => Ok(None),
+        }
     }
 }
 

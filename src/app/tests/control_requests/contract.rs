@@ -242,6 +242,13 @@ mod opting_in {
     #[case::no_bot_for_a_view_set(
         r#"{"contract":1,"view":999,"command":"view-set","args":{"claim":false,"bot":null}}"#
     )]
+    #[case::a_view_that_claims(r#"{"contract":1,"command":"view","args":{"no_claim":false}}"#)]
+    #[case::a_view_set_that_does_not_release(
+        r#"{"contract":1,"view":999,"command":"view-set","args":{"claim":false,"no_claim":false}}"#
+    )]
+    #[case::a_mark_that_is_not_only_seen(
+        r#"{"contract":1,"command":"mark","args":{"pane":999,"tab":null,"reviewed":false,"seen":false}}"#
+    )]
     #[case::not_freeing_builds_when_merged(
         r#"{"contract":1,"command":"flow-close-when-merged","args":{"workspace":9999,"off":false,"free_builds":false}}"#
     )]

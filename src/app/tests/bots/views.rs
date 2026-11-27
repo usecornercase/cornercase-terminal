@@ -133,3 +133,18 @@ fn a_view_that_shows_a_bot_does_not_see_its_tab_and_keeps_sizing_it() {
     set(&mut c, id, &bot_set(""));
     assert_eq!(c.app.seen_tabs(), vec![tab]);
 }
+
+#[cfg(unix)]
+#[test]
+fn a_view_that_does_not_claim_and_names_a_bot_does_not_see_its_tab() {
+    let mut c = chat(ANSWER);
+    c.app.open_here(AREA).expect("open the first project");
+    let tab = c.app.projects[0].workspaces[0].tabs[0].id;
+    let watching = OpenView { cols: Some(80), rows: Some(24), tab: Some(tab), no_claim: true, ..named("prs") };
+
+    let id = open(&mut c, &watching);
+
+    let info = c.app.view_report(id).and_then(|report| report.view).expect("the view");
+    assert_eq!((info.claims, info.controls), (false, false));
+    assert_eq!(c.app.seen_tabs().len(), 0);
+}

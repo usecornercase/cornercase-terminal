@@ -134,7 +134,8 @@
       "pane": 4
     },
     "controls": true,
-    "visible": true
+    "visible": true,
+    "claims": true
   },
   "config": {
     "revision": 2

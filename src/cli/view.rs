@@ -13,10 +13,14 @@ pub(super) fn open(args: &ViewArgs) -> Result<()> {
         workspace: args.workspace,
         project: args.project,
         visible: args.hidden.then_some(false),
+        no_claim: args.no_claim,
         bot: args.bot.clone(),
     };
     if args.hidden {
         client::use_notices()?;
+    }
+    if args.no_claim {
+        client::use_view_no_claim()?;
     }
     if args.bot.is_some() {
         client::use_view_bot()?;
@@ -46,12 +50,16 @@ pub(super) fn set(args: &ViewSetArgs) -> Result<()> {
     if args.bot.is_some() {
         client::use_view_bot()?;
     }
+    if args.no_claim {
+        client::use_view_no_claim()?;
+    }
     let set = control::SetView {
         cols: args.cols,
         rows: args.rows,
         active,
         claim: args.claim,
         visible,
+        no_claim: args.no_claim,
         bot: args.bot.clone(),
     };
     let value = ask("view-set", control::Command::ViewSet(set))?;
@@ -72,7 +80,8 @@ pub(super) fn describe(view: &ViewInfo) -> String {
         (true, true) => "sizes its tab",
         (true, false) => "does not size its tab",
     };
+    let claims = if view.claims { "" } else { "  no claim" };
     let hidden = if view.visible { "" } else { "  hidden" };
     let bot = view.bot.as_ref().map_or_else(String::new, |bot| format!("  bot {bot}"));
-    format!("view {}  {tab}  {size}  {state}{hidden}{bot}", view.id)
+    format!("view {}  {tab}  {size}  {state}{claims}{hidden}{bot}", view.id)
 }

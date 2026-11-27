@@ -199,6 +199,7 @@ fn viewed() -> Snapshot {
         shown,
         controls: true,
         visible: true,
+        claims: true,
         bot: None,
     });
     snapshot

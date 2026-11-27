@@ -296,6 +296,7 @@ group rows, until it is marked as reviewed or its agent starts working again on 
 answer to its question. Looking at the tab does not take it off, unlike the ✓ of an agent that finished while you looked elsewhere.
 Both marks are saved with the session, so they come back after a restart with the conversation.
 From a flow's orchestrator, marking its own pane prints one `warning: …` on stderr naming every stage not run since the last change.
+--seen takes only the ✓ off and leaves a blue ● as it is, for a program that showed the agent without a view.
 
 --boot BOOT says which run of the server the pane or tab id is from: `boot` in `status --json`, or in
 a machine's entry there. Ids last one run, so a server that restarted since refuses, nothing is
@@ -305,6 +306,7 @@ Examples:
   cornercase mark
   cornercase mark --pane 12
   cornercase mark --pane 12 --reviewed
+  cornercase mark --pane 12 --seen
   cornercase --remote vps mark --pane 9 --boot 4242-1700000000";
 pub(super) const TODO_HELP: &str = "Examples:
   cornercase todo add review the login fix
@@ -827,8 +829,8 @@ pub(super) const VIEW_HELP: &str =
     "For programs that draw cornercase themselves, such as an editor extension or a GUI, so that each
 picks its own tab and size without touching the window or the others. It keeps running and prints
 the session as one JSON line each time it changes, like `status --follow`, with a `view` object:
-id, projection, active, cols, rows, shown (the project, workspace, tab and pane it shows) and
-controls (whether it sizes its tab's terminals now). The view lives while this command runs:
+id, projection, active, cols, rows, shown (the project, workspace, tab and pane it shows),
+controls (whether it sizes its tab's terminals now) and claims (false for a --no-claim view). The view lives while this command runs:
 stopping it closes the view and gives its tabs back. The first line is the state now; the view's id
 is in it. Keep it running in the background (`cornercase view --cols 120 --rows 40 > view.jsonl &`),
 read the id from the first line, and pass it as --view ID to `focus`, `open`, `clone`, `new-workspace`,
@@ -850,17 +852,21 @@ notification, and the tab behind the chat no longer counts as seen. `view-set --
 A tab's terminals take the size of the window or the view that claimed it last, without the
 window's sidebar and panels: a view claims the tab it shows when it opens, moves there or turns
 active, and using the window takes back the tab it shows. Only that one resizes them. Without
---cols and --rows the view only follows the session and sizes nothing. Shared with the window and
+--cols and --rows the view only follows the session and sizes nothing. --no-claim opens a view that
+never sizes its tab: the tab still counts as seen and `surface --view` is laid out at the view's
+size, while its terminals keep the size of the window or the view that claimed it last. Shared with the window and
 other views: the processes, the split layout, the focused pane of a tab, scrolling and selection.
 
 Examples:
   cornercase view --cols 120 --rows 40
-  cornercase view --cols 120 --rows 40 --tab 7";
+  cornercase view --cols 120 --rows 40 --tab 7
+  cornercase view --cols 40 --rows 30 --no-claim --tab 7";
 pub(super) const VIEW_SET_HELP: &str =
     "Changes a view that `cornercase view` holds open. --cols and --rows resize it, --inactive makes it
 size nothing and stream no terminals (its tabs go to whoever claimed them before, else the window),
 --active turns it back on and claims its tab, and --claim takes its tab back from the window or
-another view. --hidden says its window is hidden or minimised, so agents in its tab notify again, and
+another view, also for a view opened with --no-claim. --no-claim gives its tab back and stops
+claiming it until --claim. --hidden says its window is hidden or minimised, so agents in its tab notify again, and
 --visible says it is back, which also reads the open pull requests again (not those read in the last
 10 seconds). --bot BOT says it shows that bot's chat in place of its tab, and --bot '' that it shows
 none. It prints the view as it is now.
@@ -868,6 +874,7 @@ none. It prints the view as it is now.
 Examples:
   cornercase view-set --view 41 --cols 100 --rows 30
   cornercase view-set --view 41 --claim
+  cornercase view-set --view 41 --no-claim
   cornercase view-set --view 41 --hidden
   cornercase view-set --view 41 --bot prs";
 pub(super) const TOUR_HELP: &str =

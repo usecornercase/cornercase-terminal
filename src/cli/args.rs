@@ -197,7 +197,7 @@ pub(crate) enum Control {
     Notify(NotifyArgs),
     #[command(about = "Have agents message you on Telegram or Discord until you turn it off", after_help = AWAY_HELP)]
     Away(AwayArgs),
-    #[command(about = "Mark an agent's pane as pending review, or as reviewed", after_help = MARK_HELP)]
+    #[command(about = "Mark an agent's pane as pending review, as reviewed, or as seen", after_help = MARK_HELP)]
     Mark(MarkArgs),
     #[command(about = "Find the panes where some text was said: agent transcripts and every pane's history", after_help = SEARCH_HELP)]
     Search(SearchArgs),
@@ -745,6 +745,12 @@ pub(crate) struct MarkArgs {
     pub(crate) target: Target,
     #[arg(long, help = "Take the mark off: the agent's work has been reviewed")]
     pub(crate) reviewed: bool,
+    #[arg(
+        long,
+        conflicts_with = "reviewed",
+        help = "Only take the done mark (✓) off, as looking at its tab does: a pending review mark stays"
+    )]
+    pub(crate) seen: bool,
     #[command(flatten)]
     pub(crate) boot: BootArg,
 }

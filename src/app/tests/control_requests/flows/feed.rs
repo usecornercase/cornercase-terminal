@@ -434,11 +434,13 @@ fn marking_the_orchestrator_with_stages_not_run_says_which() {
     let term = app.projects.pane_by_mut(orchestrator).expect("its pane");
     term.agent.follow(Some("claude"));
     term.agent.update(Some(Activity::Idle), true, Instant::now());
-    let mark = |reviewed| Command::Mark(wire::Mark { pane: Some(orchestrator), tab: None, reviewed });
+    let mark = |reviewed, seen| Command::Mark(wire::Mark { pane: Some(orchestrator), tab: None, reviewed, seen });
 
-    ask(&mut app, Some(orchestrator), mark(false));
+    ask(&mut app, Some(orchestrator), mark(false, false));
     let told = done(answers(&mut app).remove(0)).warning;
-    ask(&mut app, Some(orchestrator), mark(true));
+    ask(&mut app, Some(orchestrator), mark(false, true));
+    let seen = done(answers(&mut app).remove(0)).warning;
+    ask(&mut app, Some(orchestrator), mark(true, false));
     let cleared = done(answers(&mut app).remove(0)).warning;
 
     assert_eq!(
@@ -448,7 +450,7 @@ fn marking_the_orchestrator_with_stages_not_run_says_which() {
              them first, or say in your summary why not"
         )
     );
-    assert_eq!(cleared, None);
+    assert_eq!((seen, cleared), (None, None));
 }
 
 #[test]
