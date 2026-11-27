@@ -130,8 +130,12 @@ pub(in crate::agents) fn encode_path(path: &str) -> String {
     out
 }
 
+pub(in crate::agents) fn chat(dir: &Path) -> PathBuf {
+    dir.join("chat_history.jsonl")
+}
+
 pub(in crate::agents) fn last_message(dir: &Path) -> Result<Option<Said>> {
-    let chat = dir.join("chat_history.jsonl");
+    let chat = chat(dir);
     let Some(lines) = message::lines(&chat)? else { return Ok(None) };
     let mut text = None;
     for line in lines {
@@ -155,7 +159,7 @@ fn query(content: &Value) -> Option<String> {
 }
 
 pub(in crate::agents) fn said_all(dir: &Path, each: Each) -> Result<()> {
-    let chat = dir.join("chat_history.jsonl");
+    let chat = chat(dir);
     let Some(lines) = message::lines(&chat)? else { return Ok(()) };
     for line in lines {
         let line = line.map_err(|e| message::unreadable(&chat, &e))?;
@@ -289,7 +293,7 @@ impl Session {
     }
 
     fn read_chat(&mut self) {
-        let path = self.path.join("chat_history.jsonl");
+        let path = chat(&self.path);
         let Some(batch) = read_tail(&mut self.chat, &path) else { return };
         if batch.reset {
             self.resumable = false;
@@ -596,7 +600,7 @@ impl Session {
         if self.resumable {
             return;
         }
-        let Some(lines) = message::lines(&self.path.join("chat_history.jsonl")).ok().flatten() else { return };
+        let Some(lines) = message::lines(&chat(&self.path)).ok().flatten() else { return };
         for line in lines {
             let Ok(line) = line else { continue };
             let Ok(entry) = serde_json::from_slice::<Value>(&line) else { continue };

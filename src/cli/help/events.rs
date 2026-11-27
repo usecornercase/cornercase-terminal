@@ -4,6 +4,9 @@ pub(in crate::cli) const EVENTS_HELP: &str = "It keeps running and prints one li
                                       or none once it left the pane
   pane 7  cargo  exited               the program in the foreground ended and the shell is back
   tab 3  opened in workspace 2        a project, workspace, tab or pane opened, or closed
+  pane 5  claude  last message changed
+                                      the agent wrote a new message, or more of its newest one: read it
+                                      with `cornercase read --last-message --pane 5`
 With --notices, each notice about an agent is told too, as the window's toast and desktop notification
 say it, with the same rules (a second's wait, once per change, never for a tab seen in the window or
 in a view), and with --json its token, agent, status, place, message and panes:
@@ -31,8 +34,9 @@ With --json, each line is a JSON object with the event, the ids, the old and new
 
 It ends when the server stops, once every pane given with --pane has closed, or soon after what reads
 its output is gone (a closed pipe or socket, such as an ssh that ended), with status 0. Programs are looked
-at every half second while something follows events, so one that ends sooner may not show. Start it
-before what you want to follow, or read `cornercase status` once it runs, so nothing falls between.
+at every half second while something follows events, so one that ends sooner may not show, and agents'
+records on the same reads, so a message's line comes at most once a half second per pane. Start it before
+what you want to follow, or read `cornercase status` once it runs, so nothing falls between.
 A reader that falls far behind loses events, and a line says how many.
 With --boot BOOT, a server that restarted since refuses it before the first line (status 4); one that restarts while it runs ends it as above.
 

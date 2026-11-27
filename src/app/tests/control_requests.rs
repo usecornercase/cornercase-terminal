@@ -323,6 +323,13 @@ impl Agent {
 }
 
 #[cfg(unix)]
+fn turn(agent: &mut Agent, id: u64) {
+    agent.refreshing("the agent works", |a| pane(a, id).agent.status() == Some(activity::Status::Working));
+    agent.finish();
+    agent.refreshing("the turn is over", |a| pane(a, id).agent.status() != Some(activity::Status::Working));
+}
+
+#[cfg(unix)]
 impl Agent {
     fn transcript(&mut self, id: u64, lines: &[&str]) {
         let (app, rx) = (&mut self.app, &self.rx);
@@ -670,6 +677,7 @@ mod held;
 mod holding;
 mod issues;
 mod journal;
+mod last_message_events;
 mod merge_check;
 mod merged_builds;
 mod messages;

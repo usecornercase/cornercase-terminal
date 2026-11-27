@@ -87,6 +87,7 @@ fn pane_samples() -> Vec<Sample> {
         sample!("control/events/v1/dropped.json", event(What::Dropped { count: 12 }, Ids::default())),
         sample!("control/events/v1/clipboard.json", event(What::Clipboard { text: "hello\nworld".into() }, pane())),
         sample!("control/events/v1/bell.json", event(What::Bell { count: 3 }, pane())),
+        sample!("control/events/v1/last-message.json", event(What::LastMessage { agent: "claude".into() }, pane())),
     ]
 }
 
@@ -387,6 +388,17 @@ fn a_message_reaches_readers_of_notices_and_the_pane_readers_it_names(
     let event = a_message(named);
 
     assert!(event.notice());
+    assert!(!event.host());
+    assert_eq!(event.about(&reader), about);
+}
+
+#[rstest]
+#[case::its_pane(vec![4], true)]
+#[case::another_pane(vec![5], false)]
+fn a_last_message_is_about_its_pane_and_needs_no_opt_in(#[case] reader: Vec<u64>, #[case] about: bool) {
+    let event = event(What::LastMessage { agent: "claude".into() }, pane());
+
+    assert!(!event.notice());
     assert!(!event.host());
     assert_eq!(event.about(&reader), about);
 }

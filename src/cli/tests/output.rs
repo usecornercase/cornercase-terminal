@@ -351,6 +351,7 @@ const TAB: Ids = Ids { pane: None, ..PANE };
     PANE,
     "pane 4  codex  none → idle"
 )]
+#[case::a_last_message(What::LastMessage { agent: "claude".into() }, PANE, "pane 4  claude  last message changed")]
 #[case::a_program_ended(What::Exited { program: "cargo".into() }, PANE, "pane 4  cargo  exited")]
 #[case::a_clipboard_write(What::Clipboard { text: "hello".into() }, PANE, "pane 4  clipboard  5 bytes")]
 #[case::one_byte(What::Clipboard { text: "a".into() }, PANE, "pane 4  clipboard  1 byte")]

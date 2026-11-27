@@ -586,11 +586,9 @@ fn event_line(value: &Value) -> String {
             let state = |state: &Option<String>| state.clone().unwrap_or_else(|| "none".into());
             format!("{subject}  {agent}  {} → {}", state(from), state(to))
         }
+        (Some(subject), What::LastMessage { agent }) => format!("{subject}  {agent}  last message changed"),
         (Some(subject), What::Exited { program }) => format!("{subject}  {program}  exited"),
-        (Some(subject), What::Clipboard { text }) => {
-            let bytes = text.len();
-            format!("{subject}  clipboard  {bytes} byte{}", if bytes == 1 { "" } else { "s" })
-        }
+        (Some(subject), What::Clipboard { text }) => clipboard_line(&subject, text.len()),
         (Some(subject), What::Bell { count }) if *count > 1 => format!("{subject}  bell  {count} times"),
         (Some(subject), What::Bell { .. }) => format!("{subject}  bell"),
         (Some(subject), What::Notice { token, message, .. }) => format!("{subject}  notice  {message}  {token}"),
@@ -612,6 +610,10 @@ fn event_line(value: &Value) -> String {
         )),
         (None, _) => value.to_string(),
     }
+}
+
+fn clipboard_line(subject: &str, bytes: usize) -> String {
+    format!("{subject}  clipboard  {bytes} byte{}", if bytes == 1 { "" } else { "s" })
 }
 
 fn recap_line(range: &str, (state, agent): (&str, &str), error: Option<&str>) -> String {

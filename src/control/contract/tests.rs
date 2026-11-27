@@ -46,6 +46,11 @@ mod describing {
     }
 
     #[test]
+    fn a_changed_last_message_is_a_feature() {
+        assert!(FEATURES.contains(&"last-message-events"));
+    }
+
+    #[test]
     fn a_view_that_never_claims_and_a_seen_mark_are_features() {
         assert!(FEATURES.contains(&"view-no-claim"));
         assert!(FEATURES.contains(&"mark-seen"));
