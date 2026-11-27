@@ -37,24 +37,36 @@ fn listen(w: &mut Watched) {
     w.app.clients.events.subscribe(READER, Vec::new(), false, true);
 }
 
+fn watching() -> OpenView {
+    OpenView { no_claim: true, ..sized() }
+}
+
 #[rstest]
-#[case::shown(true, Status::Idle)]
-#[case::hidden(false, Status::Done)]
-fn a_view_showing_the_tab_takes_its_done_mark_off(#[case] visible: bool, #[case] wanted: Status) {
+#[case::shown(true, false, Status::Idle)]
+#[case::hidden(false, false, Status::Done)]
+#[case::shown_without_claiming(true, true, Status::Idle)]
+#[case::hidden_without_claiming(false, true, Status::Done)]
+fn a_view_showing_the_tab_takes_its_done_mark_off(
+    #[case] visible: bool,
+    #[case] no_claim: bool,
+    #[case] wanted: Status,
+) {
     let mut w = Watched::start(agents::Known::Claude, true);
     w.report("idle", 6);
     assert_eq!(status(&w.app, 0, 0), Some(Status::Done));
 
-    open(&mut w, 0, &OpenView { visible: Some(visible), ..sized() });
+    open(&mut w, 0, &OpenView { visible: Some(visible), no_claim, ..sized() });
     tick(&mut w.app);
 
     assert_eq!(status(&w.app, 0, 0), Some(wanted));
 }
 
-#[test]
-fn an_agent_a_visible_view_shows_stays_quiet() {
+#[rstest]
+#[case::claiming(sized())]
+#[case::without_claiming(watching())]
+fn an_agent_a_visible_view_shows_stays_quiet(#[case] view: OpenView) {
     let mut w = Watched::start(agents::Known::Claude, true);
-    open(&mut w, 0, &sized());
+    open(&mut w, 0, &view);
     listen(&mut w);
 
     w.report("waiting", 6);
@@ -67,6 +79,7 @@ fn an_agent_a_visible_view_shows_stays_quiet() {
 #[case::without_a_size(OpenView::default())]
 #[case::inactive(OpenView { active: Some(false), ..sized() })]
 #[case::hidden(OpenView { visible: Some(false), ..sized() })]
+#[case::hidden_without_claiming(OpenView { visible: Some(false), ..watching() })]
 fn a_view_without_a_size_or_inactive_or_hidden_sees_nothing(#[case] view: OpenView) {
     let mut w = Watched::start(agents::Known::Claude, true);
     open(&mut w, 0, &view);

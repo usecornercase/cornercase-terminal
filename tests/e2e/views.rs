@@ -59,6 +59,42 @@ fn opened_with(session: &Session, args: &[&str]) -> (std::process::Child, Follow
     (opened, followed, id)
 }
 
+fn controller_of(session: &Session, tab: &str) -> Value {
+    let report: Value = serde_json::from_str(&session.says(&["status", "--json"])).expect("the report");
+    let id = tab.parse::<u64>().expect("a tab id");
+    let projects = report["projects"].as_array().cloned().unwrap_or_default();
+    let tabs = projects.iter().flat_map(|p| p["workspaces"].as_array().cloned().unwrap_or_default());
+    let mut tabs = tabs.flat_map(|w| w["tabs"].as_array().cloned().unwrap_or_default());
+    let found = tabs.find(|t| t["id"].as_u64() == Some(id)).expect("the tab in the report");
+    found.get("controller").cloned().unwrap_or(Value::Null)
+}
+
+#[test]
+fn a_view_that_does_not_claim_sees_its_tab_and_leaves_its_size() {
+    let app = Harness::start();
+    let (pane, tab) = new_tab(&app);
+    let before = size_of(&app.session, &pane, "before");
+
+    let (mut opened, followed, id) =
+        opened_with(&app.session, &["--cols", "40", "--rows", "30", "--no-claim", "--tab", &tab]);
+    let first = followed.seen[0]["view"].clone();
+    let watched = size_of(&app.session, &pane, "watched");
+    let controller = controller_of(&app.session, &tab);
+    app.session.says(&["view-set", "--view", &id, "--claim"]);
+    let claimed = size_of(&app.session, &pane, "claimed");
+    let line = app.session.says(&["view-set", "--view", &id, "--no-claim"]);
+    let released = size_of(&app.session, &pane, "released");
+    let _ = opened.kill();
+    let _ = opened.wait();
+
+    assert_eq!((&first["claims"], &first["controls"]), (&json!(false), &json!(false)), "{first}");
+    assert_eq!(watched, before);
+    assert_eq!(controller, Value::Null);
+    assert_eq!(claimed, "30x40");
+    assert!(line.contains("no claim"), "{line}");
+    assert_eq!(released, before);
+}
+
 #[test]
 fn commands_with_a_view_pass_the_feature_checks_they_need() {
     let app = Harness::start();

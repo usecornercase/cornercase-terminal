@@ -901,6 +901,8 @@ pub(crate) struct Mark {
     pub(crate) pane: Option<u64>,
     pub(crate) tab: Option<u64>,
     pub(crate) reviewed: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) seen: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

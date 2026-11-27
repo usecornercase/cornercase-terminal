@@ -25,6 +25,11 @@ pub(crate) struct ViewArgs {
     pub(crate) hidden: bool,
     #[arg(
         long,
+        help = "Never size the tab it shows: its terminals keep the size of the window or of the view that claimed it last, and the tab still counts as seen"
+    )]
+    pub(crate) no_claim: bool,
+    #[arg(
+        long,
         value_name = "BOT",
         help = "Start showing this bot's chat (its id or name) in place of its tab: its answers count as read and do not notify"
     )]
@@ -46,8 +51,17 @@ pub(crate) struct ViewSetArgs {
     pub(crate) active: bool,
     #[arg(long, help = "Make it inactive: it sizes nothing and streams no terminals, and the tab goes back")]
     pub(crate) inactive: bool,
-    #[arg(long, help = "Size the tab it shows from now on, even if the window or another view did last")]
+    #[arg(
+        long,
+        help = "Size the tab it shows from now on, even if the window or another view did last, also for a view opened with --no-claim"
+    )]
     pub(crate) claim: bool,
+    #[arg(
+        long,
+        conflicts_with = "claim",
+        help = "Stop sizing the tab it shows, from now on: the tab goes back to the window or the view that claimed it before, until --claim"
+    )]
+    pub(crate) no_claim: bool,
     #[arg(
         long,
         conflicts_with = "hidden",

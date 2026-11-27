@@ -18,15 +18,20 @@ use crate::ui;
 
 impl App {
     pub(super) fn mark_request(&mut self, asker: Asker, mark: &control::Mark) -> Handled {
+        if mark.seen && mark.reviewed {
+            return Err(malformed("`mark` takes `seen` or `reviewed`, not both"));
+        }
         let pane = self.target(asker, mark.pane, mark.tab)?;
         if self.projects.pane_by(pane).is_none() {
             return Err(none("pane", pane));
         }
-        if self.mark(Marked::Pane(pane), !mark.reviewed) == 0 {
+        let marked =
+            if mark.seen { self.see_marked(Marked::Pane(pane)) } else { self.mark(Marked::Pane(pane), !mark.reviewed) };
+        if marked == 0 {
             return Err(format!("pane {pane} runs no agent cornercase reads, so there is nothing to mark").into());
         }
         let warning = self.runs.owed_at(pane);
-        Ok(Some(json(&Done { warning: warning.filter(|_| !mark.reviewed), ..pane_ids(pane) })))
+        Ok(Some(json(&Done { warning: warning.filter(|_| !mark.reviewed && !mark.seen), ..pane_ids(pane) })))
     }
 
     pub(in crate::app) fn go_request(&mut self, asker: Asker, go: &control::Go) -> Handled {

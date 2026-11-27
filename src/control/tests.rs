@@ -369,6 +369,15 @@ fn a_search_travels_as_its_query_and_logs_only_its_size() {
 }
 
 #[test]
+fn a_mark_leaves_out_seen_unless_it_asks_for_it() {
+    let pending = serde_json::to_string(&Mark { pane: Some(4), ..Mark::default() }).expect("json");
+    let seen = serde_json::to_string(&Mark { pane: Some(4), seen: true, ..Mark::default() }).expect("json");
+
+    assert_eq!(pending, r#"{"pane":4,"tab":null,"reviewed":false}"#);
+    assert_eq!(seen, r#"{"pane":4,"tab":null,"reviewed":false,"seen":true}"#);
+}
+
+#[test]
 fn a_focus_from_an_older_command_reveals_nothing() {
     let request: Request =
         serde_json::from_str(r#"{"command":"focus","args":{"item":{"pane":4}}}"#).expect("a request");

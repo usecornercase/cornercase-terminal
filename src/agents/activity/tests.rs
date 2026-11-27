@@ -303,6 +303,19 @@ mod marks {
     }
 
     #[test]
+    fn seeing_a_done_agent_clears_done_and_leaves_pending() {
+        let (mut pane, now) = claude(Activity::Working);
+        pane.update(Some(Activity::Idle), false, now + TICK);
+        assert!(pane.unseen());
+        pane.mark(true);
+        assert!(pane.unseen());
+
+        pane.see();
+
+        assert!(pane.pending() && !pane.unseen());
+    }
+
+    #[test]
     fn a_pending_mark_stays_when_the_tab_is_seen() {
         let (mut pane, now) = claude(Activity::Idle);
         pane.mark(true);

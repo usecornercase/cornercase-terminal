@@ -344,7 +344,7 @@ impl Wait {
 
 impl Mark {
     fn fields(&self, fields: &mut Fields) {
-        fields.maybe("pane", self.pane).maybe("tab", self.tab).add("reviewed", self.reviewed);
+        fields.maybe("pane", self.pane).maybe("tab", self.tab).add("reviewed", self.reviewed).add("seen", self.seen);
     }
 }
 

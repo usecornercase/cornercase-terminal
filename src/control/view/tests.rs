@@ -81,6 +81,7 @@ fn a_view_that_is_skipped_by_a_reader_reads_back_whole() {
         shown: Ids { project: Some(1), workspace: Some(2), tab: Some(3), pane: Some(4) },
         controls: true,
         visible: false,
+        claims: false,
         bot: Some("prs".into()),
     };
 
@@ -109,6 +110,46 @@ fn requests_and_views_leave_out_a_bot_they_do_not_name() {
         assert!(some.contains("\"bot\":\"prs\""), "{some}");
     }
     assert!(text(&SetView { bot: Some(String::new()), ..SetView::default() }).contains("\"bot\":\"\""));
+}
+
+#[test]
+fn requests_leave_out_no_claim_unless_they_ask_for_it() {
+    use crate::control::{OpenView, SetView};
+
+    for none in [text(&OpenView::default()), text(&SetView::default())] {
+        assert!(!none.contains("no_claim"), "{none}");
+    }
+    for some in [
+        text(&OpenView { no_claim: true, ..OpenView::default() }),
+        text(&SetView { no_claim: true, ..SetView::default() }),
+    ] {
+        assert!(some.contains("\"no_claim\":true"), "{some}");
+    }
+}
+
+#[test]
+fn a_view_read_without_claims_claims() {
+    let older: ViewInfo = serde_json::from_str(r#"{"id": 4, "active": true}"#).expect("a view");
+    let watching: ViewInfo = serde_json::from_str(r#"{"id": 4, "claims": false}"#).expect("a view");
+
+    assert!(older.claims);
+    assert!(!watching.claims);
+    assert!(text(&ViewInfo::default()).contains("\"claims\":false"));
+}
+
+#[rstest]
+#[case::neither(false, false, Ok(None))]
+#[case::claim(true, false, Ok(Some(true)))]
+#[case::no_claim(false, true, Ok(Some(false)))]
+#[case::both_are_refused(true, true, Err("`view-set` takes `claim` or `no_claim`, not both".to_string()))]
+fn a_view_set_claims_releases_or_leaves_the_claim(
+    #[case] claim: bool,
+    #[case] no_claim: bool,
+    #[case] expected: Result<Option<bool>, String>,
+) {
+    let set = SetView { claim, no_claim, ..SetView::default() };
+
+    assert_eq!(set.claiming(), expected);
 }
 
 #[test]

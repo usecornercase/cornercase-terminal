@@ -293,11 +293,12 @@ fn a_worktree_is_checked_and_removed_with_the_boot_of_this_run() {
 #[test]
 fn every_form_of_mark_move_pane_account_restart_and_context_refuses_an_earlier_boot_and_changes_nothing() {
     let Panes { session, agent, agent_tab, shell, split } = a_machine_with_an_agent_and_a_split_tab();
-    let forms: [&[&str]; 13] = [
+    let forms: [&[&str]; 14] = [
         &["mark"],
         &["mark", "--pane", &agent],
         &["mark", "--tab", &agent_tab],
         &["mark", "--pane", &agent, "--reviewed"],
+        &["mark", "--pane", &agent, "--seen"],
         &["move-pane", "--pane", &split, "--target", &shell, "--place", "left"],
         &["move-pane", "--pane", &split, "--target", &shell, "--place", "swap", "--json"],
         &["account", "restart", "claude", "work"],
