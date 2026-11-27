@@ -220,6 +220,17 @@ mod a_tab_s_close_button {
     }
 
     #[test]
+    fn opens_the_tab_s_menu_on_a_right_click_and_closes_nothing() {
+        let mut remote = on_top(with_tabs(Reply::Agree));
+        let pos = strip(&remote.rig.app).close(0).as_position();
+
+        right_click(&mut remote.rig.app, pos);
+
+        assert_eq!(menu_labels(&remote.rig.app), vec!["rename tab".to_string(), "close tab".into()]);
+        assert_eq!((remote.rig.app.tab_bar_view().tabs[0].closing, remote.rig.seen("ask")), (false, 0));
+    }
+
+    #[test]
     fn and_the_tab_take_no_click_while_it_closes() {
         let mut remote = on_top(with_tabs(Reply::Agree));
         let agent = strip(&remote.rig.app).item(1).as_position();
@@ -275,5 +286,23 @@ mod a_tab_s_menu {
 
         let labels: Vec<String> = vec!["vps unreachable".into(), "rename tab".into(), "close tab".into()];
         assert_eq!((menu_labels(&remote.rig.app), menu_disabled(&remote.rig.app)), (labels, vec![true, true, true]));
+    }
+}
+
+mod a_middle_click {
+    use super::*;
+
+    #[test]
+    fn on_a_tab_s_buttons_or_plus_does_nothing() {
+        let mut remote = on_top(with_tabs(Reply::Agree));
+        let strip = strip(&remote.rig.app);
+
+        for pos in [strip.close(0), strip.new_button(), strip.menu(0)].map(Rect::as_position) {
+            mouse_down(&mut remote.rig.app, MouseButton::Middle, pos);
+            mouse(&mut remote.rig.app, MouseEventKind::Up(MouseButton::Middle), pos);
+        }
+
+        assert_eq!((remote.rig.app.overlay.is_none(), remote.rig.seen("ask")), (true, 0));
+        assert!(!remote.rig.app.tab_bar_view().tabs[0].closing);
     }
 }

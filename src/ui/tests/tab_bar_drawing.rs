@@ -51,10 +51,12 @@ fn the_details_row_is_muted() {
 }
 
 #[test]
-fn the_active_tab_is_on_the_surface() {
+fn only_the_active_tab_is_on_the_surface() {
     let t = render(&with_bar());
-    let first = with_bar().tab_bar.expect("a bar").strip(bar()).item(0);
-    assert_eq!(t.backend().buffer()[(first.x, first.y)].bg, DARK_SURFACE);
+    let strip = with_bar().tab_bar.expect("a bar").strip(bar());
+    let (first, second) = (strip.item(0), strip.item(1));
+    let bg = |r: Rect| t.backend().buffer()[(r.x, r.y)].bg;
+    assert_eq!((bg(first) == DARK_SURFACE, bg(second) == DARK_SURFACE), (true, false));
 }
 
 #[test]
