@@ -109,6 +109,21 @@ fn what_is_typed_and_what_is_sent_both_appear() {
 }
 
 #[test]
+fn quotes_and_backslashes_come_back_as_they_were_sent() {
+    let mut agent = Agent::new();
+    agent.fake.signal("thread");
+    let id = agent.start(None);
+    let prompt = r#"say "hi" to C:\work"#;
+    ask(&mut agent.app, None, send_text(id, prompt, true, false));
+    done(agent.answered("the enter is pressed"));
+    turn(&mut agent, id);
+
+    let thread = read_later(&mut agent, messages(id, None, None, None));
+
+    assert_eq!(said(&thread), [(1, "user".into(), prompt.into()), (2, "assistant".into(), format!("done: {prompt}"))]);
+}
+
+#[test]
 fn a_shell_says_why_it_cannot_be_read() {
     let (mut app, _rx) = app();
     let id = first(&app);

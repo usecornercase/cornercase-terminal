@@ -86,12 +86,15 @@ while printf '\033[H\033[2J%s\n────────────\n❯ ' "$sai
     state idle; continue ;;
   esac
   n=$((n + 1)); u=''
-  [ -e "$d/thread" ] && u=',"message":{"role":"user","content":"'"$line"'"}'
+  if [ -e "$d/thread" ]; then
+    j=$(printf '%s' "$line" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e "s/$(printf '\t')/\\\\t/g")
+    u=',"message":{"role":"user","content":"'"$j"'"}'
+  fi
   printf '{"type":"user","uuid":"p%s","origin":{"kind":"human"}%s,"timestamp":"%s.999Z"}\n' "$n" "$u" "$(date -u +%Y-%m-%dT%H:%M:%S)" >> "$t/s$$.jsonl"
   state busy
   finished
   printf '{"type":"assistant","timestamp":"%s.999Z","message":{"id":"m%s","model":"synthetic","usage":{"input_tokens":20,"output_tokens":50,"cache_read_input_tokens":200,"cache_creation_input_tokens":10}}}\n' "$(date -u +%Y-%m-%dT%H:%M:%S)" "$n" >> "$t/s$$.jsonl"
-  [ -e "$d/thread" ] && printf '{"type":"assistant","isSidechain":false,"timestamp":"%s.999Z","message":{"id":"r%s","model":"claude-opus-5-5","role":"assistant","content":[{"type":"text","text":"done: %s"}]}}\n' "$(date -u +%Y-%m-%dT%H:%M:%S)" "$n" "$line" >> "$t/s$$.jsonl"
+  [ -e "$d/thread" ] && printf '{"type":"assistant","isSidechain":false,"timestamp":"%s.999Z","message":{"id":"r%s","model":"claude-opus-5-5","role":"assistant","content":[{"type":"text","text":"done: %s"}]}}\n' "$(date -u +%Y-%m-%dT%H:%M:%S)" "$n" "$j" >> "$t/s$$.jsonl"
   case "$line" in
     *api-error*) printf '{"type":"assistant","timestamp":"%s.999Z","isApiErrorMessage":true,"error":"authentication_failed","apiErrorStatus":403,"message":{"id":"e%s","model":"<synthetic>","role":"assistant","stop_reason":"stop_sequence","content":[{"type":"text","text":"Please run /login · API Error: 403 Attention Required! | Cloudflare"}],"usage":{"input_tokens":0,"output_tokens":0}}}\n' "$(date -u +%Y-%m-%dT%H:%M:%S)" "$n" >> "$t/s$$.jsonl"
       said="Please run /login · API Error: 403"; state waiting; continue ;;

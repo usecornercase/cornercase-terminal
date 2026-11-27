@@ -32,9 +32,13 @@ messages. --last N gives the newest N [default: 20]; --before ID the N just befo
 back; --after ID every message after it, or the newest N of them with --last. Without --json, a line
 on stderr names the --before that reads the page before. --json gives {\"pane\", \"agent\",
 \"conversation\", \"messages\": [{\"id\", \"role\", \"text\", \"written\"}], \"more_before\"}. An id is the
-message's position in the conversation, from 1, and stays while the record only grows; when
-conversation changes (a /clear, another session), ids start again. It takes one target, and fails
-as --last-message does.
+message's position among the messages read, from 1. It stays only while the reader keeps the same
+messages before it: a record past the 64 MiB a read walks is numbered from the oldest message
+inside them, so its ids move as it grows, and a Gemini CLI message rewritten in place or an opencode
+message whose text comes after a later one moves them too. The newest message can still grow under
+its id (opencode, GitHub Copilot CLI), so a client that follows reads again from the id before its
+last one. When conversation changes (a /clear, another session), ids start again. It takes one
+target, and fails as --last-message does.
 
 Claude Code's feedback survey (`How is Claude doing this session? (optional)`, then
 `1: Bad  2: Fine  3: Good  0: Dismiss`) may show above its input box: it is Claude Code asking you,
