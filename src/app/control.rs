@@ -2,6 +2,7 @@ mod account_restart;
 pub(in crate::app) mod accounts;
 mod arrange;
 pub(in crate::app) mod auto;
+mod awaited;
 mod bots;
 pub(in crate::app) mod boundary;
 mod changes;

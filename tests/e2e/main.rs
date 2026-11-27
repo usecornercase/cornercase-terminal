@@ -50,6 +50,7 @@ mod opening;
 mod pair;
 mod panels;
 mod panes;
+mod pending;
 mod personas;
 mod phone;
 mod plugin_views;
@@ -801,6 +802,10 @@ while printf '────────────\n❯ ' && IFS= read -r line; 
   printf '{"type":"user","origin":{"kind":"human"},"timestamp":"%s.999Z"}\n' "$(date -u +%Y-%m-%dT%H:%M:%S)" >> "$t/s$$.jsonl"
   state busy; finished; said "$line"
   case "$line" in *background*) state shell; finished ;; esac
+  case "$line" in *choose*) printf '{"type":"assistant","isSidechain":false,"timestamp":"2026-10-08T12:00:00.000Z","message":{"id":"q%s","model":"claude-opus-5-5","role":"assistant","content":[{"type":"tool_use","id":"t%s","name":"AskUserQuestion","input":{"questions":[{"question":"Which database should the service use?","header":"Database","multiSelect":false,"options":[{"label":"Postgres","description":"What the other services use"},{"label":"SQLite","description":"One file, no server"}]}]}}]}}\n' "$n" "$n" >> "$t/s$$.jsonl"
+    state waiting; read answer
+    printf '{"type":"user","isSidechain":false,"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t%s","content":"Your questions have been answered"}]}}\n' "$n" >> "$t/s$$.jsonl" ;;
+  esac
   printf 'done: %s\n' "$line"; state idle
 done
 "#,

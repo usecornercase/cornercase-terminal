@@ -251,6 +251,10 @@ fn persona_commands() -> Vec<Command> {
     ]
 }
 
+fn reading_commands() -> Vec<Command> {
+    vec![Command::PendingQuestion(pending::PendingQuestion::default())]
+}
+
 pub(crate) fn every_command() -> Vec<Command> {
     [
         first_commands(),
@@ -260,6 +264,7 @@ pub(crate) fn every_command() -> Vec<Command> {
         latest_commands(),
         phone_commands(),
         persona_commands(),
+        reading_commands(),
     ]
     .concat()
 }

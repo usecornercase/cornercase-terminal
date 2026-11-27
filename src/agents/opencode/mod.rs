@@ -51,6 +51,7 @@ pub(in crate::agents) const BREAKDOWN: Option<crate::agents::breakdown::Spec> = 
 pub(in crate::agents) const RESUME: Option<Vec<String>> = None;
 pub(in crate::agents) const UNFOUND: &str =
     "opencode has no conversation in its folder yet, or two opencode share that folder";
+pub(in crate::agents) const TELLS_AWAITED: bool = false;
 
 pub(in crate::agents) fn normalized(args: &[String]) -> Vec<String> {
     args.to_vec()

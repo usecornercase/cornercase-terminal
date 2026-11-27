@@ -98,6 +98,9 @@ while printf '\033[H\033[2J%s\n────────────\n❯ ' "$sai
         printf '\033[H\033[2JQuestion %s of 2\n❯ 1. Yes\n  2. No\n' $q
         a=$(dd bs=1 count=1 2>/dev/null); case "$a" in [12]) q=$((q + 1)) ;; esac
       done; stty icanon echo ;;
+    *choose*) printf '{"type":"assistant","isSidechain":false,"timestamp":"2026-10-08T12:00:00.000Z","message":{"id":"q%s","model":"claude-opus-5-5","role":"assistant","content":[{"type":"tool_use","id":"t%s","name":"AskUserQuestion","input":{"questions":[{"question":"Which database should the service use?","header":"Database","multiSelect":false,"options":[{"label":"Postgres","description":"What the other services use"},{"label":"SQLite","description":"One file, no server"}]}]}}]}}\n' "$n" "$n" >> "$t/s$$.jsonl"
+      state waiting; read answer
+      printf '{"type":"user","isSidechain":false,"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t%s","content":"Your questions have been answered"}]}}\n' "$n" >> "$t/s$$.jsonl" ;;
     *ask*) state waiting; read answer ;;
     *subagent*) a="$t/s$$/subagents"; mkdir -p "$a"
       printf '{"agentType":"general-purpose","requestShape":"background"}' > "$a/agent-a1.meta.json"

@@ -383,6 +383,19 @@ impl Known {
         }
     }
 
+    pub(crate) fn tells_awaited(self) -> bool {
+        match self {
+            Self::Claude => claude::TELLS_AWAITED,
+            Self::Codex => codex::TELLS_AWAITED,
+            Self::Gemini => gemini::TELLS_AWAITED,
+            Self::Opencode => opencode::TELLS_AWAITED,
+            Self::Grok => grok::TELLS_AWAITED,
+            Self::Cursor => cursor::TELLS_AWAITED,
+            Self::Copilot => copilot::TELLS_AWAITED,
+            Self::Vibe => vibe::TELLS_AWAITED,
+        }
+    }
+
     pub(crate) fn usage(self) -> Option<usage::Spec> {
         match self {
             Self::Claude => claude::USAGE,

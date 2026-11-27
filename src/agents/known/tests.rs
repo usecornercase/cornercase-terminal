@@ -86,3 +86,10 @@ fn four_agents_write_a_recap() {
     let writers: Vec<Known> = Known::ALL.into_iter().filter(|kind| kind.writes_recap()).collect();
     assert_eq!(writers, [Known::Claude, Known::Codex, Known::Opencode, Known::Copilot]);
 }
+
+#[test]
+fn only_claude_code_says_what_it_waits_for_in_its_record() {
+    let telling: Vec<Known> = Known::ALL.into_iter().filter(|kind| kind.tells_awaited()).collect();
+
+    assert_eq!(telling, [Known::Claude]);
+}

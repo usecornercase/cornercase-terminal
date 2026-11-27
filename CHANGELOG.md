@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.14.2
+
+- **Read what a waiting agent asks, as data.** `cornercase read --pending --pane 7` prints what Claude Code waits for you to answer, from its own record instead of its screen: each question with its numbered options, or the tool and the command of a permission. `--json` gives it as data for a phone app, a board or a script, with each option's label and description apart and whether several can be chosen, and `null` when nothing is pending. Repeat `--pane` or `--tab` to read several agents at once. Other agents answer that their records do not say it.
+- **For programs**: the request `pending-question` and the feature `pending-question` in `cornercase contract`.
+
 ## 0.14.1
 
 - **Collapse a whole sidebar section.** Click a section's title (**Projects**, **Workspaces** or **Agents**; in compact mode the workspaces menu is titled with the project's name) to fold the section under it (`▸`), and click it again to open it. It works in every sidebar layout and in compact mode. Where sections share a column, the others take its room; side by side, a folded **Workspaces** keeps its column. A folded title shows whether something it hides needs you and, where it fits, how many rows it hides. It is kept across restarts and is the same in every window. An open title shows `▾`, so in the narrowest projects column **Projects** is now cut to fit beside **Bots**.

@@ -348,6 +348,18 @@ mod streams {
         assert!(fold.contains("\"section\":\"agents\"") && !fold.contains("\"item\""), "{fold}");
     }
 
+    const READ_PENDING: &str = r#"{"args": ["read", "--pane", "4", "--pending", "--json"]}"#;
+
+    #[test]
+    fn reading_what_is_pending_is_refused_up_front_by_a_server_without_pending_question() {
+        let (answer, seen) = in_a_view_on(READ_PENDING, lacking("pending-question"));
+
+        assert_eq!(answer.status, 1, "{answer:?}");
+        let error = answer.error.expect("an error");
+        assert!(error.contains("what a waiting agent asks") && error.contains("update cornercase"), "{error}");
+        assert!(!seen.iter().any(|text| text.contains("\"pending-question\"")), "{seen:?}");
+    }
+
     #[test]
     fn a_plain_machine_needs_no_feature() {
         let (answer, _) = in_a_view_on(PLAIN_ADD, lacking("machine-shown"));
@@ -448,6 +460,7 @@ mod streams {
     #[rstest]
     #[case::read(&["read", "--pane", "4"], None)]
     #[case::read_last_messages(&["read", "--pane", "4", "--pane", "5", "--last-message"], None)]
+    #[case::read_pending(&["read", "--pane", "4", "--pending"], None)]
     #[case::wait(&["wait", "--pane", "4", "--quiet", "1"], None)]
     #[case::wait_for_several(&["wait", "--pane", "4", "--pane", "5", "--any"], None)]
     #[case::link(&["link", "--pane", "4", "--cell", "0,0"], None)]

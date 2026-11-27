@@ -35,8 +35,7 @@ mod answer_lost_requests {
 mod forget {
     use super::*;
 
-    #[test]
-    fn a_last_message_read_goes_with_its_client() {
+    fn read_after_its_client_left(read: impl FnOnce(&mut App)) -> (usize, Vec<(u64, String)>) {
         let dir = TempDir::new();
         let (tx, _rx) = mpsc::channel();
         let mut app = App::new("/bin/sh".into(), HostTheme::default(), &dir.path().join("config.json"), tx);
@@ -46,9 +45,26 @@ mod forget {
 
         app.forget(1);
         let left = app.clients.requests.pending.len();
-        app.message_read(1, Ok(Some(context::Said { text: "Done.".into(), written: None })));
+        read(&mut app);
+        (left, app.take_answers())
+    }
 
-        assert_eq!((left, app.take_answers()), (0, Vec::new()));
+    #[test]
+    fn a_last_message_read_goes_with_its_client() {
+        let said = context::Said { text: "Done.".into(), written: None };
+
+        let left = read_after_its_client_left(|app| app.message_read(1, Ok(Some(said))));
+
+        assert_eq!(left, (0, Vec::new()));
+    }
+
+    #[test]
+    fn a_pending_question_read_goes_with_its_client() {
+        let awaited = context::Awaited::permission("Bash".into(), None);
+
+        let left = read_after_its_client_left(|app| app.awaited_read(1, Ok(Some(awaited))));
+
+        assert_eq!(left, (0, Vec::new()));
     }
 }
 

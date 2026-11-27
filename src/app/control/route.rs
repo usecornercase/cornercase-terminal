@@ -74,6 +74,7 @@ impl App {
             Command::Held(held) => self.held_request(asker, &held),
             Command::Read(read) => self.read_request(asker, &read),
             Command::LastMessage(last) => self.last_message_request(client, asker, &last),
+            Command::PendingQuestion(asked) => self.pending_question_request(client, asker, &asked),
             Command::Wait(wait) => self.wait_request(client, asker, wait, now),
             Command::WaitSeveral(wait) => self.wait_several_request(client, asker, wait, now),
             Command::Mark(mark) => self.mark_request(asker, &mark),

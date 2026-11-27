@@ -93,6 +93,7 @@ const BOT: crate::agents::headless::BotSupport = crate::agents::headless::BotSup
 pub(in crate::agents) const BREAKDOWN: Option<crate::agents::breakdown::Spec> =
     Some(crate::agents::breakdown::Spec { probe: breakdown::probe });
 pub(in crate::agents) const UNFOUND: &str = "Claude Code has not said yet which conversation it is in";
+pub(in crate::agents) const TELLS_AWAITED: bool = true;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -343,6 +344,7 @@ fn from_title(title: &str) -> Option<Activity> {
     }
 }
 
+pub(in crate::agents) mod awaited;
 pub(in crate::agents) mod breakdown;
 pub(in crate::agents) mod headless;
 pub(in crate::agents) mod message;

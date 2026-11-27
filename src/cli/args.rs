@@ -596,13 +596,13 @@ pub(crate) struct ReadArgs {
     #[arg(
         long = "pane",
         value_name = "ID",
-        help = "The pane; with --last-message, repeat it to read several [default: the one this runs in, else the shown one]"
+        help = "The pane; with --last-message or --pending, repeat it to read several [default: the one this runs in, else the shown one]"
     )]
     pub(crate) panes: Vec<u64>,
     #[arg(
         long = "tab",
         value_name = "ID",
-        help = "A tab: its agent's pane, else its active one; with --last-message, repeat it"
+        help = "A tab: its agent's pane, else its active one; with --last-message or --pending, repeat it"
     )]
     pub(crate) tabs: Vec<u64>,
     #[arg(
@@ -614,6 +614,12 @@ pub(crate) struct ReadArgs {
     pub(crate) lines: Option<u64>,
     #[arg(long, conflicts_with = "lines", help = "The last message of the agent in the pane, from its own record")]
     pub(crate) last_message: bool,
+    #[arg(
+        long,
+        conflicts_with_all = ["lines", "last_message"],
+        help = "What the agent in the pane waits for you to answer, from its own record"
+    )]
+    pub(crate) pending: bool,
     #[command(flatten)]
     pub(crate) view: ViewArg,
     #[command(flatten)]
