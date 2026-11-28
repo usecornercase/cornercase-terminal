@@ -548,8 +548,8 @@ fn new_columns_of_a_pane_row_go_after_the_released_ones() {
 }
 
 #[test]
-fn a_pane_row_ends_with_its_pid_memory_and_compacted() {
-    assert_eq!(PaneRow::COLUMNS[PaneRow::COLUMNS.len() - 4..], ["account_restart", "pid", "memory", "compacted"]);
+fn a_pane_row_ends_with_its_pid_memory_compacted_and_since() {
+    assert_eq!(PaneRow::COLUMNS[PaneRow::COLUMNS.len() - 4..], ["pid", "memory", "compacted", "since"]);
 }
 
 #[test]

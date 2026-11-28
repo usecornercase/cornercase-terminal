@@ -145,6 +145,7 @@ impl Report {
             pid: pane.pid,
             memory: pane.memory,
             compacted: pane.compacted,
+            since: pane.since.clone(),
         }
     }
 }
@@ -191,10 +192,11 @@ pub struct PaneRow {
     pub(crate) pid: Option<i32>,
     pub(crate) memory: Option<u64>,
     pub(crate) compacted: bool,
+    pub(crate) since: Option<String>,
 }
 
 impl PaneRow {
-    pub const COLUMNS: [&str; 32] = [
+    pub const COLUMNS: [&str; 33] = [
         "pane",
         "tab",
         "workspace",
@@ -227,6 +229,7 @@ impl PaneRow {
         "pid",
         "memory",
         "compacted",
+        "since",
     ];
 }
 
@@ -462,4 +465,6 @@ pub struct PaneInfo {
     pub(crate) compacted: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) bot: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) since: Option<String>,
 }

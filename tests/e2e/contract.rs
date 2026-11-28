@@ -112,7 +112,7 @@ fn assert_features_and_streams(contract: &Value) {
         .chain(["focus-reveal", "files", "queue-routines", "queue-results", "tunnel-orders"])
         .chain(["tunnel-reverse", "machine-tunnels", "tunnel-hold-ended", "merged-builds", "section-folds"])
         .chain(["pending-question", "view-no-claim", "mark-seen", "read-messages", "last-message-events"])
-        .chain(["cli-tls"])
+        .chain(["cli-tls", "status-since"])
     {
         assert!(has_feature(contract, feature), "{feature}: {contract}");
     }

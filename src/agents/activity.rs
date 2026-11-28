@@ -1,5 +1,5 @@
 use std::ops::RangeInclusive;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 pub(in crate::agents) const BRAILLE: RangeInclusive<char> = '\u{2800}'..='\u{28ff}';
 pub(crate) const NOTIFY_AFTER: Duration = Duration::from_secs(1);
@@ -92,6 +92,7 @@ pub(crate) struct Pane {
     notified: bool,
     worked: Option<Instant>,
     moved: Option<Instant>,
+    taken: Option<(Status, SystemTime)>,
 }
 
 impl Pane {
@@ -213,6 +214,17 @@ impl Pane {
 
     pub(crate) fn state(&self) -> Option<&'static str> {
         if self.background_shell() { Some(SHELL) } else { self.status().map(Status::name) }
+    }
+
+    pub(crate) fn stamp(&mut self, at: SystemTime) {
+        let status = self.status();
+        if self.taken.map(|(taken, _)| taken) != status {
+            self.taken = status.map(|status| (status, at));
+        }
+    }
+
+    pub(crate) fn status_since(&self) -> Option<SystemTime> {
+        self.taken.filter(|&(taken, _)| Some(taken) == self.status()).map(|(_, at)| at)
     }
 
     pub(crate) fn status(&self) -> Option<Status> {

@@ -304,6 +304,7 @@ fn forget_moved_end(projects: &mut [Project], run: &mut Run) {
     let pane = run.pane_of(flows::ORCHESTRATOR);
     if let Some(term) = pane.and_then(|pane| projects.pane_by_mut(pane)) {
         term.agent.mark(false);
+        term.agent.stamp(SystemTime::now());
     }
     log::info!(
         "flow",

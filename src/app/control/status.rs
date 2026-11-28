@@ -275,6 +275,7 @@ impl App {
         let pid = term.foreground_pid();
         (term.id, pid, pid.and_then(process::name), term.cwd(), term.shell_pid()).hash(hash);
         (term.agent.agent(), term.agent.status().map(Status::name), term.agent.background_shell()).hash(hash);
+        term.agent.status_since().hash(hash);
         term.context.conversation().hash(hash);
         term.context.context().map(|c| (&c.model, c.percent)).hash(hash);
         term.context.compaction().hides.hash(hash);
@@ -322,6 +323,7 @@ impl App {
             memory: term.memory.bytes().filter(|_| self.config.memory),
             compacted: term.context.compaction().hides,
             bot: term.bot.clone(),
+            since: term.agent.status_since().map(|at| crate::time::Stamp(at).to_string()),
         }
     }
 

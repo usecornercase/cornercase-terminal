@@ -63,6 +63,17 @@ fn a_pane_leaves_its_pid_and_memory_out_unless_it_has_them() {
 }
 
 #[test]
+fn a_pane_leaves_since_out_unless_it_has_one() {
+    let plain = serde_json::to_value(pane(4, false)).expect("a pane");
+    let given = serde_json::to_value(PaneInfo { since: Some(SINCE.into()), ..pane(4, false) }).expect("a pane");
+
+    assert!(plain.get("since").is_none(), "{plain}");
+    assert_eq!(given["since"], json!(SINCE));
+    let read = serde_json::from_value::<PaneInfo>(given).expect("a pane");
+    assert_eq!(read.since.as_deref(), Some(SINCE));
+}
+
+#[test]
 fn a_pane_always_has_the_key_of_its_conversation_with_null_until_it_is_known() {
     let unknown = serde_json::to_value(pane(5, false)).expect("a pane");
     let known = serde_json::to_value(pane(4, true)).expect("a pane");
@@ -83,6 +94,19 @@ fn a_pane_row_gives_its_pid_and_memory_or_null() {
     assert_eq!((&rows[0]["pid"], &rows[0]["memory"]), (&json!(321), &json!(4096)));
     assert_eq!((&rows[1]["pid"], &rows[1]["memory"]), (&Value::Null, &Value::Null));
 }
+
+#[test]
+fn a_pane_row_gives_since_or_null() {
+    let mut project = shop_project();
+    project.workspaces[0].tabs[0].panes[0].since = Some(SINCE.into());
+    let report = Report { projects: vec![project], ..Report::default() };
+
+    let rows = serde_json::to_value(report.panes()).expect("rows");
+
+    assert_eq!((&rows[0]["since"], &rows[1]["since"]), (&json!(SINCE), &Value::Null));
+}
+
+const SINCE: &str = "2026-11-28T10:46:03.123Z";
 
 fn agents_tab() -> TabInfo {
     TabInfo {

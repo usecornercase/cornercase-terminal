@@ -605,6 +605,37 @@ mod pending_review {
         );
     }
 
+    fn since(agent: &mut Agent, id: u64) -> (Option<String>, Option<SystemTime>) {
+        let info = in_status(&mut agent.app, id);
+        (info.status, info.since.as_deref().and_then(crate::time::Stamp::parse))
+    }
+
+    #[test]
+    fn status_says_since_when_a_pane_has_its_status() {
+        let (mut agent, id) = finished();
+
+        done(now(&mut agent.app, None, mark(id, false)));
+        let (marked, first) = since(&mut agent, id);
+        agent.refreshing("a refresh in sight", |_| true);
+        let after_a_look = since(&mut agent, id);
+        done(now(&mut agent.app, None, mark(id, true)));
+        let (reviewed, then) = since(&mut agent, id);
+
+        assert_eq!((marked.as_deref(), first.is_some()), (Some("pending"), true));
+        assert_eq!(after_a_look, (marked, first));
+        assert_eq!(reviewed.as_deref(), Some("idle"));
+        assert!(then.zip(first).is_some_and(|(then, first)| then >= first), "{then:?} after {first:?}");
+    }
+
+    #[test]
+    fn a_pane_without_an_agent_has_no_since() {
+        let mut agent = Agent::new();
+        agent.start(None);
+        let shell = done(now(&mut agent.app, None, new_tab(None))).ids.pane.expect("the shell's pane");
+
+        assert_eq!(in_status(&mut agent.app, shell).since, None);
+    }
+
     #[test]
     fn a_pane_without_an_agent_cannot_be_marked() {
         let mut agent = Agent::new();

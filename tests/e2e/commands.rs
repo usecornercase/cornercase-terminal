@@ -36,6 +36,7 @@ fn status_panes_gives_every_pane_a_row_of_its_own() {
     assert_eq!(lines[1..].iter().map(|line| line[0].parse().expect("an id")).collect::<Vec<u64>>(), ids);
     assert!(ids.contains(&split.parse().expect("an id")), "{text}");
     assert_eq!((marked("caller"), marked("shown")), (vec![shown.as_str()], vec![shown.as_str()]));
+    assert!(lines[1..].iter().all(|line| line[column("since")] == "-"), "{text}");
     assert_eq!(rows.panes.iter().map(|row| row.pane).collect::<Vec<_>>(), ids);
     assert!(rows.panes.iter().all(|row| !row.caller), "{rows:?}");
 }
