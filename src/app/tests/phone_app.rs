@@ -18,7 +18,7 @@ struct Rig {
     addresses: Arc<Mutex<Vec<IpAddr>>>,
     port: u16,
     at: Instant,
-    _dir: TempDir,
+    dir: TempDir,
 }
 
 fn rig() -> Rig {
@@ -29,7 +29,7 @@ fn rig() -> Rig {
     app.phone.set_probe(move || seen.lock().clone());
     let port = free_port();
     app.config.phone_app_port = port;
-    Rig { app, rx, addresses, port, at: Instant::now(), _dir: dir }
+    Rig { app, rx, addresses, port, at: Instant::now(), dir }
 }
 
 fn on() -> Rig {
@@ -137,7 +137,7 @@ fn a_port_somebody_holds_is_named_in_the_note_and_refuses_a_code() {
     r.app.config.phone_app = true;
     r.app.refresh(Instant::now());
 
-    let refusal = r.app.request_app_code(Instant::now()).expect_err("refused");
+    let refusal = r.app.request_app_code(Instant::now(), false).expect_err("refused");
 
     assert!(r.app.phone.note().contains("phone_app_port"), "{}", r.app.phone.note());
     assert_eq!(refusal.code, Code::Unavailable);
@@ -147,7 +147,7 @@ fn a_port_somebody_holds_is_named_in_the_note_and_refuses_a_code() {
 fn a_code_is_refused_while_it_is_off() {
     let mut r = rig();
 
-    let refusal = r.app.request_app_code(Instant::now()).expect_err("refused");
+    let refusal = r.app.request_app_code(Instant::now(), false).expect_err("refused");
 
     assert_eq!(refusal.code, Code::Conflict);
     assert!(refusal.message.contains("phone_app true"), "{}", refusal.message);
@@ -179,7 +179,8 @@ fn the_routes_follow_the_addresses_every_two_seconds() {
 fn the_dialog_shows_the_code_and_closes_with_a_toast_when_an_app_pairs() {
     let mut r = on();
     let url = open_dialog(&mut r);
-    assert!(url.starts_with(&format!("ws://127.0.0.1:{}/?code=", r.port)), "{url}");
+    assert!(url.starts_with(&format!("wss://127.0.0.1:{}/?code=", r.port)), "{url}");
+    assert!(url.contains("&fp="), "{url}");
 
     let secret = phone_secret(&url);
     pump_until(&mut r.app, &r.rx, "the pairing is told", |app| app.overlay.is_none());
@@ -200,7 +201,7 @@ fn changing_the_port_keeps_the_held_code_working() {
     listening(&mut r, at);
     let url = dialog(&r.app).and_then(|view| view.url).expect("an address");
 
-    assert!(url.starts_with(&format!("ws://127.0.0.1:{port}/?code=")), "{url}");
+    assert!(url.starts_with(&format!("wss://127.0.0.1:{port}/?code=")), "{url}");
     assert!(phone_secret(&url).contains('.'));
 }
 
@@ -270,4 +271,23 @@ fn the_revision_moves_each_time_the_note_changes_and_not_on_a_read_that_changes_
     assert!(off > again);
     r.app.refresh(r.at + Duration::from_secs(4));
     assert_eq!(revision(&r.app), off);
+}
+
+#[test]
+fn a_certificate_that_cannot_be_kept_shows_no_code() {
+    let mut r = rig();
+    std::fs::create_dir(r.dir.path().join("app-certificate.json")).expect("a folder in the certificate's place");
+    r.app.config.phone_app = true;
+    r.app.refresh(Instant::now());
+
+    let refusal = r.app.request_app_code(Instant::now(), false).expect_err("refused");
+
+    assert!(
+        matches!(r.app.phone.phase(), Phase::Failed(why) if why.contains("certificate")),
+        "{:?}",
+        r.app.phone.phase()
+    );
+    assert_eq!(refusal.code, Code::Unavailable);
+    assert_eq!(r.app.app_shown().url, None);
+    assert!(TcpStream::connect(("127.0.0.1", r.port)).is_err());
 }

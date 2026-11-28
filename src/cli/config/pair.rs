@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use serde_json::Value;
 
-use crate::cli::{print_json, print_out, quietly};
+use crate::cli::{note, print_json, print_out, quietly};
 use crate::client::{self, answer, ask};
 use crate::control::pair::{ConfigPair, PairEnded, PairKey, PairLine, PairShown, Route, Routes};
 use crate::control::{AppRoutes, Command};
@@ -12,16 +12,25 @@ use crate::os::console;
 
 const SERVER_LEFT: &str = "the server stopped before a phone paired";
 const NOT_PAIRED: &str = "no phone was paired";
+const NEW_CERTIFICATE: &str = "the certificate is new: every paired app was forgotten and needs this code\n";
 
-pub(super) fn run(key: String, routes: bool, json: bool) -> Result<()> {
+pub(super) fn run(key: String, routes: bool, new_certificate: bool, json: bool) -> Result<()> {
     if routes && key != "app" {
         return Err(Error::WrongUsage("--routes goes with `config pair app`".into()));
+    }
+    if new_certificate && key != "app" {
+        return Err(Error::WrongUsage("--new-certificate goes with `config pair app`".into()));
     }
     if routes {
         return listed(json);
     }
-    let mut reading = Reading { key: PairKey::of(&key), json, ended: None, reader_left: false };
-    client::follow_all("config pair", Command::ConfigPair(ConfigPair { key }), |value| reading.line(&value))?;
+    if new_certificate {
+        client::use_cli_tls()?;
+    }
+    let mut reading =
+        Reading { key: PairKey::of(&key), json, ended: None, reader_left: false, renewed: new_certificate };
+    let asked = ConfigPair { key, new_certificate };
+    client::follow_all("config pair", Command::ConfigPair(asked), |value| reading.line(&value))?;
     reading.finished(reader_gone)
 }
 
@@ -43,11 +52,15 @@ struct Reading {
     json: bool,
     ended: Option<PairEnded>,
     reader_left: bool,
+    renewed: bool,
 }
 
 impl Reading {
     fn line(&mut self, value: &Value) -> Result<bool> {
         let line: PairLine = answer(value.clone())?;
+        if matches!(line, PairLine::Shown(_)) && std::mem::take(&mut self.renewed) {
+            note(NEW_CERTIFICATE);
+        }
         let text = if self.json { format!("{value}\n") } else { self.text(&line) };
         let mut out = std::io::stdout().lock();
         self.reader_left = quietly(out.write_all(text.as_bytes()).and_then(|()| out.flush()))?;

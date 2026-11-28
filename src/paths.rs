@@ -146,6 +146,10 @@ pub(crate) fn apps(config: &Path) -> PathBuf {
     config.with_file_name("apps.json")
 }
 
+pub(crate) fn app_certificate(config: &Path) -> PathBuf {
+    config.with_file_name("app-certificate.json")
+}
+
 pub(crate) fn telegram(config: &Path) -> PathBuf {
     config.with_file_name("telegram.json")
 }

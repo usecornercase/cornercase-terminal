@@ -81,7 +81,11 @@ A phone app built on cornercase's commands connects without a browser, over your
 
 The code holds every address cornercase listens on, so the app reaches it on whichever network it is on. When a network comes up later, the app asks `cornercase config pair app --routes` for the current addresses without scanning again.
 
-**How it is kept private.** The code works once and for ten minutes. The app trades it for a secret of its own, which cornercase keeps only as a hash in `apps.json` next to `config.json` (readable only by you); the app sends the secret in the handshake, never in an address or in `server.log`. Over your Wi-Fi the connection is `ws://`, not encrypted, so the secret crosses the network in clear: use a network you trust, or Tailscale, which encrypts it. cornercase listens only on the addresses of your Wi-Fi, your LAN and Tailscale, and only while the switch is on.
+**How it is kept private.** The code works once and for ten minutes. The app trades it for a secret of its own, which cornercase keeps only as a hash in `apps.json` next to `config.json` (readable only by you); the app sends the secret in the handshake, never in an address or in `server.log`. The connection is encrypted (`wss://`) with a certificate cornercase made for this computer, kept in `app-certificate.json` next to `config.json` (readable only by you). The code carries the certificate's fingerprint, and the app accepts that certificate only, so nobody on your Wi-Fi can read the secret or your commands, or pretend to be your computer. It stays the same after a restart or an update, so paired phones keep working. cornercase listens only on the addresses of your Wi-Fi, your LAN and Tailscale, and only while the switch is on.
+
+An app paired before cornercase 0.14.7, or a version of the app that does not read the fingerprint yet, still connects with `ws://`, in clear: the same port answers both. A version of the app that only reads `ws://` codes can't pair until it is updated.
+
+**Starting over.** `cornercase config pair app --new-certificate` makes a new certificate, forgets every paired app, closes their connections and shows the new code. Use it when `app-certificate.json` may have been copied, or to make every phone pair again.
 
 The first time, your computer's firewall may ask whether cornercase can accept connections on private networks: allow it.
 

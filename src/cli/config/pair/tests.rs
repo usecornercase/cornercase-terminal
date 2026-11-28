@@ -3,7 +3,7 @@ use serde_json::json;
 use super::*;
 
 fn reading(ended: Option<PairEnded>) -> Reading {
-    Reading { key: Some(PairKey::Browsers), json: false, ended, reader_left: false }
+    Reading { key: Some(PairKey::Browsers), json: false, ended, reader_left: false, renewed: false }
 }
 
 fn ended(paired: bool, error: Option<&str>) -> Reading {
@@ -92,7 +92,19 @@ mod the_arguments {
 
         let Some(Command::Control(Control::Config(config))) = cli.command else { panic!("not config") };
         assert!(config.json);
-        assert!(matches!(config.action, Some(ConfigAction::Pair { key, routes: false }) if key == "telegram.chat"));
+        let pair = matches!(config.action, Some(ConfigAction::Pair { key, routes: false, new_certificate: false }) if key == "telegram.chat");
+        assert!(pair);
+    }
+
+    #[test]
+    fn take_a_new_certificate_but_not_with_the_routes() {
+        let renewed =
+            Cli::try_parse_from(["cornercase", "config", "pair", "app", "--new-certificate"]).expect("parses");
+        let both = Cli::try_parse_from(["cornercase", "config", "pair", "app", "--new-certificate", "--routes"]);
+
+        let Some(Command::Control(Control::Config(config))) = renewed.command else { panic!("not config") };
+        assert!(matches!(config.action, Some(ConfigAction::Pair { routes: false, new_certificate: true, .. })));
+        assert!(both.is_err());
     }
 
     #[test]
@@ -117,8 +129,19 @@ mod the_routes {
 
     #[test]
     fn go_only_with_the_app() {
-        let refused = run("browsers".into(), true, false);
+        let refused = run("browsers".into(), true, false, false);
 
         assert!(matches!(refused, Err(Error::WrongUsage(message)) if message.contains("config pair app")));
+    }
+}
+
+mod a_new_certificate {
+    use super::*;
+
+    #[test]
+    fn goes_only_with_the_app() {
+        let refused = run("browsers".into(), false, true, false);
+
+        assert!(matches!(refused, Err(Error::WrongUsage(message)) if message.contains("--new-certificate")));
     }
 }

@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.14.7
+
+- **The phone app's connection is encrypted on your Wi-Fi.** cornercase now makes a certificate of its own for this computer, and the pairing code carries its fingerprint (`wss://…&fp=…`). An app that reads it checks the fingerprint on every connection, so nobody on the same network can read the secret, your commands or what they print, or sit in the middle. Nothing to set up, and paired phones keep working after a restart or an update.
+- **Apps paired before keep working**, in clear as until now, until they pair again with a version of the app that reads the new code. A version of the app that only reads `ws://` codes cannot pair until it is updated.
+- **Start over** with `cornercase config pair app --new-certificate`: it makes a new certificate, forgets every paired app and prints the new code.
+- **For programs**: `fingerprint` in `config pair app --routes --json`, `new_certificate` in the `config-pair` request, and the feature `cli-tls` in `cornercase contract`.
+
 ## 0.14.6
 
 - **Know when an agent's last message changes.** `cornercase events` prints `pane 7  claude  last message changed` when the agent in a pane writes a new message or adds to its newest one, about once every half second at most while it writes, so a phone app, a chat or a script that shows an agent's answer reads it once with `cornercase read --last-message` instead of asking again and again. `--pane` keeps only those panes' lines, and nothing is printed while the agent writes nothing new.

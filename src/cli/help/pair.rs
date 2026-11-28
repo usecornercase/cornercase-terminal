@@ -18,13 +18,17 @@ it says so as it does for its dialog. The address holds a code, so treat it as a
 written to server.log. Discord has no code: its owner is asked for while this runs.
 
 `app` pairs the cornercase phone app, on the same network or over Tailscale, once `phone_app` is on. Its
-address is the app's own code: ws://HOST:PORT/?code=CODE&also=HOST&name=NAME, with every address the
-computer listens on for the app (also= for each one after the first, IPv6 in brackets only in the first)
-and the computer's name. The app opens it as a WebSocket, which trades the code for a secret of its own
-and ends the command with {\"paired\": true}. --routes does not wait: it prints the addresses the app
-can reach now, one HOST:PORT per line or, with --json, {\"routes\": [{\"host\", \"port\"}]}, so an app
-that paired earlier can add a network that came up since. A paired app is forgotten with
-`config remove app.ID`.
+address is the app's own code: wss://HOST:PORT/?code=CODE&also=HOST&name=NAME&fp=FINGERPRINT, with every
+address the computer listens on for the app (also= for each one after the first, IPv6 in brackets only in
+the first), the computer's name and fp, the SHA-256 of the certificate the listener presents, in base64url
+without padding. The listener speaks TLS with a certificate of its own, made once for this computer: the
+app must accept that certificate only, never another one. It opens the address as a WebSocket, which
+trades the code for a secret of its own and ends the command with {\"paired\": true}. Plain ws:// on the
+same port is still answered, for apps paired before. --routes does not wait: it prints the addresses the
+app can reach now, one HOST:PORT per line or, with --json, {\"routes\": [{\"host\", \"port\"}],
+\"fingerprint\"}, so an app that paired earlier can add a network that came up since.
+--new-certificate makes a new certificate first, forgets every paired app and then shows the new code;
+it says so once on standard error. A paired app is forgotten with `config remove app.ID`.
 
 Examples:
   cornercase config set remote true
@@ -32,6 +36,7 @@ Examples:
   cornercase config set phone_app true
   cornercase config pair app --json
   cornercase config pair app --routes --json
+  cornercase config pair app --new-certificate --json
   printf '%s' \"$BOT_TOKEN\" | cornercase config secret telegram
   cornercase config pair telegram.chat --json
   cornercase --remote devbox config pair discord.chat";

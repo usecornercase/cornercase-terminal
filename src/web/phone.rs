@@ -11,15 +11,20 @@ use parking_lot::Mutex;
 
 use super::auth::{Devices, Pairing};
 use super::http::{Request, Response};
-use super::{ACCEPT_POLL, Event, MAX_MESSAGE, PING_EVERY, SILENT_FOR, bind_now, spawn_counted};
+use super::{
+    ACCEPT_POLL, Event, HEAD_TIMEOUT, MAX_MESSAGE, PING_EVERY, SILENT_FOR, bind_now, read_head, spawn_counted,
+};
 use crate::log;
 use crate::process::program;
+use link::Link;
 
 mod cli;
 mod code;
 mod command;
+mod link;
 mod message;
 mod pairing;
+mod tls;
 
 pub(crate) use code::machine_code;
 
@@ -37,6 +42,7 @@ pub(crate) struct Limits {
     pub(crate) longest_line: usize,
     pub(crate) queued_bytes: usize,
     pub(crate) largest_message: usize,
+    pub(crate) head_within: Duration,
 }
 
 impl Default for Limits {
@@ -50,6 +56,7 @@ impl Default for Limits {
             longest_line: 16 * 1024 * 1024,
             queued_bytes: 4 * 1024 * 1024,
             largest_message: MAX_MESSAGE,
+            head_within: HEAD_TIMEOUT,
         }
     }
 }
@@ -68,6 +75,7 @@ struct Shared {
     devices: Devices,
     connections: Vec<Connected>,
     next: u64,
+    identity: Option<tls::Identity>,
 }
 
 impl Shared {
@@ -100,9 +108,9 @@ impl Context {
         (self.notify)(event);
     }
 
-    fn admit(&self, credential: Option<&str>, stream: &TcpStream) -> Result<(u64, String), Refused> {
+    fn admit(&self, credential: Option<&str>, link: &Link) -> Result<(u64, String), Refused> {
         let credential = credential.ok_or(Refused::NoSecret)?;
-        let stream = stream.try_clone().map_err(|_| Refused::Closed)?;
+        let stream = link.tcp().try_clone().map_err(|_| Refused::Closed)?;
         let mut shared = self.shared.lock();
         let device = shared.devices.check(credential).map(String::from).ok_or(Refused::UnknownSecret)?;
         if !shared.accepting {
@@ -175,11 +183,17 @@ pub(crate) struct Listened {
 
 pub(crate) struct Phone {
     context: Context,
+    certificate: PathBuf,
     listening: Option<Accepting>,
 }
 
 impl Phone {
-    pub(crate) fn new<E: From<Event> + Send + 'static>(apps: PathBuf, socket: PathBuf, notify: Sender<E>) -> Self {
+    pub(crate) fn new<E: From<Event> + Send + 'static>(
+        apps: PathBuf,
+        certificate: PathBuf,
+        socket: PathBuf,
+        notify: Sender<E>,
+    ) -> Self {
         let shared = Shared {
             accepting: false,
             generation: 0,
@@ -188,6 +202,7 @@ impl Phone {
             devices: Devices::load(apps),
             connections: Vec::new(),
             next: 0,
+            identity: None,
         };
         let notify: Arc<dyn Fn(Event) + Send + Sync> = Arc::new(move |event| _ = notify.send(E::from(event)));
         let context = Context {
@@ -200,17 +215,51 @@ impl Phone {
             stopping: Arc::default(),
             waits: Arc::default(),
         };
-        Self { context, listening: None }
+        Self { context, certificate, listening: None }
     }
 
-    pub(crate) fn listen(&mut self, addresses: &[IpAddr], port: u16) -> Listened {
+    pub(crate) fn listen(
+        &mut self,
+        addresses: &[IpAddr],
+        port: u16,
+        name: &dyn Fn() -> Option<String>,
+    ) -> io::Result<Listened> {
+        self.keep_identity(name)?;
         if self.listening.as_ref().is_some_and(|accepting| accepting.port != port) {
             self.stop_listening();
         }
         self.context.shared.lock().accepting = true;
         let context = &self.context;
         let accepting = self.listening.get_or_insert_with(|| Accepting::start(port, context));
-        accepting.update(addresses)
+        Ok(accepting.update(addresses))
+    }
+
+    fn keep_identity(&self, name: &dyn Fn() -> Option<String>) -> io::Result<()> {
+        if self.context.shared.lock().identity.is_some() {
+            return Ok(());
+        }
+        let identity = tls::Identity::load_or_make(&self.certificate, name)?;
+        self.context.shared.lock().identity = Some(identity);
+        Ok(())
+    }
+
+    pub(crate) fn fingerprint(&self) -> Option<String> {
+        self.context.shared.lock().identity.as_ref().map(|identity| identity.fingerprint.clone())
+    }
+
+    pub(crate) fn renew(&self, name: Option<&str>) -> io::Result<(String, usize)> {
+        let identity = tls::Identity::make(&self.certificate, name)?;
+        let fingerprint = identity.fingerprint.clone();
+        let mut shared = self.context.shared.lock();
+        let forgotten = shared.devices.list().len();
+        shared.devices.clear()?;
+        shared.identity = Some(identity);
+        for connected in &shared.connections {
+            let _ = connected.stream.shutdown(Shutdown::Both);
+        }
+        shared.generation += 1;
+        log::info!("web", "phone app certificate replaced", fingerprint = fingerprint, forgotten = forgotten);
+        Ok((fingerprint, forgotten))
     }
 
     fn stop_listening(&mut self) {
@@ -324,10 +373,14 @@ fn accept(listeners: &Listeners, context: &Context, stop: &AtomicBool) {
 fn serve_in_thread(stream: TcpStream, context: &Context) {
     let open = Arc::clone(&context.open);
     let context = context.clone();
-    spawn_counted(stream, &open, MAX_OPEN, move |stream, request| serve(stream, &request, &context));
+    spawn_counted(stream, &open, MAX_OPEN, context.limits.head_within, move |stream, deadline| {
+        let config = || context.shared.lock().identity.as_ref().map(|identity| Arc::clone(&identity.config));
+        let Some(link) = Link::accept(stream, config, deadline) else { return };
+        read_head(link, deadline, |link, request| serve(link, &request, &context));
+    });
 }
 
-fn serve(mut stream: TcpStream, request: &Request, context: &Context) {
+fn serve(mut stream: Link, request: &Request, context: &Context) {
     match (request.method.as_str(), request.path.as_str()) {
         ("GET", "/") => pairing::pair(stream, request, context),
         ("GET", "/cli") => cli::run(stream, request, context),

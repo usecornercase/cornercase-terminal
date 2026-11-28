@@ -1,4 +1,3 @@
-use std::net::TcpStream;
 use std::time::Instant;
 
 use tungstenite::protocol::WebSocketConfig;
@@ -7,6 +6,7 @@ use tungstenite::protocol::frame::coding::CloseCode;
 use tungstenite::{Message, WebSocket};
 
 use super::Context;
+use super::link::Link;
 use crate::log;
 use crate::web::http::{self, Request, Response};
 use crate::web::{Event, WRITE_TIMEOUT};
@@ -14,7 +14,7 @@ use crate::web::{Event, WRITE_TIMEOUT};
 const NOT_A_SOCKET: &str = "a WebSocket is needed: open the pairing code's address with one";
 const BAD_CODE: &str = "this code does not work: show a new one in Settings › Remote";
 
-pub(super) fn pair(mut stream: TcpStream, request: &Request, context: &Context) {
+pub(super) fn pair(mut stream: Link, request: &Request, context: &Context) {
     if !request.wants_websocket() {
         let _ = Response::text("426 Upgrade Required", NOT_A_SOCKET).send(&mut stream);
         return;
@@ -30,13 +30,14 @@ pub(super) fn pair(mut stream: TcpStream, request: &Request, context: &Context) 
         let _ = Response::text("403 Forbidden", BAD_CODE).send(&mut stream);
         return;
     }
-    let _ = stream.set_write_timeout(Some(WRITE_TIMEOUT));
+    let _ = stream.tcp().set_write_timeout(Some(WRITE_TIMEOUT));
     let Some(mut ws) = http::upgrade(stream, request, WebSocketConfig::default()) else { return };
     exchange(&mut ws, request, context);
     let _ = ws.flush();
+    ws.get_mut().end();
 }
 
-fn exchange(ws: &mut WebSocket<TcpStream>, request: &Request, context: &Context) {
+fn exchange(ws: &mut WebSocket<Link>, request: &Request, context: &Context) {
     let name = request.header("user-agent").unwrap_or_default();
     let (held, added, generation) = {
         let mut shared = context.shared.lock();
@@ -61,13 +62,13 @@ fn code_of(request: &Request) -> &str {
     request.query("code").unwrap_or_default()
 }
 
-fn end(ws: &mut WebSocket<TcpStream>, code: CloseCode) {
+fn end(ws: &mut WebSocket<Link>, code: CloseCode) {
     let _ = ws.close(Some(CloseFrame { code, reason: "".into() }));
     let _ = ws.flush();
 }
 
 fn deliver(
-    ws: &mut WebSocket<TcpStream>,
+    ws: &mut WebSocket<Link>,
     context: &Context,
     (id, secret, taken): (&str, &str, u64),
     (held, generation, name): (Option<crate::web::auth::Pairing>, u64, &str),
@@ -75,7 +76,8 @@ fn deliver(
     let reply = serde_json::json!({ "secret": secret }).to_string();
     let delivered = ws.write(Message::text(reply)).and_then(|()| ws.flush()).is_ok();
     let name: String = name.chars().take(120).collect();
-    log::info!("web", "phone app paired", device = id, name = name, delivered = delivered);
+    let tls = ws.get_ref().encrypted();
+    log::info!("web", "phone app paired", device = id, name = name, delivered = delivered, tls = tls);
     if delivered {
         end(ws, CloseCode::Normal);
         context.tell(Event::AppPaired(taken));

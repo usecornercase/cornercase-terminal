@@ -7,6 +7,7 @@ macro_rules! fixture {
 pub(crate) use fixture;
 
 mod program;
+pub(crate) mod tls;
 
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -698,11 +699,15 @@ pub(crate) fn http_get(port: u16, path: &str) -> String {
 
 pub(crate) fn phone_secret(url: &str) -> String {
     use tungstenite::client::IntoClientRequest as _;
-    let address = url.trim_start_matches("ws://").split('/').next().expect("an address").to_string();
+    let rest = url.strip_prefix("wss://").or_else(|| url.strip_prefix("ws://")).expect("a WebSocket address");
+    let address = rest.split('/').next().expect("an address").to_string();
     let stream = std::net::TcpStream::connect(address).expect("connect");
-    let (mut ws, _) =
-        tungstenite::client::client(url.into_client_request().expect("a request"), stream).expect("a handshake");
-    let reply = ws.read().expect("a message").into_text().expect("text");
+    let request = url.into_client_request().expect("a request");
+    let reply = match tls::fingerprint_in(url).filter(|_| url.starts_with("wss://")) {
+        Some(pin) => tls::connect_pinned(request, stream, pin).expect("a TLS handshake").read(),
+        None => tungstenite::client::client(request, stream).expect("a handshake").0.read(),
+    };
+    let reply = reply.expect("a message").into_text().expect("text");
     let reply: serde_json::Value = serde_json::from_str(&reply).expect("json");
     reply["secret"].as_str().expect("a secret").to_string()
 }

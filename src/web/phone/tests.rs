@@ -1,3 +1,4 @@
+use std::io::{Read, Write};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver};
@@ -31,14 +32,19 @@ impl Rig {
     fn with(configure: impl FnOnce(&mut Limits)) -> Self {
         let dir = TempDir::new();
         let (tx, events) = mpsc::channel();
-        let mut phone = Phone::new(dir.path().join("apps.json"), dir.path().join("cornercase.sock"), tx);
+        let mut phone = Phone::new(
+            dir.path().join("apps.json"),
+            dir.path().join("app-certificate.json"),
+            dir.path().join("cornercase.sock"),
+            tx,
+        );
         let program = fake_program(dir.path(), "cornercase");
         phone.set_program(program.clone());
         let mut limits = Limits::default();
         configure(&mut limits);
         phone.set_limits(limits);
         let port = free_port();
-        let listened = phone.listen(&[LOCALHOST], port);
+        let listened = phone.listen(&[LOCALHOST], port, &no_name).expect("a certificate");
         assert_eq!(listened.routes.len(), 1, "{:?}", listened.failed);
         Self { dir, phone, port, events, program }
     }
@@ -106,7 +112,11 @@ struct Seen {
     ended: String,
 }
 
-fn read_all(ws: &mut WebSocket<TcpStream>) -> Seen {
+fn no_name() -> Option<String> {
+    None
+}
+
+fn read_all<S: Read + Write>(ws: &mut WebSocket<S>) -> Seen {
     let mut seen = Seen::default();
     loop {
         match ws.read() {
@@ -127,11 +137,11 @@ fn read_all(ws: &mut WebSocket<TcpStream>) -> Seen {
     }
 }
 
-fn send(ws: &mut WebSocket<TcpStream>, text: &str) {
+fn send<S: Read + Write>(ws: &mut WebSocket<S>, text: &str) {
     ws.send(Message::text(text)).expect("send");
 }
 
-fn argv(ws: &mut WebSocket<TcpStream>, words: &[&str]) {
+fn argv<S: Read + Write>(ws: &mut WebSocket<S>, words: &[&str]) {
     send(ws, &serde_json::json!({ "argv": words }).to_string());
 }
 
@@ -403,7 +413,7 @@ mod the_command_line {
         frame.extend_from_slice(&(1024 * 1024 + 1_u64).to_be_bytes());
         frame.extend_from_slice(&[0; 4]);
         frame.extend_from_slice(br#"{"stdin":"xxxx"#);
-        io::Write::write_all(ws.get_mut(), &frame).expect("the frame's head");
+        Write::write_all(ws.get_mut(), &frame).expect("the frame's head");
         let seen = read_all(&mut ws);
 
         assert!(stderr_then_exit_2(&seen), "{seen:?}");
@@ -453,9 +463,9 @@ mod the_command_line {
              Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\
              Authorization: Bearer {secret}\r\n\r\n"
         );
-        io::Write::write_all(&mut early, head.as_bytes()).expect("the head");
+        Write::write_all(&mut early, head.as_bytes()).expect("the head");
         let mut answer = String::new();
-        io::Read::read_to_string(&mut early, &mut answer).expect("an answer");
+        Read::read_to_string(&mut early, &mut answer).expect("an answer");
 
         assert!(answer.starts_with("HTTP/1.1 503"), "{answer}");
         assert!(!rig.ran());
@@ -520,16 +530,16 @@ mod the_listener {
         let (port, v6) = (rig.port, IpAddr::V6(Ipv6Addr::LOCALHOST));
 
         if can_bind_ipv6() {
-            let both = rig.phone.listen(&[LOCALHOST, v6], port);
+            let both = rig.phone.listen(&[LOCALHOST, v6], port, &no_name).expect("listening");
             assert_eq!(both.routes.len(), 2, "{:?}", both.failed);
         }
-        let none = rig.phone.listen(&[], port);
+        let none = rig.phone.listen(&[], port, &no_name).expect("listening");
 
         assert_eq!(none.routes.len(), 0);
         assert_eq!(rig.phone.listening().len(), 0);
         assert!(alive(pid));
         assert!(TcpStream::connect(("127.0.0.1", port)).is_err());
-        let again = rig.phone.listen(&[LOCALHOST], port);
+        let again = rig.phone.listen(&[LOCALHOST], port, &no_name).expect("listening");
         assert_eq!(again.routes.len(), 1);
         assert!(rig.connect("/cli", &[]).is_err());
         drop(ws);
@@ -541,12 +551,15 @@ mod the_listener {
         let rig = Rig::new();
         let taken = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("a port");
         let port = taken.local_addr().expect("address").port();
-        let mut other = Phone::new(rig.dir.path().join("other.json"), PathBuf::new(), mpsc::channel::<Event>().0);
+        let (apps, certificate) = (rig.dir.path().join("other.json"), rig.dir.path().join("other-certificate.json"));
+        let mut other = Phone::new(apps, certificate, PathBuf::new(), mpsc::channel::<Event>().0);
 
-        let listened = other.listen(&[LOCALHOST], port);
+        let listened = other.listen(&[LOCALHOST], port, &no_name).expect("a certificate");
 
         assert_eq!(listened.routes.len(), 0);
         assert_eq!(listened.failed.len(), 1);
         let _: &Path = rig.dir.path();
     }
 }
+
+mod tls;
