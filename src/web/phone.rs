@@ -248,16 +248,19 @@ impl Phone {
     }
 
     pub(crate) fn renew(&self, name: Option<&str>) -> io::Result<(String, usize)> {
-        let identity = tls::Identity::make(&self.certificate, name)?;
-        let fingerprint = identity.fingerprint.clone();
+        let made = tls::Made::new(name)?;
+        let fingerprint = made.fingerprint().to_string();
         let mut shared = self.context.shared.lock();
         let forgotten = shared.devices.list().len();
         shared.devices.clear()?;
-        shared.identity = Some(identity);
         for connected in &shared.connections {
             let _ = connected.stream.shutdown(Shutdown::Both);
         }
         shared.generation += 1;
+        let identity = made.keep(&self.certificate).map_err(|e| {
+            io::Error::other(format!("the paired apps were forgotten, but the certificate could not be written ({e})"))
+        })?;
+        shared.identity = Some(identity);
         log::info!("web", "phone app certificate replaced", fingerprint = fingerprint, forgotten = forgotten);
         Ok((fingerprint, forgotten))
     }

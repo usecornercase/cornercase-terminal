@@ -139,6 +139,10 @@ mod opting_in {
         r#"{"contract":1,"command":"notify","args":{"text":"hi","bot":null}}"#,
         "args.bot"
     )]
+    #[case::keeping_a_certificate_where_none_is_made(
+        r#"{"contract":1,"command":"notify","args":{"text":"hi","new_certificate":false}}"#,
+        "args.new_certificate"
+    )]
     #[case::not_freeing_builds_where_no_flow_runs(
         r#"{"contract":1,"command":"notify","args":{"text":"hi","free_builds":false}}"#,
         "args.free_builds"
@@ -245,6 +249,9 @@ mod opting_in {
     #[case::a_view_that_claims(r#"{"contract":1,"command":"view","args":{"no_claim":false}}"#)]
     #[case::a_view_set_that_does_not_release(
         r#"{"contract":1,"view":999,"command":"view-set","args":{"claim":false,"no_claim":false}}"#
+    )]
+    #[case::a_pairing_that_keeps_its_certificate(
+        r#"{"contract":1,"command":"config-pair","args":{"key":"app","new_certificate":false}}"#
     )]
     #[case::a_mark_that_is_not_only_seen(
         r#"{"contract":1,"command":"mark","args":{"pane":999,"tab":null,"reviewed":false,"seen":false}}"#

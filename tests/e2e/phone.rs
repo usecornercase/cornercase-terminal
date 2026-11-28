@@ -174,7 +174,9 @@ fn stdout_of(seen: &Seen) -> String {
 fn events(session: &Session, listener: &Listener, secret: &str) -> (Socket, String) {
     let mut ws = connect(listener, "/cli", Some(secret)).expect("an upgrade");
     ws.send(Message::text(r#"{"argv":["events"]}"#)).expect("argv");
-    (ws, started_pid(session))
+    let pid = started_pid(session);
+    assert!(!gone(&pid), "the command {pid:?} is not running");
+    (ws, pid)
 }
 
 fn pid_in(log: &str) -> String {
@@ -182,8 +184,9 @@ fn pid_in(log: &str) -> String {
         .rev()
         .find(|line| line.contains("phone app command started"))
         .and_then(|line| line.split("pid=").nth(1))
+        .and_then(|rest| rest.split_whitespace().next())
+        .filter(|pid| pid.parse::<u32>().is_ok())
         .unwrap_or_default()
-        .trim()
         .to_string()
 }
 

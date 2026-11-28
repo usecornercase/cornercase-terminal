@@ -253,29 +253,50 @@ mod a_new_certificate {
     }
 
     #[test]
-    fn that_cannot_forget_the_apps_leaves_the_old_one_in_use() {
+    fn that_cannot_forget_the_apps_changes_nothing() {
         let rig = Rig::new();
         let old = rig.pin();
         rig.paired_over_tls();
-        let apps = rig.dir.path().join("apps.json");
-        std::fs::remove_file(&apps).expect("the apps' file");
-        std::fs::create_dir(&apps).expect("a folder in its place");
+        folder_in_place_of(&rig, "apps.json");
 
         let renewed = rig.phone.renew(None);
 
         assert!(renewed.is_err());
-        assert_eq!((rig.pin(), rig.phone.apps().len()), (old, 1));
+        assert_eq!((rig.pin(), rig.phone.apps().len()), (old.clone(), 1));
+        assert_eq!(loaded_next_time(&rig), Some(old));
+    }
+
+    #[test]
+    fn that_cannot_be_written_still_forgets_the_apps_and_keeps_the_old_one() {
+        let rig = Rig::new();
+        let old = rig.pin();
+        rig.paired_over_tls();
+        folder_in_place_of(&rig, "app-certificate.json");
+
+        let renewed = rig.phone.renew(None).expect_err("not written");
+
+        assert!(renewed.to_string().contains("forgotten"), "{renewed}");
+        assert_eq!((rig.pin(), rig.phone.apps().len()), (old, 0));
     }
 
     #[test]
     fn is_the_one_loaded_next_time() {
         let rig = Rig::new();
         let (new, _) = rig.phone.renew(None).expect("renewed");
+
+        assert_eq!(loaded_next_time(&rig), Some(new));
+    }
+
+    fn folder_in_place_of(rig: &Rig, file: &str) {
+        let path = rig.dir.path().join(file);
+        std::fs::remove_file(&path).expect("the file");
+        std::fs::create_dir(&path).expect("a folder in its place");
+    }
+
+    fn loaded_next_time(rig: &Rig) -> Option<String> {
         let (apps, certificate) = (rig.dir.path().join("next.json"), rig.dir.path().join("app-certificate.json"));
         let mut next = Phone::new(apps, certificate, PathBuf::new(), mpsc::channel::<Event>().0);
-
         next.listen(&[LOCALHOST], free_port(), &no_name).expect("listening");
-
-        assert_eq!(next.fingerprint(), Some(new));
+        next.fingerprint()
     }
 }

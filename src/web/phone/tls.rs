@@ -30,12 +30,12 @@ pub(super) struct Identity {
 
 impl Identity {
     pub(super) fn load_or_make(path: &Path, name: &dyn Fn() -> Option<String>) -> io::Result<Self> {
-        let text = match std::fs::read_to_string(path) {
-            Ok(text) => text,
+        let bytes = match std::fs::read(path) {
+            Ok(bytes) => bytes,
             Err(e) if e.kind() == io::ErrorKind::NotFound => return Self::made(path, name().as_deref()),
             Err(e) => return Err(e),
         };
-        if let Some(identity) = loaded(&text) {
+        if let Some(identity) = loaded(&bytes) {
             log::info!("web", "phone app certificate loaded", fingerprint = identity.fingerprint);
             Ok(identity)
         } else {
@@ -51,10 +51,29 @@ impl Identity {
     }
 
     pub(super) fn make(path: &Path, name: Option<&str>) -> io::Result<Self> {
+        Made::new(name)?.keep(path)
+    }
+}
+
+pub(super) struct Made {
+    saved: Saved,
+    identity: Identity,
+}
+
+impl Made {
+    pub(super) fn new(name: Option<&str>) -> io::Result<Self> {
         let (certificate, key) = generate(name).map_err(io::Error::other)?;
         let saved = Saved { version: VERSION, certificate: STANDARD.encode(&certificate), key: STANDARD.encode(&key) };
-        crate::persist::write(path, &saved, true)?;
-        identity(certificate, key)
+        Ok(Self { saved, identity: identity(certificate, key)? })
+    }
+
+    pub(super) fn fingerprint(&self) -> &str {
+        &self.identity.fingerprint
+    }
+
+    pub(super) fn keep(self, path: &Path) -> io::Result<Identity> {
+        crate::persist::write(path, &self.saved, true)?;
+        Ok(self.identity)
     }
 }
 
@@ -77,8 +96,8 @@ fn generate(name: Option<&str>) -> Result<(Vec<u8>, Vec<u8>), rcgen::Error> {
     Ok((certificate.der().to_vec(), key.serialize_der()))
 }
 
-fn loaded(text: &str) -> Option<Identity> {
-    let saved = serde_json::from_str::<Saved>(text).ok().filter(|saved| saved.version == VERSION)?;
+fn loaded(bytes: &[u8]) -> Option<Identity> {
+    let saved = serde_json::from_slice::<Saved>(bytes).ok().filter(|saved| saved.version == VERSION)?;
     let certificate = STANDARD.decode(saved.certificate).ok()?;
     let key = STANDARD.decode(saved.key).ok()?;
     identity(certificate, key).ok()

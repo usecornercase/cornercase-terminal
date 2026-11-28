@@ -224,13 +224,10 @@ impl App {
     }
 
     fn renew_app_certificate(&mut self) -> Result<(), Refusal> {
-        self.phone
-            .listener
-            .renew(name::computer().as_deref())
-            .map_err(|e| Refusal::new(Code::Failed, format!("could not make a new certificate: {e}")))?;
+        let renewed = self.phone.listener.renew(name::computer().as_deref());
         self.settings_changed();
         self.refresh_phone_app_note();
-        Ok(())
+        renewed.map(drop).map_err(|e| Refusal::new(Code::Failed, format!("could not make a new certificate: {e}")))
     }
 
     pub(in crate::app) fn phone_app_down(&self) -> Option<Refusal> {

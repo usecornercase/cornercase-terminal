@@ -94,6 +94,17 @@ mod loading {
     }
 
     #[test]
+    fn a_file_that_is_not_text_is_replaced_too() {
+        let dir = TempDir::new();
+        let path = certificate_file(&dir);
+        std::fs::write(&path, [0xff, 0xfe]).expect("write");
+
+        let identity = Identity::load_or_make(&path, &|| None).expect("made");
+
+        assert_eq!(identity.fingerprint, sha256_base64url(&der(&path)));
+    }
+
+    #[test]
     fn another_version_is_replaced_too() {
         let dir = TempDir::new();
         let path = certificate_file(&dir);
