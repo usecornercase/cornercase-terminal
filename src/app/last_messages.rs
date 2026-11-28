@@ -31,6 +31,7 @@ struct Watched {
     kept: Kept,
     reading: Option<u64>,
     failed: u8,
+    again: bool,
 }
 
 enum Kept {
@@ -91,16 +92,20 @@ impl LastMessages {
             kept: if primed { Kept::Read(None) } else { Kept::Nothing },
             reading: None,
             failed: 0,
+            again: false,
         });
         if watched.reading.is_some() {
             return None;
         }
         let stamp = record.stamp();
-        match &watched.seen {
-            Some((seen, stamped)) if seen == record && *stamped == stamp => return None,
-            Some(_) => watched.failed = 0,
-            None => {}
+        let unchanged = watched.seen.as_ref().is_some_and(|(seen, stamped)| seen == record && *stamped == stamp);
+        if unchanged && !watched.again {
+            return None;
         }
+        if !unchanged {
+            watched.failed = 0;
+        }
+        watched.again = false;
         watched.seen = Some((record.clone(), stamp));
         watched.reading = Some(next);
         self.reads = next;
@@ -112,7 +117,7 @@ impl Watched {
     fn retry(&mut self) {
         if self.failed < RETRIES {
             self.failed += 1;
-            self.seen = None;
+            self.again = true;
         }
     }
 }

@@ -141,7 +141,7 @@ mod last_messages {
     }
 
     #[test]
-    fn a_failed_read_is_tried_again_a_few_times_per_change_of_the_record() {
+    fn an_unchanged_record_that_keeps_failing_is_read_again_three_times_then_waits_for_a_change() {
         let (mut last_messages, transcript) = kept_a();
         transcript.grow();
         let mut tried = read(&mut last_messages, &transcript);
@@ -158,6 +158,26 @@ mod last_messages {
         assert!(!last_messages.told(1, changed, failed()));
         let again = read(&mut last_messages, &transcript);
         assert!(last_messages.told(1, again, Ok(Some(b()))));
+    }
+
+    #[test]
+    fn a_change_found_while_a_retry_waits_is_retried_as_often_as_a_first_failure() {
+        let (mut last_messages, transcript) = kept_a();
+        transcript.grow();
+        let mut tried = read(&mut last_messages, &transcript);
+        for _ in 1..RETRIES {
+            assert!(!last_messages.told(1, tried, failed()));
+            tried = read(&mut last_messages, &transcript);
+        }
+        assert!(!last_messages.told(1, tried, failed()));
+
+        transcript.grow();
+        let mut tried = read(&mut last_messages, &transcript);
+        for _ in 0..RETRIES {
+            assert!(!last_messages.told(1, tried, failed()));
+            tried = read(&mut last_messages, &transcript);
+        }
+        assert!(last_messages.told(1, tried, Ok(Some(b()))));
     }
 
     #[test]
