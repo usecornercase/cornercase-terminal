@@ -53,12 +53,15 @@ impl App {
             let message = format!("`{}` cannot be paired; use app, browsers, telegram.chat or discord.chat", asked.key);
             return Err(malformed(message));
         };
+        if asked.new_certificate && key != PairKey::App {
+            return Err(malformed("`new_certificate` goes with the key `app`"));
+        }
         if self.clients.pairings.follows(client) {
             return Err(conflict("this connection already follows a pairing; open another connection"));
         }
         let since = match key {
             PairKey::Browsers => self.request_browser_code(now)?,
-            PairKey::App => self.request_app_code(now)?,
+            PairKey::App => self.request_app_code(now, asked.new_certificate)?,
             PairKey::Chat(via) => self.request_chat_code(via, now).map(|()| 0)?,
         };
         let shown = self.pairing_shown(key);
@@ -122,9 +125,9 @@ impl App {
     }
 
     pub(super) fn app_routes_request(&self) -> Handled {
-        let routes = self.app_routes()?;
+        let (routes, fingerprint) = self.app_routes()?;
         let routes = routes.iter().map(|route| Route { host: route.ip().to_string(), port: route.port() }).collect();
-        Ok(Some(json(&Routes { routes })))
+        Ok(Some(json(&Routes { routes, fingerprint })))
     }
 
     pub(in crate::app) fn chat_paired(&mut self, via: Via, name: &str) {

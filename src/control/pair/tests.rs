@@ -75,11 +75,33 @@ mod the_request {
 
         let request: Request = serde_json::from_str(text).expect("a request");
 
-        let pair = ConfigPair { key: "telegram.chat".into() };
+        let pair = ConfigPair { key: "telegram.chat".into(), new_certificate: false };
         assert_eq!(request.command, Command::ConfigPair(pair));
         assert_eq!(request.command.name(), "config-pair");
         assert_eq!(request.command.fields(), [("key", "telegram.chat".to_string())]);
         assert!(!Command::chatty("config-pair"));
+    }
+
+    #[test]
+    fn takes_a_new_certificate_and_logs_it() {
+        let text = r#"{"command": "config-pair", "args": {"key": "app", "new_certificate": true}}"#;
+
+        let request: Request = serde_json::from_str(text).expect("a request");
+
+        let pair = ConfigPair { key: "app".into(), new_certificate: true };
+        assert_eq!(request.command, Command::ConfigPair(pair.clone()));
+        assert_eq!(request.command.fields(), [("key", "app".to_string()), ("new_certificate", "true".to_string())]);
+        assert_eq!(
+            serde_json::to_value(&pair).expect("json"),
+            serde_json::json!({"key": "app", "new_certificate": true})
+        );
+    }
+
+    #[test]
+    fn writes_no_new_certificate_when_it_is_not_asked() {
+        let pair = ConfigPair { key: "app".into(), new_certificate: false };
+
+        assert_eq!(serde_json::to_value(&pair).expect("json"), serde_json::json!({"key": "app"}));
     }
 }
 
@@ -128,6 +150,21 @@ mod the_routes {
                 Route { host: "192.168.1.20".into(), port: 47682 },
                 Route { host: "fd7a:115c:a1e0::1".into(), port: 47682 },
             ],
+            fingerprint: String::new(),
+        };
+
+        let pinned: serde_json::Value = serde_json::from_str(fixture).expect("a fixture");
+
+        assert_eq!(serde_json::to_value(&routes).expect("json"), pinned);
+        assert_eq!(serde_json::from_str::<Routes>(fixture).expect("read back"), routes);
+    }
+
+    #[test]
+    fn carry_the_fingerprint_pinned_by_its_fixture() {
+        let fixture = fixture!("control/app-routes/fingerprint.json");
+        let routes = Routes {
+            routes: vec![Route { host: "192.168.1.20".into(), port: 47682 }],
+            fingerprint: "q2Ht0dXo3vR1Rr5w8XlJ8ZcT6E4kH7mN0pQwErTyUiO".into(),
         };
 
         let pinned: serde_json::Value = serde_json::from_str(fixture).expect("a fixture");

@@ -462,6 +462,7 @@ mod over_cli {
     #[case::version("--version")]
     #[case::a_commands_help("status --help")]
     #[case::the_routes("config pair app --routes --json")]
+    #[case::a_new_certificate("config pair app --new-certificate --json")]
     fn allows_what_asks_the_server(#[case] line: &str) {
         assert_eq!(over_cli(&words(line)), Ok(()));
     }

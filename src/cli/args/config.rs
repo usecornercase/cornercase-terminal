@@ -67,6 +67,12 @@ pub(crate) enum ConfigAction {
         key: String,
         #[arg(long, help = "With app: print the addresses the phone app reaches now, then end")]
         routes: bool,
+        #[arg(
+            long,
+            conflicts_with = "routes",
+            help = "With app: make a new certificate first; every paired app is forgotten and needs the new code"
+        )]
+        new_certificate: bool,
     },
     #[command(about = "Pick the server of the Discord forum, once the forum's setup waits for that")]
     ForumServer {

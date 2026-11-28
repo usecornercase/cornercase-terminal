@@ -39,8 +39,7 @@ impl Request {
         Some(Self { method: request.method?.to_string(), path: path.to_string(), query, headers })
     }
 
-    pub(super) fn read_within(stream: &mut TcpStream, total: Duration) -> io::Result<Option<Self>> {
-        let deadline = Instant::now() + total;
+    pub(super) fn read_before<S: Timed>(stream: &mut S, deadline: Instant) -> io::Result<Option<Self>> {
         let mut head = Vec::new();
         let mut byte = [0u8; 1];
         while !head.ends_with(b"\r\n\r\n") {
@@ -48,7 +47,7 @@ impl Request {
             if head.len() >= MAX_HEAD || left.is_zero() {
                 return Ok(None);
             }
-            stream.set_read_timeout(Some(left))?;
+            stream.wait_at_most(left)?;
             match stream.read(&mut byte) {
                 Ok(0) => return Ok(None),
                 Ok(_) => head.push(byte[0]),
@@ -116,11 +115,21 @@ pub(super) fn waiting(error: &tungstenite::Error) -> bool {
     matches!(error, tungstenite::Error::Io(e) if matches!(e.kind(), io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut))
 }
 
-pub(super) fn upgrade(
-    mut stream: TcpStream,
+pub(super) trait Timed: Read {
+    fn wait_at_most(&self, time: Duration) -> io::Result<()>;
+}
+
+impl Timed for TcpStream {
+    fn wait_at_most(&self, time: Duration) -> io::Result<()> {
+        self.set_read_timeout(Some(time))
+    }
+}
+
+pub(super) fn upgrade<S: Read + Write>(
+    mut stream: S,
     request: &Request,
     config: WebSocketConfig,
-) -> Option<WebSocket<TcpStream>> {
+) -> Option<WebSocket<S>> {
     if !request.upgradable() {
         return None;
     }
@@ -133,6 +142,7 @@ pub(super) fn upgrade(
             )
             .as_bytes(),
         )
+        .and_then(|()| stream.flush())
         .ok()?;
     Some(WebSocket::from_raw_socket(stream, Role::Server, Some(config)))
 }

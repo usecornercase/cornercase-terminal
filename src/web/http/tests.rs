@@ -78,7 +78,7 @@ fn a_head_trickled_past_the_deadline_is_given_up() {
     client.write_all(b"G").expect("a byte");
 
     let started = Instant::now();
-    let read = Request::read_within(&mut served, Duration::from_millis(300)).expect("no error");
+    let read = Request::read_before(&mut served, Instant::now() + Duration::from_millis(300)).expect("no error");
 
     assert_eq!(read, None);
     assert!(started.elapsed() < Duration::from_secs(5));

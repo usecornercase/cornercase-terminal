@@ -65,7 +65,8 @@ fn joined(ips: &[String]) -> String {
 
 impl PhoneApp {
     pub(super) fn new(config_path: &Path, tx: &Sender<AppEvent>) -> Self {
-        let listener = Phone::new(paths::apps(config_path), paths::socket(), tx.clone());
+        let listener =
+            Phone::new(paths::apps(config_path), paths::app_certificate(config_path), paths::socket(), tx.clone());
         Self {
             listener,
             phase: Phase::Off,
@@ -154,13 +155,15 @@ impl App {
     fn read_phone_addresses(&mut self, now: Instant) {
         let port = self.config.phone_app_port;
         let addresses = (self.phone.probe)();
-        let listened = self.phone.listener.listen(&addresses, port);
-        let phase = match (listened.routes.is_empty(), listened.failed.first()) {
-            (false, _) => Phase::Listening(listened.routes),
-            (true, None) => Phase::NoAddress,
-            (true, Some((_, e))) => {
-                Phase::Failed(format!("port {port} is taken ({e}); set phone_app_port in config.json"))
-            }
+        let phase = match self.phone.listener.listen(&addresses, port, &name::computer) {
+            Ok(listened) => match (listened.routes.is_empty(), listened.failed.first()) {
+                (false, _) => Phase::Listening(listened.routes),
+                (true, None) => Phase::NoAddress,
+                (true, Some((_, e))) => {
+                    Phase::Failed(format!("port {port} is taken ({e}); set phone_app_port in config.json"))
+                }
+            },
+            Err(e) => Phase::Failed(format!("the phone app's certificate cannot be kept ({e})")),
         };
         self.phone.read_at = Some(now);
         self.phone.port = port;
@@ -204,17 +207,27 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn request_app_code(&mut self, now: Instant) -> Result<u64, Refusal> {
+    pub(in crate::app) fn request_app_code(&mut self, now: Instant, renew: bool) -> Result<u64, Refusal> {
         self.phone.read_at = None;
         self.sync_phone_app(now);
         if let Some(refusal) = self.phone_app_down() {
             return Err(refusal);
+        }
+        if renew {
+            self.renew_app_certificate()?;
         }
         self.hold_app_code(now);
         if self.phone.token.is_none() {
             return Err(Refusal::new(Code::Failed, NO_CODE));
         }
         Ok(self.phone.taken)
+    }
+
+    fn renew_app_certificate(&mut self) -> Result<(), Refusal> {
+        let renewed = self.phone.listener.renew(name::computer().as_deref());
+        self.settings_changed();
+        self.refresh_phone_app_note();
+        renewed.map(drop).map_err(|e| Refusal::new(Code::Failed, format!("could not make a new certificate: {e}")))
     }
 
     pub(in crate::app) fn phone_app_down(&self) -> Option<Refusal> {
@@ -225,14 +238,16 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn app_routes(&self) -> Result<Vec<SocketAddr>, Refusal> {
-        self.phone_app_down().map_or_else(|| Ok(self.phone.routes()), Err)
+    pub(in crate::app) fn app_routes(&self) -> Result<(Vec<SocketAddr>, String), Refusal> {
+        let fingerprint = self.phone.listener.fingerprint().unwrap_or_default();
+        self.phone_app_down().map_or_else(|| Ok((self.phone.routes(), fingerprint)), Err)
     }
 
     pub(in crate::app) fn app_shown(&self) -> PairShown {
-        let (url, lines) = match (&self.phone.phase, &self.phone.token) {
-            (Phase::Listening(routes), Some(token)) => {
-                let url = phone::machine_code(routes, token, name::computer().as_deref());
+        let fingerprint = self.phone.listener.fingerprint();
+        let (url, lines) = match (&self.phone.phase, &self.phone.token, fingerprint) {
+            (Phase::Listening(routes), Some(token), Some(fingerprint)) => {
+                let url = phone::machine_code(routes, token, name::computer().as_deref(), &fingerprint);
                 let ips: Vec<String> = routes.iter().map(|route| route.ip().to_string()).collect();
                 match url {
                     Some(url) => (
@@ -248,13 +263,13 @@ impl App {
                     None => (None, vec![NO_CODE.into()]),
                 }
             }
-            (Phase::Listening(_), None) => (None, vec![NO_CODE.into()]),
-            (Phase::NoAddress, _) => (
+            (Phase::Listening(_), _, _) => (None, vec![NO_CODE.into()]),
+            (Phase::NoAddress, _, _) => (
                 None,
                 vec!["no LAN or Tailscale address to listen on yet: join a Wi-Fi network or turn Tailscale on".into()],
             ),
-            (Phase::Off, _) => (None, vec!["turn on the phone app in Settings › Remote".into()]),
-            (Phase::Failed(why), _) => (None, vec![why.clone(), "fix it, then show the code again".into()]),
+            (Phase::Off, _, _) => (None, vec!["turn on the phone app in Settings › Remote".into()]),
+            (Phase::Failed(why), _, _) => (None, vec![why.clone(), "fix it, then show the code again".into()]),
         };
         PairShown { url, lines }
     }

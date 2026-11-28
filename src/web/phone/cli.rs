@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 use std::io::{ErrorKind, Read as _};
-use std::net::{Shutdown, TcpStream};
+use std::net::TcpStream;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -11,11 +11,12 @@ use tungstenite::protocol::frame::coding::CloseCode;
 use tungstenite::{Bytes, Error, Message, WebSocket};
 
 use super::command::{self, Out, Running, Writing};
+use super::link::Link;
 use super::message::{self, Input, Output};
 use super::{Context, Limits, Refused};
 use crate::cli;
 use crate::log;
-use crate::web::http::{self, Request, Response, waiting};
+use crate::web::http::{self, Request, Response, Timed as _, waiting};
 use crate::web::{POLL, WRITE_TIMEOUT};
 
 const STOP_WRITE: Duration = Duration::from_secs(1);
@@ -61,7 +62,7 @@ enum First {
     Gone,
 }
 
-fn reply(stream: &mut TcpStream, status: &'static str, body: &'static str) {
+fn reply(stream: &mut Link, status: &'static str, body: &'static str) {
     let _ = Response::text(status, body).send(stream);
 }
 
@@ -77,7 +78,7 @@ fn config(limits: &Limits) -> WebSocketConfig {
         .max_write_buffer_size(BUFFERED + 7 * limits.longest_line)
 }
 
-pub(super) fn run(mut stream: TcpStream, request: &Request, context: &Context) {
+pub(super) fn run(mut stream: Link, request: &Request, context: &Context) {
     if !request.wants_websocket() || !request.upgradable() {
         return refuse_handshake(&mut stream, request, context);
     }
@@ -88,12 +89,12 @@ pub(super) fn run(mut stream: TcpStream, request: &Request, context: &Context) {
     let leaving =
         http::upgrade(stream, request, config(&context.limits)).and_then(|ws| connected(ws, context, &device));
     context.unregister(registered);
-    if let Some(mut ws) = leaving {
-        drain(ws.get_mut(), context.limits.linger);
+    if let Some(ws) = leaving {
+        drain(ws.get_ref().tcp(), context.limits.linger);
     }
 }
 
-fn refuse_handshake(stream: &mut TcpStream, request: &Request, context: &Context) {
+fn refuse_handshake(stream: &mut Link, request: &Request, context: &Context) {
     match bearer(request) {
         None => return turn_away(stream, &Refused::NoSecret),
         Some(credential) if context.shared.lock().devices.check(credential).is_none() => {
@@ -108,7 +109,7 @@ fn refuse_handshake(stream: &mut TcpStream, request: &Request, context: &Context
     }
 }
 
-fn turn_away(stream: &mut TcpStream, refused: &Refused) {
+fn turn_away(stream: &mut Link, refused: &Refused) {
     match refused {
         Refused::Closed => reply(stream, "503 Service Unavailable", "not listening"),
         Refused::NoSecret | Refused::UnknownSecret => {
@@ -119,9 +120,9 @@ fn turn_away(stream: &mut TcpStream, refused: &Refused) {
     }
 }
 
-fn connected(mut ws: WebSocket<TcpStream>, context: &Context, device: &str) -> Option<WebSocket<TcpStream>> {
-    let _ = ws.get_ref().set_read_timeout(Some(POLL));
-    let _ = ws.get_ref().set_write_timeout(Some(WRITE_TIMEOUT));
+fn connected(mut ws: WebSocket<Link>, context: &Context, device: &str) -> Option<WebSocket<Link>> {
+    let _ = ws.get_ref().wait_at_most(POLL);
+    let _ = ws.get_ref().tcp().set_write_timeout(Some(WRITE_TIMEOUT));
     let argv = match first(&mut ws, &context.limits, &context.stopping) {
         First::Argv(argv) => argv,
         First::Refused(text) => {
@@ -148,7 +149,7 @@ fn connected(mut ws: WebSocket<TcpStream>, context: &Context, device: &str) -> O
     }
 }
 
-fn first(ws: &mut WebSocket<TcpStream>, limits: &Limits, stopping: &AtomicBool) -> First {
+fn first(ws: &mut WebSocket<Link>, limits: &Limits, stopping: &AtomicBool) -> First {
     let deadline = Instant::now() + limits.argv_within;
     loop {
         if stopping.load(Ordering::SeqCst) {
@@ -171,16 +172,16 @@ fn first(ws: &mut WebSocket<TcpStream>, limits: &Limits, stopping: &AtomicBool) 
     }
 }
 
-fn tell(ws: &mut WebSocket<TcpStream>, output: &Output) -> bool {
+fn tell(ws: &mut WebSocket<Link>, output: &Output) -> bool {
     ws.send(Message::text(output.json())).is_ok()
 }
 
-fn finish(ws: &mut WebSocket<TcpStream>, code: CloseCode) {
+fn finish(ws: &mut WebSocket<Link>, code: CloseCode) {
     let _ = ws.close(Some(CloseFrame { code, reason: "".into() }));
     let _ = ws.flush();
 }
 
-fn linger(ws: &mut WebSocket<TcpStream>, within: Duration) {
+fn linger(ws: &mut WebSocket<Link>, within: Duration) {
     let end = Instant::now() + within;
     while Instant::now() < end {
         match ws.read() {
@@ -190,13 +191,13 @@ fn linger(ws: &mut WebSocket<TcpStream>, within: Duration) {
     }
 }
 
-fn stopped(ws: &mut WebSocket<TcpStream>) {
-    let _ = ws.get_ref().set_write_timeout(Some(STOP_WRITE));
+fn stopped(ws: &mut WebSocket<Link>) {
+    let _ = ws.get_ref().tcp().set_write_timeout(Some(STOP_WRITE));
     finish(ws, CloseCode::Away);
-    let _ = ws.get_ref().shutdown(Shutdown::Write);
+    ws.get_mut().end();
 }
 
-fn drain(stream: &mut TcpStream, within: Duration) {
+fn drain(mut stream: &TcpStream, within: Duration) {
     let end = Instant::now() + within;
     let mut buffer = [0_u8; 4096];
     while Instant::now() < end {
@@ -209,22 +210,23 @@ fn drain(stream: &mut TcpStream, within: Duration) {
     }
 }
 
-fn refuse(ws: &mut WebSocket<TcpStream>, text: &str, within: Duration) {
+fn refuse(ws: &mut WebSocket<Link>, text: &str, within: Duration) {
     if tell(ws, &Output::Stderr(message::refusal(text))) && tell(ws, &Output::Exit(2)) {
         finish(ws, CloseCode::Normal);
         linger(ws, within);
     }
+    ws.get_mut().end();
 }
 
 fn converse(
-    ws: WebSocket<TcpStream>,
+    ws: WebSocket<Link>,
     running: Running,
     context: &Context,
     (device, name): (&str, &str),
-) -> Option<WebSocket<TcpStream>> {
-    let pid = running.pid();
-    log::info!("web", "phone app command started", command = name, device = device, pid = pid);
-    let _ = ws.get_ref().set_write_timeout(Some(POLL));
+) -> Option<WebSocket<Link>> {
+    let (pid, tls) = (running.pid(), ws.get_ref().encrypted());
+    log::info!("web", "phone app command started", command = name, device = device, pid = pid, tls = tls);
+    let _ = ws.get_ref().tcp().set_write_timeout(Some(POLL));
     let now = Instant::now();
     let mut pump =
         Pump { ws, running, context, heard: now, pinged: now, flushing: false, held: VecDeque::new(), held_bytes: 0 };
@@ -236,7 +238,7 @@ fn converse(
 }
 
 struct Pump<'a> {
-    ws: WebSocket<TcpStream>,
+    ws: WebSocket<Link>,
     running: Running,
     context: &'a Context,
     heard: Instant,
@@ -374,14 +376,15 @@ impl Pump<'_> {
         }
         match ending {
             Ending::Exited(code) => {
-                let _ = self.ws.get_ref().set_write_timeout(Some(WRITE_TIMEOUT));
+                let _ = self.ws.get_ref().tcp().set_write_timeout(Some(WRITE_TIMEOUT));
                 if tell(&mut self.ws, &Output::Exit(*code)) {
                     finish(&mut self.ws, CloseCode::Normal);
                     linger(&mut self.ws, self.context.limits.linger);
                 }
+                self.ws.get_mut().end();
             }
             Ending::Refused(text) => {
-                let _ = self.ws.get_ref().set_write_timeout(Some(WRITE_TIMEOUT));
+                let _ = self.ws.get_ref().tcp().set_write_timeout(Some(WRITE_TIMEOUT));
                 refuse(&mut self.ws, text, self.context.limits.linger);
             }
             Ending::Stopped => {

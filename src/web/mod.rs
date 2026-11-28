@@ -215,11 +215,15 @@ fn accept(listener: &TcpListener, context: &Context, stop: &AtomicBool) {
             continue;
         };
         let served = context.clone();
-        spawn_counted(stream, &context.open, MAX_CONNECTIONS, move |mut stream, request| {
-            if let Some(response) = route(&request, &served, &stream) {
-                let _ = response.send(&mut stream);
-            }
+        spawn_counted(stream, &context.open, MAX_CONNECTIONS, HEAD_TIMEOUT, move |stream, deadline| {
+            read_head(stream, deadline, |stream, request| answer(stream, &request, &served));
         });
+    }
+}
+
+fn answer(mut stream: TcpStream, request: &Request, context: &Context) {
+    if let Some(response) = route(request, context, &stream) {
+        let _ = response.send(&mut stream);
     }
 }
 
@@ -227,9 +231,10 @@ fn spawn_counted(
     stream: TcpStream,
     open: &Arc<AtomicUsize>,
     most: usize,
-    work: impl FnOnce(TcpStream, Request) + Send + 'static,
+    within: Duration,
+    work: impl FnOnce(TcpStream, Instant) + Send + 'static,
 ) {
-    if stream.set_nonblocking(false).is_err() {
+    if stream.set_nonblocking(false).is_err() || stream.set_write_timeout(Some(within)).is_err() {
         return;
     }
     if open.fetch_add(1, Ordering::SeqCst) >= most {
@@ -238,14 +243,13 @@ fn spawn_counted(
     }
     let open = Arc::clone(open);
     thread::spawn(move || {
-        read_head(stream, work);
+        work(stream, Instant::now() + within);
         open.fetch_sub(1, Ordering::SeqCst);
     });
 }
 
-fn read_head(mut stream: TcpStream, work: impl FnOnce(TcpStream, Request)) {
-    let _ = stream.set_write_timeout(Some(HEAD_TIMEOUT));
-    let Ok(Some(request)) = Request::read_within(&mut stream, HEAD_TIMEOUT) else { return };
+fn read_head<S: http::Timed>(mut stream: S, deadline: Instant, work: impl FnOnce(S, Request)) {
+    let Ok(Some(request)) = Request::read_before(&mut stream, deadline) else { return };
     work(stream, request);
 }
 

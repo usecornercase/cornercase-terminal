@@ -7,11 +7,16 @@ use crate::messenger::Via;
 #[serde(default)]
 pub(crate) struct ConfigPair {
     pub(crate) key: String,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) new_certificate: bool,
 }
 
 impl ConfigPair {
     pub(super) fn fields(&self, fields: &mut Fields) {
         fields.add("key", &self.key);
+        if self.new_certificate {
+            fields.add("new_certificate", true);
+        }
     }
 }
 
@@ -53,6 +58,8 @@ pub(crate) struct AppRoutes {}
 #[serde(default)]
 pub(crate) struct Routes {
     pub(crate) routes: Vec<Route>,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub(crate) fingerprint: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

@@ -264,6 +264,10 @@ pub(crate) fn use_view_no_claim() -> Result<()> {
     require("view-no-claim", "cannot open a view that leaves its tab's size alone: the view would resize the tab")
 }
 
+pub(crate) fn use_cli_tls() -> Result<()> {
+    require("cli-tls", "cannot replace the phone app's certificate")
+}
+
 pub(crate) fn use_mark_seen() -> Result<()> {
     require("mark-seen", "cannot take only the done mark off: it would mark the agent as pending review")
 }

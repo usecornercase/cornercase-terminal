@@ -58,6 +58,7 @@ fn left_out(command: &str, key: &str, value: &Value) -> bool {
         "bot" => value.is_null() && matches!(command, "view" | "view-set"),
         "no_claim" => value == &Value::Bool(false) && matches!(command, "view" | "view-set"),
         "seen" => value == &Value::Bool(false) && command == "mark",
+        "new_certificate" => value == &Value::Bool(false) && command == "config-pair",
         "item" | "section" => value.is_null() && matches!(command, "collapse" | "expand"),
         "machine_boot" => {
             value.is_null()

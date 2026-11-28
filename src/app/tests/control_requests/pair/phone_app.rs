@@ -25,6 +25,17 @@ fn url(line: &Value) -> String {
     line["url"].as_str().expect("an address").to_string()
 }
 
+fn fingerprint(line: &Value) -> String {
+    let url = url(line);
+    crate::test_util::tls::fingerprint_in(&url).expect("a fingerprint").to_string()
+}
+
+fn apps_listed(app: &mut App) -> usize {
+    let listed = ok(app, "config", &json!({"action": "get"}));
+    let connections = listed["connections"].as_array().cloned().unwrap_or_default();
+    connections.iter().filter(|c| c["kind"] == "app").count()
+}
+
 #[test]
 fn it_answers_with_the_address_and_the_lines_and_ends_with_paired() {
     let mut r = on();
@@ -33,7 +44,8 @@ fn it_answers_with_the_address_and_the_lines_and_ends_with_paired() {
     let secret = phone_secret(&url(&line));
     pump_until(&mut r.app, &r.rx, "the pairing is told", |app| toast(app).is_some());
 
-    assert!(url(&line).starts_with(&format!("ws://127.0.0.1:{}/?code=", r.port)), "{line}");
+    assert!(url(&line).starts_with(&format!("wss://127.0.0.1:{}/?code=", r.port)), "{line}");
+    assert_eq!(fingerprint(&line).len(), 43, "{line}");
     assert_eq!(line["lines"][0], "scan the code with the cornercase app on your phone.");
     assert_eq!(lines(&mut r.app), ended(FIRST, &json!({"paired": true})));
     assert_eq!(toast(&r.app), Some("a phone app connected"));
@@ -84,11 +96,12 @@ fn the_routes_are_where_it_listens_and_a_conflict_while_it_is_off() {
     let mut r = on();
 
     let routes = ok(&mut r.app, "app-routes", &json!({}));
+    let shown = fingerprint(&shown(&mut r.app, FIRST, "app"));
     r.app.config.phone_app = false;
     r.app.refresh(Instant::now());
     let off = refused(&mut r.app, "app-routes", &json!({}));
 
-    assert_eq!(routes, json!({"routes": [{"host": "127.0.0.1", "port": r.port}]}));
+    assert_eq!(routes, json!({"routes": [{"host": "127.0.0.1", "port": r.port}], "fingerprint": shown}));
     assert_eq!(off.code, "conflict");
 }
 
@@ -130,4 +143,52 @@ fn a_set_of_phone_app_answers_the_note_the_listener_settled_on() {
     let note = got.settings.iter().find(|s| s.key == "phone_app").map(|s| s.note.clone());
     assert_eq!(note, Some(app.phone.note()));
     assert_eq!(got.revision, app.config_file.revision());
+}
+
+mod a_new_certificate {
+    use super::*;
+
+    fn renewed(app: &mut App) -> Value {
+        ok(app, "config-pair", &json!({"key": "app", "new_certificate": true}))
+    }
+
+    #[test]
+    fn changes_the_fingerprint_and_forgets_every_paired_app() {
+        let mut r = on();
+        let before = shown(&mut r.app, FIRST, "app");
+        phone_secret(&url(&before));
+        pump_until(&mut r.app, &r.rx, "the pairing is told", |app| toast(app).is_some());
+        let (paired, revision) = (apps_listed(&mut r.app), r.app.config_file.revision());
+
+        let after = renewed(&mut r.app);
+
+        assert_eq!(paired, 1);
+        assert_ne!(fingerprint(&after), fingerprint(&before));
+        assert_eq!(apps_listed(&mut r.app), 0);
+        assert!(r.app.config_file.revision() > revision);
+        let routes = ok(&mut r.app, "app-routes", &json!({}));
+        assert_eq!(routes["fingerprint"].as_str(), Some(fingerprint(&after).as_str()));
+        assert!(phone_secret(&url(&after)).contains('.'));
+    }
+
+    #[test]
+    fn goes_with_the_key_app_only() {
+        let mut r = on();
+
+        let refused = refused(&mut r.app, "config-pair", &json!({"key": "browsers", "new_certificate": true}));
+
+        assert_eq!(refused.code, "malformed");
+        assert!(refused.message.contains("`new_certificate`"), "{}", refused.message);
+    }
+
+    #[test]
+    fn is_refused_while_it_is_off_and_replaces_nothing() {
+        let dir = TempDir::new();
+        let (mut app, _rx) = new_app(dir.path().join("config.json"));
+
+        let refused = refused(&mut app, "config-pair", &json!({"key": "app", "new_certificate": true}));
+
+        assert_eq!(refused.code, "conflict");
+        assert!(!dir.path().join("app-certificate.json").exists());
+    }
 }

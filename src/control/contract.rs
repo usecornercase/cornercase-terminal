@@ -121,6 +121,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "mark-seen",
     "read-messages",
     "last-message-events",
+    "cli-tls",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
