@@ -441,3 +441,117 @@ mod marks {
         assert_eq!(pane.status(), Some(Status::Idle));
     }
 }
+
+mod since {
+    use std::time::UNIX_EPOCH;
+
+    use super::*;
+
+    fn at(secs: u64) -> SystemTime {
+        UNIX_EPOCH + Duration::from_secs(secs)
+    }
+
+    fn stamped(activity: Activity, seen: bool, secs: u64) -> Pane {
+        let mut pane = Pane::default();
+        pane.follow(Some("claude"));
+        pane.update(Some(activity), seen, Instant::now());
+        pane.stamp(at(secs));
+        pane
+    }
+
+    #[test]
+    fn a_pane_without_a_status_has_no_time() {
+        let mut pane = Pane::default();
+        pane.stamp(at(1));
+        assert_eq!(pane.status_since(), None);
+    }
+
+    #[test]
+    fn a_pane_whose_agent_left_has_no_time() {
+        let mut pane = stamped(Activity::Working, false, 1);
+        pane.update(None, false, Instant::now());
+        pane.stamp(at(2));
+        assert_eq!(pane.status_since(), None);
+    }
+
+    #[test]
+    fn a_status_keeps_the_time_of_its_first_stamp() {
+        let mut pane = stamped(Activity::Working, false, 1);
+        pane.update(Some(Activity::Working), false, Instant::now());
+        pane.stamp(at(2));
+        assert_eq!(pane.status_since(), Some(at(1)));
+    }
+
+    fn asks(pane: &mut Pane) {
+        pane.update(Some(Activity::Waiting), false, Instant::now());
+    }
+
+    fn ends_out_of_sight(pane: &mut Pane) {
+        pane.update(Some(Activity::Idle), false, Instant::now());
+    }
+
+    fn ends_and_is_seen(pane: &mut Pane) {
+        ends_out_of_sight(pane);
+        pane.stamp(at(2));
+        pane.see();
+        pane.update(Some(Activity::Idle), true, Instant::now());
+    }
+
+    fn is_marked(pane: &mut Pane) {
+        ends_and_is_seen(pane);
+        pane.stamp(at(3));
+        pane.mark(true);
+    }
+
+    fn is_reviewed(pane: &mut Pane) {
+        is_marked(pane);
+        pane.stamp(at(4));
+        pane.mark(false);
+    }
+
+    fn works_again(pane: &mut Pane) {
+        ends_and_is_seen(pane);
+        pane.stamp(at(3));
+        pane.update(Some(Activity::Working), true, Instant::now());
+    }
+
+    #[rstest]
+    #[case::asks(asks, Status::Waiting)]
+    #[case::ends_out_of_sight(ends_out_of_sight, Status::Done)]
+    #[case::is_seen(ends_and_is_seen, Status::Idle)]
+    #[case::is_marked(is_marked, Status::Pending)]
+    #[case::is_reviewed(is_reviewed, Status::Idle)]
+    #[case::works_again(works_again, Status::Working)]
+    fn a_new_status_takes_the_time_of_its_stamp(#[case] change: fn(&mut Pane), #[case] status: Status) {
+        let mut pane = stamped(Activity::Working, false, 1);
+        change(&mut pane);
+        pane.stamp(at(9));
+        assert_eq!((pane.status(), pane.status_since()), (Some(status), Some(at(9))));
+    }
+
+    #[rstest]
+    #[case::background_shell(Activity::Shell)]
+    #[case::subagents(Activity::Subagents)]
+    fn a_background_task_keeps_the_time_of_working(#[case] activity: Activity) {
+        let mut pane = stamped(Activity::Working, false, 1);
+        pane.update(Some(activity), false, Instant::now());
+        pane.stamp(at(2));
+        assert_eq!(pane.status_since(), Some(at(1)));
+    }
+
+    #[test]
+    fn a_status_not_stamped_yet_has_no_time() {
+        let mut pane = stamped(Activity::Working, false, 1);
+        asks(&mut pane);
+        assert_eq!(pane.status_since(), None);
+    }
+
+    #[test]
+    fn another_agent_in_the_pane_starts_its_own_time() {
+        let mut pane = stamped(Activity::Working, false, 1);
+        pane.follow(Some("codex"));
+        pane.update(Some(Activity::Working), false, Instant::now());
+        pane.stamp(at(2));
+        assert_eq!(pane.status_since(), Some(at(2)));
+    }
+}

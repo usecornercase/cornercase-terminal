@@ -122,6 +122,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "read-messages",
     "last-message-events",
     "cli-tls",
+    "status-since",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

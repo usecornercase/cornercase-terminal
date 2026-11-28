@@ -204,6 +204,11 @@ mod describing {
     }
 
     #[test]
+    fn status_since_is_a_feature() {
+        assert!(FEATURES.contains(&"status-since"));
+    }
+
+    #[test]
     fn the_shown_bot_and_what_a_bot_is_for_are_features() {
         assert!(FEATURES.contains(&"shown-bot"));
         assert!(FEATURES.contains(&"bot-about"));

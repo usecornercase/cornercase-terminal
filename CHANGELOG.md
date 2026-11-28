@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the app's update dialog, so write it for users.
 
+## 0.14.8
+
+- **See since when an agent has its status.** `cornercase status --json` gives each pane with an agent's status a `since`, the time it took it (`"since": "2026-11-28T10:46:03.123Z"`), which only moves when the status changes. A phone app, a board or a script can show "waiting for 12 min" as soon as it connects, without having followed `cornercase events` from the start. `status --follow`, `watch` and `view` lines carry it, and `status --panes` has it as its last column (`-` where there is no status). After cornercase restarts, the times start from when it saw each agent again.
+- **For programs**: `since` in each pane of `status`, `watch` and `view`, the `since` column of `status --panes`, and the feature `status-since` in `cornercase contract`.
+
 ## 0.14.7
 
 - **The phone app's connection is encrypted on your Wi-Fi.** cornercase now makes a certificate of its own for this computer, and the pairing code carries its fingerprint (`wss://…&fp=…`). An app that reads it checks the fingerprint on every connection, so nobody on the same network can read the secret, your commands or what they print, or sit in the middle. Nothing to set up, and paired phones keep working after a restart or an update.

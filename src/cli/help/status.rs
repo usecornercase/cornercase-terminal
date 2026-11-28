@@ -20,6 +20,9 @@ A last line like `section projects  collapsed` names each sidebar section that i
 until its next reply and comes back then (`compacted` in the JSON, there only while true).
 The JSON also names the conversation a pane's agent is in (`conversation`, the id `places` gives in
 `cornercase recap --json`), null until the agent has one and always for opencode.
+The JSON's `since` is when a pane's agent took its status (such as 2026-11-28T10:46:03.123Z): it
+moves only when the status does, is left out for a pane with no status, and starts again when the
+server restarts.
 
 With --panes it prints one line per pane instead, for scripts, in the sidebar's order: a header
 line naming the columns, then one row per pane, its columns separated by tabs. The columns are
@@ -33,8 +36,9 @@ held_sends (how many messages `cornercase send` holds until the person in the pa
 typing), draft (true while it has text a person typed and has not sent), account_restart
 (waiting while it waits for its turn to end to restart on another account), pid (its
 shell's process id), memory (the bytes its shell and the programs under it use, while that setting is
-on) and compacted (true while the context is empty because the conversation was just compacted);
-new ones only ever go at the end. Values are as in the
+on), compacted (true while the context is empty because the conversation was just compacted) and
+since (when the agent took its status, as the server saw it, in UTC); new ones only ever go at the
+end. Values are as in the
 JSON (true or false, context as a number, full paths), with - where there is none and a space for a tab or line break in a name.
 With --json, it prints {\"panes\": [...]}, one object per pane with the columns as keys and null
 where there is no value.

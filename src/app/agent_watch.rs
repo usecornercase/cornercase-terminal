@@ -153,6 +153,7 @@ impl App {
         let (members, orchestrators) = (self.run_panes(false), self.run_panes(true));
         let mut round = Round {
             now,
+            clock,
             read,
             config: &self.config,
             dirs: (self.agents.claude_dir.as_deref(), self.accounts.dir(), self.agents.vibe_dir.as_deref()),
@@ -287,6 +288,7 @@ impl App {
         for &pane in &panes {
             if let Some(term) = self.projects.pane_by_mut(pane) {
                 change(&mut term.agent);
+                term.agent.stamp(SystemTime::now());
             }
         }
         panes.len()
@@ -362,6 +364,7 @@ impl App {
 
 struct Round<'a> {
     now: Instant,
+    clock: SystemTime,
     read: bool,
     config: &'a Config,
     dirs: (Option<&'a Path>, &'a Path, Option<&'a Path>),
@@ -396,6 +399,7 @@ impl Round<'_> {
             } else if seen {
                 term.agent.see();
             }
+            term.agent.stamp(self.clock);
             if measure && let Some(pid) = term.shell_pid() {
                 term.memory.update(pid, self.now);
             }
