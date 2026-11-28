@@ -140,3 +140,18 @@ fn an_agent_found_while_following_is_told_its_first_message() {
 
     assert_eq!(last_messages(&until_settled(&mut agent, id), id), 1);
 }
+
+#[test]
+fn the_event_names_the_agents_pane_when_another_pane_of_its_tab_has_the_focus() {
+    let (mut agent, id) = following(false);
+    let split = done(now(&mut agent.app, None, Command::Split(wire::Split { down: true, ..wire::Split::default() })));
+    let beside = split.ids.pane.expect("the new pane");
+    now(&mut agent.app, None, Command::Focus(wire::Focus { item: Item::Pane(beside), reveal: None }));
+    assert_eq!(agent.app.tab().and_then(|t| t.pane()).map(|t| t.id), Some(beside));
+
+    agent.transcript(id, &[thread()[2]]);
+    let got = until_settled(&mut agent, id);
+
+    assert_eq!(last_messages(&got, id), 1);
+    assert_eq!(last_messages(&got, beside), 0);
+}
