@@ -4,7 +4,7 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.14.6
 
-- **Know when an agent's last message changes.** `cornercase events` prints `pane 7  claude  last message changed` when the agent in a pane writes a new message or adds to its newest one, at most once every half second per pane, so a phone app, a chat or a script that shows an agent's answer reads it once with `cornercase read --last-message` instead of asking again and again. `--pane` keeps only those panes' lines, and nothing is printed while the agent writes nothing new.
+- **Know when an agent's last message changes.** `cornercase events` prints `pane 7  claude  last message changed` when the agent in a pane writes a new message or adds to its newest one, about once every half second at most while it writes, so a phone app, a chat or a script that shows an agent's answer reads it once with `cornercase read --last-message` instead of asking again and again. `--pane` keeps only those panes' lines, and nothing is printed while the agent writes nothing new.
 - **For programs**: the `last-message` event (`agent` and the pane's ids, no text) and the feature `last-message-events` in `cornercase contract`.
 
 ## 0.14.5

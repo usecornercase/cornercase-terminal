@@ -37,7 +37,7 @@ pub(crate) enum AppEvent {
     FlowFetched(crate::flows::registry::Source, std::result::Result<String, String>),
     PersonasFetched(String, std::result::Result<crate::flows::persona::source::Gathered, String>),
     LastMessage { request: u64, result: Result<Option<context::Said>> },
-    LastMessageSeen { pane: u64, agent: crate::agents::Known, said: Result<Option<context::Said>> },
+    LastMessageSeen { pane: u64, agent: crate::agents::Known, read: u64, said: Result<Option<context::Said>> },
     Awaited { request: u64, result: Result<Option<context::Awaited>> },
     Thread { request: u64, result: Result<Option<context::Page>> },
     Ports(super::ports_dialog::PortsEvent),

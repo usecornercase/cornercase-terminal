@@ -53,6 +53,7 @@ mod stamp {
 
     #[rstest]
     #[case::grok(Record::Grok, "chat_history.jsonl")]
+    #[case::grok_times(Record::Grok, "updates.jsonl")]
     #[case::copilot(Record::Copilot, "events.jsonl")]
     fn the_file_inside_a_folder_record_is_what_counts(#[case] record: fn(PathBuf) -> Record, #[case] file: &str) {
         let dir = TempDir::new();

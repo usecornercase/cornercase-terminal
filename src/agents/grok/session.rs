@@ -134,6 +134,10 @@ pub(in crate::agents) fn chat(dir: &Path) -> PathBuf {
     dir.join("chat_history.jsonl")
 }
 
+pub(in crate::agents) fn updates(dir: &Path) -> PathBuf {
+    dir.join("updates.jsonl")
+}
+
 pub(in crate::agents) fn last_message(dir: &Path) -> Result<Option<Said>> {
     let chat = chat(dir);
     let Some(lines) = message::lines(&chat)? else { return Ok(None) };
@@ -280,7 +284,7 @@ impl Session {
     }
 
     fn read_updates(&mut self) -> bool {
-        let path = self.path.join("updates.jsonl");
+        let path = updates(&self.path);
         let Some(batch) = read_tail(&mut self.updates, &path) else { return false };
         if batch.reset {
             self.compact = None;
@@ -583,7 +587,7 @@ impl Session {
     }
 
     fn recover_prompt(&mut self) {
-        let Some(chunk) = newest_chunk(&self.path.join("updates.jsonl")) else { return };
+        let Some(chunk) = newest_chunk(&updates(&self.path)) else { return };
         if !self.primary_at(chunk.at) {
             return;
         }
@@ -621,7 +625,7 @@ impl Session {
         let mut dirs: Vec<PathBuf> = entries
             .flatten()
             .map(|entry| entry.path())
-            .filter(|path| path.is_dir() && path.join("updates.jsonl").is_file())
+            .filter(|path| path.is_dir() && updates(path).is_file())
             .collect();
         dirs.sort();
         let mut next = Vec::new();
@@ -634,7 +638,7 @@ impl Session {
     }
 
     fn read_child(&mut self, path: &Path, tail: &mut Tail) {
-        let Some(batch) = read_tail(tail, &path.join("updates.jsonl")) else { return };
+        let Some(batch) = read_tail(tail, &updates(path)) else { return };
         for update in jsonl::values(&batch.bytes) {
             if let Some(record) = child_token(&update) {
                 self.push_extra(path.to_string_lossy().into_owned(), record);
@@ -857,7 +861,7 @@ fn token_record(reply: &Reply) -> counting::Record {
 }
 
 fn written(dir: &Path, text: &str) -> Option<String> {
-    let path = dir.join("updates.jsonl");
+    let path = updates(dir);
     let lines = message::lines(&path).ok()??;
     for line in lines {
         let Ok(line) = line else { continue };

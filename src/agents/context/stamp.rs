@@ -17,7 +17,7 @@ impl Record {
         match self {
             Self::Claude(path) | Self::Codex(path) | Self::Gemini(path) => vec![path.clone()],
             Self::Opencode { database: path, .. } | Self::Cursor(path) => vec![path.clone(), wal(path)],
-            Self::Grok(dir) => vec![grok::session::chat(dir)],
+            Self::Grok(dir) => vec![grok::session::chat(dir), grok::session::updates(dir)],
             Self::Copilot(dir) => vec![copilot::message::events(dir)],
             Self::Vibe(dir) => vibe::message::journals(dir),
         }

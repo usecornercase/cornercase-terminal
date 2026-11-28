@@ -35,8 +35,9 @@ With --json, each line is a JSON object with the event, the ids, the old and new
 It ends when the server stops, once every pane given with --pane has closed, or soon after what reads
 its output is gone (a closed pipe or socket, such as an ssh that ended), with status 0. Programs are looked
 at every half second while something follows events, so one that ends sooner may not show, and agents'
-records on the same reads, so a message's line comes at most once a half second per pane. Start it before
-what you want to follow, or read `cornercase status` once it runs, so nothing falls between.
+records on the same reads, so a pane's message lines come about once a half second at most while it writes,
+one per read. Start it before what you want to follow, or read `cornercase status` once it runs, so nothing
+falls between.
 A reader that falls far behind loses events, and a line says how many.
 With --boot BOOT, a server that restarted since refuses it before the first line (status 4); one that restarts while it runs ends it as above.
 

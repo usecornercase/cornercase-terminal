@@ -705,7 +705,7 @@ impl App {
     fn last_message_read(&mut self, ev: AppEvent) {
         match ev {
             AppEvent::LastMessage { request, result } => self.message_read(request, result),
-            AppEvent::LastMessageSeen { pane, agent, said } => self.last_message_seen(pane, agent, said),
+            AppEvent::LastMessageSeen { pane, agent, read, said } => self.last_message_seen((pane, agent), read, said),
             _ => {}
         }
     }
