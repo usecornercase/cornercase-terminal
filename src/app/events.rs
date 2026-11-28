@@ -214,7 +214,6 @@ struct Subscriber {
     panes: Option<Vec<u64>>,
     host: bool,
     notices: bool,
-    joined: u64,
 }
 
 impl Subscriber {
@@ -232,8 +231,7 @@ impl Events {
 
     pub(super) fn subscribe(&mut self, client: u64, panes: Vec<u64>, host: bool, notices: bool) {
         let panes = (!panes.is_empty()).then_some(panes);
-        let joined = self.last_messages.reads();
-        self.subscribers.push(Subscriber { client, panes, host, notices, joined });
+        self.subscribers.push(Subscriber { client, panes, host, notices });
         self.last_messages.unprime();
     }
 
@@ -288,14 +286,6 @@ impl Events {
 }
 
 impl Events {
-    pub(super) fn publish_since(&mut self, event: &Event, read: u64) {
-        let Some(text) = event.streamed() else { return };
-        let Self { subscribers, out, .. } = self;
-        for subscriber in subscribers.iter().filter(|subscriber| subscriber.wants(event) && subscriber.joined < read) {
-            out.push((subscriber.client, Streamed::Event(text.clone())));
-        }
-    }
-
     pub(super) fn take(&mut self) -> Vec<(u64, Streamed)> {
         std::mem::take(&mut self.out)
     }

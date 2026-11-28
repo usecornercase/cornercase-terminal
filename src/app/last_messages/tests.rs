@@ -60,17 +60,18 @@ fn failed() -> error::Result<Option<Said>> {
 fn kept_a() -> (LastMessages, Transcript) {
     let (mut last_messages, transcript) = (LastMessages::default(), Transcript::new());
     let first = read(&mut last_messages, &transcript);
-    assert_eq!(last_messages.told(1, first, Ok(Some(a()))), None);
+    assert!(!last_messages.told(1, first, Ok(Some(a()))));
     (last_messages, transcript)
 }
 
-fn changed(events: &mut Events, since: Option<u64>) -> Vec<u64> {
+fn changed(events: &mut Events, told: bool) -> Vec<u64> {
+    assert!(told, "a change");
     let event = Event {
         time: "2026-11-27T10:00:05.000Z".into(),
         what: What::LastMessage { agent: "claude".into() },
         ids: Ids { pane: Some(1), ..Ids::default() },
     };
-    events.publish_since(&event, since.expect("a change"));
+    events.publish(&[event]);
     let streamed = events.take();
     streamed
         .into_iter()
@@ -87,10 +88,10 @@ mod last_messages {
         let (mut last_messages, transcript) = (LastMessages::default(), Transcript::new());
 
         let first = read(&mut last_messages, &transcript);
-        assert_eq!(last_messages.told(1, first, Ok(Some(a()))), None);
+        assert!(!last_messages.told(1, first, Ok(Some(a()))));
         transcript.grow();
         let second = read(&mut last_messages, &transcript);
-        assert_eq!(last_messages.told(1, second, Ok(Some(b()))), Some(first));
+        assert!(last_messages.told(1, second, Ok(Some(b()))));
     }
 
     #[test]
@@ -100,7 +101,7 @@ mod last_messages {
         last_messages.step(Vec::new());
         let first = read(&mut last_messages, &transcript);
 
-        assert_eq!(last_messages.told(1, first, Ok(Some(a()))), Some(first));
+        assert!(last_messages.told(1, first, Ok(Some(a()))));
     }
 
     #[test]
@@ -111,7 +112,7 @@ mod last_messages {
         last_messages.unprime();
         let first = read(&mut last_messages, &transcript);
 
-        assert_eq!(last_messages.told(1, first, Ok(Some(a()))), None);
+        assert!(!last_messages.told(1, first, Ok(Some(a()))));
     }
 
     #[rstest]
@@ -124,7 +125,7 @@ mod last_messages {
         transcript.grow();
         let second = read(&mut last_messages, &transcript);
 
-        assert_eq!(last_messages.told(1, second, Ok(now)).is_some(), told);
+        assert_eq!(last_messages.told(1, second, Ok(now)), told);
     }
 
     #[test]
@@ -133,28 +134,30 @@ mod last_messages {
         transcript.grow();
         let second = read(&mut last_messages, &transcript);
 
-        assert_eq!(last_messages.told(1, second, failed()), None);
+        assert!(!last_messages.told(1, second, failed()));
         transcript.grow();
         let again = read(&mut last_messages, &transcript);
-        assert_eq!(last_messages.told(1, again, Ok(Some(a()))), None);
+        assert!(!last_messages.told(1, again, Ok(Some(a()))));
     }
 
     #[test]
-    fn a_failed_read_is_tried_again_a_few_times_then_waits_for_a_change() {
+    fn a_failed_read_is_tried_again_a_few_times_per_change_of_the_record() {
         let (mut last_messages, transcript) = kept_a();
         transcript.grow();
         let mut tried = read(&mut last_messages, &transcript);
 
         for _ in 0..RETRIES {
-            assert_eq!(last_messages.told(1, tried, failed()), None);
+            assert!(!last_messages.told(1, tried, failed()));
             tried = read(&mut last_messages, &transcript);
         }
-        assert_eq!(last_messages.told(1, tried, failed()), None);
+        assert!(!last_messages.told(1, tried, failed()));
         assert_eq!(reads(&last_messages.step(transcript.pane())), []);
 
         transcript.grow();
         let changed = read(&mut last_messages, &transcript);
-        assert!(last_messages.told(1, changed, Ok(Some(b()))).is_some());
+        assert!(!last_messages.told(1, changed, failed()));
+        let again = read(&mut last_messages, &transcript);
+        assert!(last_messages.told(1, again, Ok(Some(b()))));
     }
 
     #[test]
@@ -179,7 +182,7 @@ mod last_messages {
         last_messages.step(Vec::new());
 
         assert!(last_messages.is_empty());
-        assert_eq!(last_messages.told(1, first, Ok(Some(a()))), None);
+        assert!(!last_messages.told(1, first, Ok(Some(a()))));
     }
 
     #[test]
@@ -189,9 +192,9 @@ mod last_messages {
         last_messages.step(Vec::new());
         let current = read(&mut last_messages, &transcript);
 
-        assert_eq!(last_messages.told(1, stale, Ok(Some(a()))), None);
+        assert!(!last_messages.told(1, stale, Ok(Some(a()))));
         assert_eq!(reads(&last_messages.step(transcript.pane())), [], "the current read still runs");
-        assert_eq!(last_messages.told(1, current, Ok(Some(b()))), Some(current));
+        assert!(last_messages.told(1, current, Ok(Some(b()))));
     }
 
     #[test]
@@ -203,8 +206,8 @@ mod last_messages {
         let current = read(&mut last_messages, &transcript);
 
         assert_ne!(current, stale);
-        assert_eq!(last_messages.told(1, stale, Ok(Some(a()))), None);
-        assert_eq!(last_messages.told(1, current, Ok(Some(b()))), Some(current));
+        assert!(!last_messages.told(1, stale, Ok(Some(a()))));
+        assert!(last_messages.told(1, current, Ok(Some(b()))));
     }
 }
 
@@ -216,33 +219,31 @@ mod readers {
         events.subscribe(1, Vec::new(), false, false);
         let transcript = Transcript::new();
         let first = read(&mut events.last_messages, &transcript);
-        assert_eq!(events.last_messages.told(1, first, Ok(Some(a()))), None);
-        transcript.grow();
+        assert!(!events.last_messages.told(1, first, Ok(Some(a()))));
         (events, transcript)
     }
 
     #[test]
-    fn a_reader_that_joins_while_a_read_runs_is_not_told_what_it_finds() {
+    fn a_reader_that_joins_beside_another_is_told_a_change_written_after_it_joined() {
         let (mut events, transcript) = following();
-        let running = read(&mut events.last_messages, &transcript);
         events.subscribe(2, Vec::new(), false, false);
+        transcript.grow();
+        let after = read(&mut events.last_messages, &transcript);
 
-        let since = events.last_messages.told(1, running, Ok(Some(b())));
+        let told = events.last_messages.told(1, after, Ok(Some(b())));
 
-        assert_eq!(changed(&mut events, since), [1]);
+        assert_eq!(changed(&mut events, told), [1, 2]);
     }
 
     #[test]
-    fn a_change_made_before_a_reader_joined_is_not_told_to_it_but_the_next_is() {
+    fn a_reader_that_joins_while_a_read_runs_may_be_told_what_it_finds() {
         let (mut events, transcript) = following();
-        events.subscribe(2, Vec::new(), false, false);
-        let after = read(&mut events.last_messages, &transcript);
-
-        let since = events.last_messages.told(1, after, Ok(Some(b())));
-        assert_eq!(changed(&mut events, since), [1]);
         transcript.grow();
-        let next = read(&mut events.last_messages, &transcript);
-        let since = events.last_messages.told(1, next, Ok(Some(said("Done.", "2026-11-27T10:01:00.000Z"))));
-        assert_eq!(changed(&mut events, since), [1, 2]);
+        let running = read(&mut events.last_messages, &transcript);
+        events.subscribe(2, Vec::new(), false, false);
+
+        let told = events.last_messages.told(1, running, Ok(Some(b())));
+
+        assert_eq!(changed(&mut events, told), [1, 2]);
     }
 }

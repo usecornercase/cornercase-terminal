@@ -35,16 +35,12 @@ struct Watched {
 
 enum Kept {
     Nothing,
-    Read { said: Option<Said>, by: u64 },
+    Read(Option<Said>),
 }
 
 impl LastMessages {
     pub(super) fn unprime(&mut self) {
         self.primed = false;
-    }
-
-    pub(super) fn reads(&self) -> u64 {
-        self.reads
     }
 
     pub(super) fn clear(&mut self) {
@@ -73,27 +69,26 @@ impl LastMessages {
         due
     }
 
-    fn told(&mut self, pane: u64, read: u64, said: error::Result<Option<Said>>) -> Option<u64> {
-        let watched = self.panes.get_mut(&pane).filter(|watched| watched.reading == Some(read))?;
+    fn told(&mut self, pane: u64, read: u64, said: error::Result<Option<Said>>) -> bool {
+        let Some(watched) = self.panes.get_mut(&pane).filter(|watched| watched.reading == Some(read)) else {
+            return false;
+        };
         watched.reading = None;
         let Ok(said) = said else {
             watched.retry();
-            return None;
+            return false;
         };
         watched.failed = 0;
-        let since = match &watched.kept {
-            Kept::Read { said: kept, by } if said.is_some() && *kept != said => Some(*by),
-            _ => None,
-        };
-        watched.kept = Kept::Read { said, by: read };
-        since
+        let changed = said.is_some() && matches!(&watched.kept, Kept::Read(kept) if *kept != said);
+        watched.kept = Kept::Read(said);
+        changed
     }
 
     fn due(&mut self, pane: u64, record: &Record) -> Option<u64> {
         let (primed, next) = (self.primed, self.reads + 1);
         let watched = self.panes.entry(pane).or_insert_with(|| Watched {
             seen: None,
-            kept: if primed { Kept::Read { said: None, by: next } } else { Kept::Nothing },
+            kept: if primed { Kept::Read(None) } else { Kept::Nothing },
             reading: None,
             failed: 0,
         });
@@ -101,8 +96,10 @@ impl LastMessages {
             return None;
         }
         let stamp = record.stamp();
-        if watched.seen.as_ref().is_some_and(|(seen, stamped)| seen == record && *stamped == stamp) {
-            return None;
+        match &watched.seen {
+            Some((seen, stamped)) if seen == record && *stamped == stamp => return None,
+            Some(_) => watched.failed = 0,
+            None => {}
         }
         watched.seen = Some((record.clone(), stamp));
         watched.reading = Some(next);
@@ -161,7 +158,9 @@ impl App {
         read: u64,
         said: error::Result<Option<Said>>,
     ) {
-        let Some(since) = self.clients.events.last_messages.told(pane, read, said) else { return };
+        if !self.clients.events.last_messages.told(pane, read, said) {
+            return;
+        }
         let Some(at) = self.projects.tab_of_pane(pane) else { return };
         let event = Event {
             time: crate::time::Stamp(SystemTime::now()).to_string(),
@@ -169,7 +168,7 @@ impl App {
             ids: Ids { pane: Some(pane), ..self.ids_of_tab(at) },
         };
         log::debug!("control", "last message", pane = pane, agent = agent.name());
-        self.clients.events.publish_since(&event, since);
+        self.clients.events.publish(&[event]);
     }
 }
 
