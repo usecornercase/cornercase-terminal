@@ -27,6 +27,7 @@ pub(super) struct Events {
     pub(super) app: Snapshots<AppState>,
     pub(super) runs: Snapshots<FlowRuns>,
     flow_messages: Vec<(u64, u64)>,
+    pub(super) last_messages: super::last_messages::LastMessages,
 }
 
 #[derive(Clone, Copy)]
@@ -231,6 +232,11 @@ impl Events {
     pub(super) fn subscribe(&mut self, client: u64, panes: Vec<u64>, host: bool, notices: bool) {
         let panes = (!panes.is_empty()).then_some(panes);
         self.subscribers.push(Subscriber { client, panes, host, notices });
+        self.last_messages.unprime();
+    }
+
+    pub(super) fn wants_pane(&self, pane: u64) -> bool {
+        self.subscribers.iter().any(|subscriber| subscriber.panes.as_ref().is_none_or(|panes| panes.contains(&pane)))
     }
 
     fn hosting(&self) -> bool {
@@ -245,6 +251,9 @@ impl Events {
         self.subscribers.retain(|subscriber| subscriber.client != client);
         if !self.hosting() {
             self.bells.panes.clear();
+        }
+        if self.subscribers.is_empty() {
+            self.last_messages.clear();
         }
         self.snapshots.forget(client);
         self.app.forget(client);
@@ -277,6 +286,10 @@ impl Events {
 }
 
 impl Events {
+    pub(super) fn take(&mut self) -> Vec<(u64, Streamed)> {
+        std::mem::take(&mut self.out)
+    }
+
     pub(super) fn push(&mut self, client: u64, streamed: Streamed) {
         self.out.push((client, streamed));
     }
@@ -333,7 +346,7 @@ impl App {
     }
 
     pub(crate) fn take_events(&mut self) -> Vec<(u64, Streamed)> {
-        std::mem::take(&mut self.clients.events.out)
+        self.clients.events.take()
     }
 
     pub(super) fn watch_snapshots(&mut self, client: u64, now: Instant) -> Snapshot {

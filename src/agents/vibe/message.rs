@@ -6,7 +6,7 @@ use serde_json::Value;
 use crate::agents::context::message::{self, Each, Role, Said, Spoken};
 use crate::error::Result;
 
-fn journals(dir: &Path) -> Vec<PathBuf> {
+pub(in crate::agents) fn journals(dir: &Path) -> Vec<PathBuf> {
     let mut files: Vec<PathBuf> = std::fs::read_dir(dir.join("journal"))
         .into_iter()
         .flatten()

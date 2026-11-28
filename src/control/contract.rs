@@ -120,6 +120,7 @@ pub(crate) const FEATURES: &[&str] = &[
     "view-no-claim",
     "mark-seen",
     "read-messages",
+    "last-message-events",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

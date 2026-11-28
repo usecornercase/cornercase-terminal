@@ -43,6 +43,7 @@ mod held;
 mod hints;
 mod input;
 mod issues;
+mod last_message_events;
 mod machine_actions;
 mod machine_panels;
 mod machines;

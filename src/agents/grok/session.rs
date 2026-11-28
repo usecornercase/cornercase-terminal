@@ -130,8 +130,16 @@ pub(in crate::agents) fn encode_path(path: &str) -> String {
     out
 }
 
+pub(in crate::agents) fn chat(dir: &Path) -> PathBuf {
+    dir.join("chat_history.jsonl")
+}
+
+pub(in crate::agents) fn updates(dir: &Path) -> PathBuf {
+    dir.join("updates.jsonl")
+}
+
 pub(in crate::agents) fn last_message(dir: &Path) -> Result<Option<Said>> {
-    let chat = dir.join("chat_history.jsonl");
+    let chat = chat(dir);
     let Some(lines) = message::lines(&chat)? else { return Ok(None) };
     let mut text = None;
     for line in lines {
@@ -155,7 +163,7 @@ fn query(content: &Value) -> Option<String> {
 }
 
 pub(in crate::agents) fn said_all(dir: &Path, each: Each) -> Result<()> {
-    let chat = dir.join("chat_history.jsonl");
+    let chat = chat(dir);
     let Some(lines) = message::lines(&chat)? else { return Ok(()) };
     for line in lines {
         let line = line.map_err(|e| message::unreadable(&chat, &e))?;
@@ -276,7 +284,7 @@ impl Session {
     }
 
     fn read_updates(&mut self) -> bool {
-        let path = self.path.join("updates.jsonl");
+        let path = updates(&self.path);
         let Some(batch) = read_tail(&mut self.updates, &path) else { return false };
         if batch.reset {
             self.compact = None;
@@ -289,7 +297,7 @@ impl Session {
     }
 
     fn read_chat(&mut self) {
-        let path = self.path.join("chat_history.jsonl");
+        let path = chat(&self.path);
         let Some(batch) = read_tail(&mut self.chat, &path) else { return };
         if batch.reset {
             self.resumable = false;
@@ -579,7 +587,7 @@ impl Session {
     }
 
     fn recover_prompt(&mut self) {
-        let Some(chunk) = newest_chunk(&self.path.join("updates.jsonl")) else { return };
+        let Some(chunk) = newest_chunk(&updates(&self.path)) else { return };
         if !self.primary_at(chunk.at) {
             return;
         }
@@ -596,7 +604,7 @@ impl Session {
         if self.resumable {
             return;
         }
-        let Some(lines) = message::lines(&self.path.join("chat_history.jsonl")).ok().flatten() else { return };
+        let Some(lines) = message::lines(&chat(&self.path)).ok().flatten() else { return };
         for line in lines {
             let Ok(line) = line else { continue };
             let Ok(entry) = serde_json::from_slice::<Value>(&line) else { continue };
@@ -617,7 +625,7 @@ impl Session {
         let mut dirs: Vec<PathBuf> = entries
             .flatten()
             .map(|entry| entry.path())
-            .filter(|path| path.is_dir() && path.join("updates.jsonl").is_file())
+            .filter(|path| path.is_dir() && updates(path).is_file())
             .collect();
         dirs.sort();
         let mut next = Vec::new();
@@ -630,7 +638,7 @@ impl Session {
     }
 
     fn read_child(&mut self, path: &Path, tail: &mut Tail) {
-        let Some(batch) = read_tail(tail, &path.join("updates.jsonl")) else { return };
+        let Some(batch) = read_tail(tail, &updates(path)) else { return };
         for update in jsonl::values(&batch.bytes) {
             if let Some(record) = child_token(&update) {
                 self.push_extra(path.to_string_lossy().into_owned(), record);
@@ -853,7 +861,7 @@ fn token_record(reply: &Reply) -> counting::Record {
 }
 
 fn written(dir: &Path, text: &str) -> Option<String> {
-    let path = dir.join("updates.jsonl");
+    let path = updates(dir);
     let lines = message::lines(&path).ok()??;
     for line in lines {
         let Ok(line) = line else { continue };

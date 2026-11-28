@@ -41,12 +41,6 @@ fn with_the_fixture() -> (Agent, u64) {
     (agent, id)
 }
 
-fn turn(agent: &mut Agent, id: u64) {
-    agent.refreshing("the agent works", |a| pane(a, id).agent.status() == Some(activity::Status::Working));
-    agent.finish();
-    agent.refreshing("the turn is over", |a| pane(a, id).agent.status() != Some(activity::Status::Working));
-}
-
 #[test]
 fn a_conversation_is_read_in_order_with_ids() {
     let (mut agent, id) = with_the_fixture();

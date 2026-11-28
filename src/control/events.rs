@@ -145,6 +145,10 @@ pub(crate) enum What {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         role: Option<String>,
     },
+    #[serde(rename = "last-message")]
+    LastMessage {
+        agent: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -160,7 +164,11 @@ impl Event {
     pub(crate) fn kind(&self) -> Option<Kind> {
         match &self.what {
             What::Opened { kind, .. } | What::Closed { kind } => Some(*kind),
-            What::Status { .. } | What::Exited { .. } | What::Clipboard { .. } | What::Bell { .. } => Some(Kind::Pane),
+            What::Status { .. }
+            | What::Exited { .. }
+            | What::Clipboard { .. }
+            | What::Bell { .. }
+            | What::LastMessage { .. } => Some(Kind::Pane),
             What::Notice { .. } | What::Message { .. } => Some(Kind::Workspace),
             What::Dropped { .. } | What::Recap { .. } | What::Bot { .. } | What::Tunnel { .. } => None,
         }

@@ -123,6 +123,7 @@ mod input;
 mod interaction;
 mod issues_dialog;
 mod jobs;
+mod last_messages;
 mod launches;
 mod layout;
 mod links;
@@ -677,7 +678,7 @@ impl App {
             AppEvent::AgentModels { request, kind, result } => self.agent_models_read(request, kind, result),
             AppEvent::FlowFetched(source, result) => self.flow_fetched(&source, result),
             AppEvent::PersonasFetched(source, result) => self.personas_fetched(&source, result),
-            AppEvent::LastMessage { request, result } => self.message_read(request, result),
+            AppEvent::LastMessage { .. } | AppEvent::LastMessageSeen { .. } => self.last_message_read(ev),
             AppEvent::Awaited { request, result } => self.awaited_read(request, result),
             AppEvent::Thread { request, result } => self.thread_read(request, result),
             AppEvent::Ports(event) => self.ports_answered(event),
@@ -699,6 +700,14 @@ impl App {
             AppEvent::Cloned { request, result } => self.clone_answered(request, result, area),
         }
         Ok(())
+    }
+
+    fn last_message_read(&mut self, ev: AppEvent) {
+        match ev {
+            AppEvent::LastMessage { request, result } => self.message_read(request, result),
+            AppEvent::LastMessageSeen { pane, agent, read, said } => self.last_message_seen((pane, agent), read, said),
+            _ => {}
+        }
     }
 
     fn terminal_event(&mut self, ev: AppEvent) {

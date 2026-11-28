@@ -191,6 +191,7 @@ impl App {
         self.agents.stats.prune(clock);
         self.learn_conversations();
         self.watch_queue_results();
+        self.watch_last_messages();
     }
 
     fn send_notices(&mut self, notices: Vec<(NoticeKey, Vec<u64>)>) {

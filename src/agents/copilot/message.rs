@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
@@ -59,8 +59,12 @@ fn spoken_of(event: &Value, call: Option<&str>, chunks: &mut Option<Chunks>) -> 
     }
 }
 
+pub(in crate::agents) fn events(dir: &Path) -> PathBuf {
+    dir.join("events.jsonl")
+}
+
 pub(in crate::agents) fn said_all(dir: &Path, each: Each) -> Result<()> {
-    let file = dir.join("events.jsonl");
+    let file = events(dir);
     let Some(lines) = message::lines(&file)? else { return Ok(()) };
     let mut chunks: Option<Chunks> = None;
     for line in lines {

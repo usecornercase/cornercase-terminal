@@ -551,7 +551,8 @@ fn hook_name(event: &control::Event) -> Option<&'static str> {
         | control::What::Message { .. }
         | control::What::Recap { .. }
         | control::What::Bot { .. }
-        | control::What::Tunnel { .. } => None,
+        | control::What::Tunnel { .. }
+        | control::What::LastMessage { .. } => None,
     }
 }
 

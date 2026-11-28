@@ -12,11 +12,13 @@ pub(in crate::agents) mod discovery;
 pub(in crate::agents) mod jsonl;
 pub(in crate::agents) mod message;
 mod pointer;
+mod stamp;
 pub(in crate::agents) mod thread;
 
 pub(crate) use awaited::{Awaited, Choice, Question};
 pub(crate) use message::{Role, Said, Spoken};
 pub(crate) use pointer::Pointer;
+pub(crate) use stamp::Stamp;
 pub(crate) use thread::{Page, Slice, Told};
 
 use counting::Ledger;
